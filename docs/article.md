@@ -8,7 +8,7 @@ That is exactly the problem I ran into with [MockNest Serverless](https://github
 
 **Can AWS Lambda do it?**
 
-Yes. AWS Lambda introduced response payload streaming on April 7, 2023 [9], initially supporting Node.js 14.x and newer runtimes, plus custom runtimes, across 21 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [10]. It raises the response payload limit from 6 MB to 200 MB and improves time-to-first-byte for progressive responses.
+Yes. AWS Lambda introduced response payload streaming on April 7, 2023 [10], initially supporting Node.js 14.x and newer runtimes, plus custom runtimes, across 21 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [11]. It raises the response payload limit from 6 MB to 200 MB and improves time-to-first-byte for progressive responses.
 
 **Does it work on the JVM?**
 
