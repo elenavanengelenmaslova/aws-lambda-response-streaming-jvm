@@ -10,7 +10,7 @@ I stumbled upon this problem with [MockNest Serverless](https://github.com/elena
 
 ## Can AWS Lambda do it?
 
-The short answer is **yes** - AWS Lambda introduced response payload streaming on April 7, 2023 [9], initially supporting Node.js 14.x, newer runtimes and custom runtimes, across 21 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [10]. This capability increases the response payload limit from 6 MB to 200 MB.
+The short answer is **yes** - AWS Lambda introduced response payload streaming on April 7, 2023 [9], initially supporting Node.js 14.x, newer runtimes and custom runtimes, across 22 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [10]. This capability increases the response payload limit from 6 MB to 200 MB.
 
 ## Does it work on the JVM?
 
@@ -60,13 +60,13 @@ This seemingly small change has several important consequences:
 
 - **Flushing matters.** Writing bytes to an `OutputStream` does not necessarily mean the client receives them immediately - you need to flush explicitly.
 
-- **Testing becomes more involved.** Unit tests can verify the protocol, and local integration tests with Floci or LocalStack can verify the handler and API Gateway configuration. Only a deployed AWS endpoint can prove that bytes are delivered progressively through the managed streaming path.
+- **Testing becomes more involved.** Unit tests can verify the new request / response trsanformations, and local integration tests with Floci or LocalStack can verify the handler and API Gateway configuration. However, only testing a deployed AWS endpoint can truly prove that bytes are delivered progressively through the managed streaming path. 
 
-The implementation itself is not particularly complicated. The challenge is understanding the new lifecycle. Once that is clear, the next step is replacing the familiar `RequestHandler` with `RequestStreamHandler`.
+The implementation is not complex; instead, the main challenge here is understanding the new lifecycle. Once that is clear, the implementation should be pretty much straightforward. We start by replacing the familiar `RequestHandler` with `RequestStreamHandler`.
 
 ## Moving to `RequestStreamHandler`
 
-For most Java and Kotlin Lambda functions, the handler implements `RequestHandler`. AWS deserializes the incoming event into an object and expects another object in return:
+For typical Java and Kotlin Lambda functions, the handler implements `RequestHandler`. AWS deserializes the incoming event into an object and expects another object in return:
 
 ```kotlin
 class MyHandler : RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -94,14 +94,11 @@ class StreamingLambdaHandler : RequestStreamHandler {
 }
 ```
 
-At first glance this looks like a small API change. In reality, it changes both sides of the request.
-
-Instead of receiving an `APIGatewayProxyRequestEvent`, the request arrives as raw JSON through an `InputStream`. Likewise, instead of returning an `APIGatewayProxyResponseEvent`, the handler writes bytes directly to an `OutputStream`.
+This changes both sides of the request: instead of receiving an `APIGatewayProxyRequestEvent`, the request arrives as raw JSON through an `InputStream`. Likewise, instead of returning an `APIGatewayProxyResponseEvent`, the handler writes bytes directly to an `OutputStream`.
 
 That means your handler becomes responsible for two things that AWS previously handled for you:
-
-- parsing the API Gateway event from the input stream
-- writing the HTTP response to the output stream
+- Parsing the API Gateway event from the input stream
+- Writing the HTTP response to the output stream
 
 For MockNest Serverless, I wanted to keep the rest of the application unchanged. Rather than letting business logic work directly with the raw API Gateway event, I introduced a small parser that converts the incoming JSON into an internal HTTP request object. Everything beyond that point continues to work with the same abstractions as before.
 
@@ -240,7 +237,7 @@ private fun writeMetadata(
 
 You can use your JSON library of choice. In my project, Kotlinx Serialization is preferred.
 
-There was one issue I encountered was with the headers. HTTP allows a header to appear more than once, `Set-Cookie` is the common case, but the API Gateway streaming metadata format requires plain string values in the `headers` map, not arrays. If you serialize headers as `Map<String, List<String>>` (JSON arrays for values), API Gateway rejects the response with HTTP 502. For repeated headers like `Set-Cookie`, use the separate `cookies` array field that the streaming metadata format provides. For other multi-value headers, use the separate `multiValueHeaders` field, which accepts `Map<String, List<String>>` [9].
+There was one issue I encountered was with the headers. HTTP allows a header to appear more than once, `Set-Cookie` is the common case, but the API Gateway streaming metadata format requires plain string values in the `headers` map, not arrays. If you serialize headers as `Map<String, List<String>>` (JSON arrays for values), API Gateway rejects the response with HTTP 502. For repeated headers like `Set-Cookie`, use the separate `cookies` array field that the streaming metadata format provides. For other multi-value headers, use the separate `multiValueHeaders` field, which accepts `Map<String, List<String>>` [13].
 
 After the metadata and delimiter are written, the body can be written progressively:
 
@@ -655,16 +652,17 @@ https://aws.amazon.com/blogs/compute/building-responsive-apis-with-amazon-api-ga
 [8] MockNest Serverless repository
 https://github.com/elenavanengelenmaslova/mocknest-serverless
 
-[9] API Gateway documentation — Lambda proxy integration format for response streaming
-https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode-lambda.html
-
-[10] AWS What's New — AWS Lambda response payload streaming (April 7, 2023)
+[9] AWS What's New — AWS Lambda response payload streaming (April 7, 2023)
 https://aws.amazon.com/about-aws/whats-new/2023/04/aws-lambda-response-payload-streaming/
 
-[11] AWS What's New — AWS Lambda response streaming expands to all commercial AWS regions (April 7, 2026)
+[10] AWS What's New — AWS Lambda response streaming expands to all commercial AWS regions (April 7, 2026)
 https://aws.amazon.com/about-aws/whats-new/2026/04/aws-lambda-response-streaming/
+
+[11] Introducing AWS Lambda response streaming
+https://aws.amazon.com/blogs/compute/introducing-aws-lambda-response-streaming/
 
 [12] aws-lambda-streaming-core — source, README, and the `streaming-s3-example` module (GitHub); published to Maven Central as `nl.vintik:aws-lambda-streaming-core`
 https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime
 
-[13] Introducing AWS Lambda response streaming https://aws.amazon.com/blogs/compute/introducing-aws-lambda-response-streaming/
+[13] API Gateway documentation — Lambda proxy integration format for response streaming
+https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode-lambda.html
