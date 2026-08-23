@@ -1,20 +1,166 @@
-# Adding response streaming to a Kotlin Lambda behind API Gateway
+# Adding Response Streaming to a Kotlin Lambda behind API Gateway
 
-### Lessons learnt when implementing streaming HTTP responses from a JVM Lambda
+### Implementing AWS Lambda Response Streaming for Kotlin and Java Without a Custom Runtime or Lambda Layers
 
-Most REST APIs return small JSON responses. That is the common case, and it works fine. But some REST endpoints do not. They return file downloads, bulk exports, or large generated payloads. Others use Server-Sent Events to push data progressively to the client. With AI APIs now streaming responses token by token, what used to be an edge case is becoming the expected behaviour.
+## The problem
 
-That is exactly the problem I ran into with [MockNest Serverless](https://github.com/elenavanengelenmaslova/mocknest-serverless) [8], my open source cloud mock server that runs in your own AWS account. It exposes WireMock-compatible mock endpoints through API Gateway and AWS Lambda, and stores mock definitions in S3. A mock server should be able to simulate the full behaviour of the APIs it replaces — including the ones that stream. A concrete example: Salesforce Bulk API 2.0 returns large CSV result sets from endpoints such as `/services/data/vXX.X/jobs/query/{queryJobId}/results`, with locators and parallel result URLs for even larger sets [1]. If an application integrates with that kind of API, the mock needs to simulate large CSV downloads too. I needed to add this functionality in order to mock true streaming behaviour as well as increase the response size limit. API Gateway has a 10 MB payload limit for non-streaming APIs [2], but in the Lambda path the stricter limit is Lambda itself: synchronous invocation payloads are limited to 6 MB [3].
+Most REST APIs return small JSON responses, which is still the most common use case. However, some APIs are exceptions to the rule – they return file downloads, bulk exports, or large generated payloads and use server-sent events to push data progressively to the client. With a growing number of AI APIs streaming responses token by token, what used to be an edge case is now becoming the expected behaviour.
 
-**Can AWS Lambda do it?**
+I stumbled upon this problem with [MockNest Serverless](https://github.com/elenavanengelenmaslova/mocknest-serverless) [8], my open-source cloud mock server that runs in your AWS account. It exposes WireMock-compatible mock endpoints through API Gateway and AWS Lambda and persists mock definitions in S3. A mock server should be able to simulate the full behaviour of the APIs it replaces, including those that stream. A concrete example is Salesforce Bulk API 2.0 returns large CSV result sets from endpoints, such as `/services/data/vXX.X/jobs/query/{queryJobId}/results`, with locators and parallel result URLs for even larger sets [1]. If an application integrates with that kind of API, the mock needs to simulate large CSV downloads too. I needed to add this functionality in order to mock true streaming behaviour as well as increase the response size limit. API Gateway has a 10 MB payload limit for non-streaming APIs [2], but in the Lambda path the stricter limit is Lambda itself: synchronous invocation payloads are limited to 6 MB [3].
 
-Yes. AWS Lambda introduced response payload streaming on April 7, 2023 [9], initially supporting Node.js 14.x and newer runtimes, plus custom runtimes, across 21 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [10]. It raises the response payload limit from 6 MB to 200 MB and improves time-to-first-byte for progressive responses.
+## Can AWS Lambda do it?
 
-**Does it work on the JVM?**
+The short answer is **yes** - AWS Lambda introduced response payload streaming on April 7, 2023 [9], initially supporting Node.js 14.x, newer runtimes and custom runtimes, across 21 regions. The feature expanded to all commercial AWS regions on April 7, 2026 [10]. This capability increases the response payload limit from 6 MB to 200 MB.
 
-That is where it gets interesting. When I looked for guidance, the examples I found were almost exclusively JavaScript and TypeScript. AWS's own helpers — such as `awslambda.HttpResponseStream.from()` — are Node.js-only. For a Kotlin or Java Lambda, there was no equivalent library, so I implemented the streaming response protocol and published it as **`aws-lambda-streaming-core`** [12] — a small library with no AWS SDK dependency that anyone can drop into a JVM Lambda.
+## Does it work on the JVM?
 
-The original implementation of MockNest Serverless used a buffered Lambda response. That means the full response had to be built before it was returned to API Gateway.
+ough the short answer is yes, there is a caveat. When I started implementing response streaming, the first thing I looked for was a Kotlin or Java library. AWS provides awslambda.HttpResponseStream.from() for Node.js, but I could not find an equivalent library or SDK for the AWS-managed JVM Lambda runtime. Most examples were written in JavaScript or TypeScript, while the official JVM guidance focused on custom runtimes and Lambda Layers rather than the managed Java runtime.
+
+Rather than implementing the protocol directly inside MockNest Serverless, I extracted it into aws-lambda-streaming-core lightweight library [12] with no AWS SDK dependency. This article explains how that implementation works and lessons learnt along the way.
+
+## Why response streaming is different
+
+At a first glance, response streaming looks like a simple API change. Instead of returning an object, you write to it. However, in practice, it changes the entire lifecycle of a request. In the next few sections I will explain this life cycle, which is important if you want to implement Lambda Streaming on JVM without using layers or custom runtime.
+
+### Buffered response
+
+With a standard Lambda handler, the entire response is built in memory before anything is sent to the client.
+
+```mermaid
+flowchart LR
+
+A[Request received]
+--> B[Build complete response]
+--> C[Return response object]
+--> D[Lambda sends response]
+--> E[Client receives response]
+```
+
+This model is simple because the entire response exists before it is returned. If something goes wrong while generating the response, the handler can still change a `200 OK` into a `404` or `500`.
+
+### Response streaming
+
+In the case of response streaming, the client starts receiving data while your code is still producing it.
+
+```mermaid
+flowchart LR
+
+A[Request received]
+--> B[Validate request]
+--> C[Write response metadata]
+--> D[Stream body progressively]
+--> E[Close OutputStream]
+```
+
+This seemingly small change has several important consequences:
+
+- **The HTTP status is committed early.** Once the response metadata has been written, you cannot change a 200 OK into a 404 or 500 later on. Therefore, any validation that used to happen just before returning the response now needs to happen before streaming begins.
+
+- **Memory usage becomes your responsibility.** Simply writing to an `OutputStream` does not automatically make your function memory efficient. If you first read a 100 MB file into a `ByteArray` and then write it to the stream, you've still allocated 100 MB of memory. In order to take advantage of the memory efficiency that streaming can give you, you need to stream from the source.
+
+- **Flushing matters.** Writing bytes to an `OutputStream` does not necessarily mean the client receives them immediately - you need to flush explicitly.
+
+- **Testing becomes more involved.** Unit tests can verify the protocol, and local integration tests with Floci or LocalStack can verify the handler and API Gateway configuration. Only a deployed AWS endpoint can prove that bytes are delivered progressively through the managed streaming path.
+
+The implementation itself is not particularly complicated. The challenge is understanding the new lifecycle. Once that is clear, the next step is replacing the familiar `RequestHandler` with `RequestStreamHandler`.
+
+## Moving to `RequestStreamHandler`
+
+For most Java and Kotlin Lambda functions, the handler implements `RequestHandler`. AWS deserializes the incoming event into an object and expects another object in return:
+
+```kotlin
+class MyHandler : RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+    override fun handleRequest(
+        request: APIGatewayProxyRequestEvent,
+        context: Context,
+    ): APIGatewayProxyResponseEvent {
+        ...
+    }
+}
+```
+
+Response streaming requires a different interface:
+
+```kotlin
+class StreamingLambdaHandler : RequestStreamHandler {
+
+    override fun handleRequest(
+        input: InputStream,
+        output: OutputStream,
+        context: Context,
+    ) {
+        ...
+    }
+}
+```
+
+At first glance this looks like a small API change. In reality, it changes both sides of the request.
+
+Instead of receiving an `APIGatewayProxyRequestEvent`, the request arrives as raw JSON through an `InputStream`. Likewise, instead of returning an `APIGatewayProxyResponseEvent`, the handler writes bytes directly to an `OutputStream`.
+
+That means your handler becomes responsible for two things that AWS previously handled for you:
+
+- parsing the API Gateway event from the input stream
+- writing the HTTP response to the output stream
+
+For MockNest Serverless, I wanted to keep the rest of the application unchanged. Rather than letting business logic work directly with the raw API Gateway event, I introduced a small parser that converts the incoming JSON into an internal HTTP request object. Everything beyond that point continues to work with the same abstractions as before.
+
+On the response side, however, there is no equivalent abstraction provided by AWS for the JVM. Unlike the `Node.js` runtime, which exposes `awslambda.HttpResponseStream.from()` to handle the response protocol automatically [11], the `OutputStream` handed to a JVM `RequestStreamHandler` is just a raw stream. The library `aws-lambda-streaming-core` [12] helps you write your response to that stream correctly, so that AWS Lambda and API Gateway can interpret and return the streaming response correctly.
+
+## Implementing the streaming protocol
+
+Once the handler has switched to `RequestStreamHandler`, the next challenge is producing the response in the format that API Gateway expects.
+
+This was the part that surprised me most. For Node.js, AWS provides `awslambda.HttpResponseStream.from()`, which hides the protocol completely [11]. On the JVM, however, the `OutputStream` is just a stream of bytes. The handler is responsible for writing the response exactly as API Gateway expects it.
+
+The response consists of three parts:
+
+1. Response metadata encoded as JSON
+2. Eight null bytes (`0x00`) as a delimiter
+3. The response body
+
+Conceptually, the stream looks like this:
+
+```text
++-------------------------------------------+
+| Response metadata (JSON)                  |
++-------------------------------------------+
+| 00 00 00 00 00 00 00 00                   |
++-------------------------------------------+
+| Response body                             |
++-------------------------------------------+
+```
+
+Every JVM Lambda that implements response streaming has to produce this protocol. Rather than duplicating that logic across projects, I extracted it into **`aws-lambda-streaming-core`** [12].
+
+The library exposes a small `ResponseWriter` responsible for writing the metadata prelude and delimiter:
+
+```kotlin
+val writer = ResponseWriter()
+
+writer.writeMetadata(
+    output,
+    ResponseMetadata(
+        statusCode = 200,
+        headers = mapOf(
+            "Content-Type" to "text/csv"
+        )
+    )
+)
+```
+
+From that point onwards, the handler simply streams the body:
+
+```kotlin
+copy(source, output)
+output.flush()
+```
+
+Internally, `ResponseWriter` serializes the response metadata to JSON, writes the required eight-byte delimiter, and commits the HTTP status before any body bytes are sent.
+
+From that point onwards, the handler can simply stream the response body.
+
+The implementation deliberately hides the protocol details, allowing the handler to focus on the application itself rather than the response format expected by API Gateway.
 
 ## Step 1: Move from `RequestHandler` to `RequestStreamHandler`
 
@@ -520,3 +666,5 @@ https://aws.amazon.com/about-aws/whats-new/2026/04/aws-lambda-response-streaming
 
 [12] aws-lambda-streaming-core — source, README, and the `streaming-s3-example` module (GitHub); published to Maven Central as `nl.vintik:aws-lambda-streaming-core`
 https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime
+
+[13] Introducing AWS Lambda response streaming https://aws.amazon.com/blogs/compute/introducing-aws-lambda-response-streaming/

@@ -557,3 +557,314 @@ Each entry uses the form:
     On an S3 `GetObject`-only role, *missing* and *forbidden* are indistinguishable —
     S3 returns 403 for both — so a not-found handler that keys off `NoSuchKey` alone
     will mis-report missing objects as 5xx.
+
+# Plan
+Right now it's somewhere between:
+
+tutorial
+implementation log
+library announcement
+
+I'd make it primarily an engineering article, with the library as the outcome.
+
+That way people don't feel they're reading documentation.
+
+I would structure it like this
+1. Introduction (already done)
+   Why MockNest needed streaming
+   Salesforce Bulk API
+   6 MB limit
+   No JVM solution
+   Built a library
+
+✅ I think this part is done.
+
+2. Why response streaming is different
+
+Don't jump into RequestStreamHandler immediately.
+
+Instead explain the mental model.
+
+Buffered Lambda
+
+request
+↓
+build response
+↓
+return response
+
+Streaming Lambda
+
+request
+↓
+commit status
+↓
+stream bytes
+↓
+close stream
+
+Explain why this changes everything:
+
+status committed early
+memory
+flushing
+validation
+
+Then every later section makes sense.
+
+3. Moving to RequestStreamHandler
+
+Very short.
+
+Not pages.
+
+Just
+
+RequestHandler
+RequestStreamHandler
+InputStream
+OutputStream
+
+Done.
+
+4. The missing protocol
+
+This should be the "wow" section.
+
+metadata JSON
+
+8 null bytes
+
+body
+
+Explain
+
+AWS hides this for Node.
+
+JVM developers have to write it.
+
+Then immediately introduce ResponseWriter.
+
+Not 100 lines later.
+
+Example:
+
+writer.writeMetadata(...)
+
+copy(...)
+
+Then explain that the implementation lives in the library.
+
+5. Streaming correctly
+
+This becomes one chapter.
+
+Instead of
+
+Step 4
+
+Step 5
+
+Step 6
+
+I'd merge them.
+
+Topics:
+
+Don't buffer
+readBytes()
+
+bad
+
+copy()
+
+good
+
+Validate first
+
+because status commits
+
+Flush
+
+because clients otherwise don't observe progress
+
+This is one conceptual lesson:
+
+Once streaming starts, think like a stream.
+
+6. Infrastructure surprises
+
+This is where your development log shines.
+
+I'd move these together.
+
+STREAM vs RESPONSE_STREAM
+response-streaming-invocations URI
+OutputStream.close()
+HTTP/2 curl issue
+
+These are deployment lessons.
+
+People love those because they waste days.
+
+7. Testing
+
+Current testing section is excellent.
+
+I'd barely change it.
+
+Maybe add one nice diagram.
+
+Unit
+
+↓
+
+Integration
+
+↓
+
+Post Deploy
+
+That section is one of the strongest in the article.
+
+8. The library
+
+Only now.
+
+Reader already understands the problem.
+
+Now say
+
+"I extracted two reusable pieces."
+
+Not
+
+"I published a library."
+
+Explain only
+
+ResponseWriter
+copy()
+
+Done.
+
+The README is documentation.
+
+The article should not become documentation.
+
+One small example.
+
+One Maven dependency.
+
+One link.
+
+9. Lessons learned
+
+I'd replace the current lessons completely.
+
+Instead I'd have something like
+
+Lessons learned
+1. Response streaming is more than changing the handler
+
+Changing RequestHandler is maybe 5%.
+
+The protocol, infrastructure and testing matter more.
+
+2. AWS's Node.js helper hides a surprising amount
+
+JVM developers need to understand the protocol.
+
+3. Streaming and memory are different problems
+
+Many people "stream"
+
+but still
+
+readBytes()
+4. Status codes become immutable
+
+Validate first.
+
+5. Test the platform, not just your code
+
+Probably my favourite lesson.
+
+6. Infrastructure naming matters
+
+STREAM
+
+RESPONSE_STREAM
+
+One word.
+
+One day lost.
+
+10. Conclusion
+
+Current one is good.
+
+Things I would REMOVE
+
+I think there are a few places where the article starts feeling like README documentation.
+
+For example
+
+API reference
+
+ResponseWriter
+
+copy()
+
+DELIMITER_LEN
+
+...
+
+This belongs in GitHub.
+
+Not Medium.
+
+Likewise the long explanation of
+
+ResponseMetadata.fromMultiValue()
+
+I would replace that with one sentence:
+
+The library also handles repeated headers and cookies correctly according to API Gateway's metadata format.
+
+Then link to GitHub.
+
+Things from the development log I'd definitely include
+
+These are excellent because they're not documented elsewhere:
+
+✅ STREAM vs RESPONSE_STREAM
+
+✅ OutputStream.close() or partial responses
+
+✅ headers must be Map<String,String>
+
+✅ curl HTTP/2 issue
+
+Those are exactly the kind of things people search for after spending hours debugging.
+
+I would not include:
+
+Kover
+Mockito
+MockK
+Java 25
+JaCoCo
+Gradle
+
+Those are interesting for the project, but they distract from the core story of Lambda response streaming.
+
+One final thought
+
+I think your article's unique value isn't "how to stream from S3."
+
+It's:
+
+"Everything I had to learn to implement AWS Lambda response streaming on the JVM because AWS only provides a high-level helper for Node.js."
+
+That framing is what makes it likely to become the article people find when they search for Kotlin or Java Lambda response streaming. It also naturally leads readers to your library as the reusable implementation, rather than making the article feel like a library announcement.
