@@ -35,7 +35,11 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${rootProject.extra["coroutinesVersion"]}")
     testImplementation("org.testcontainers:testcontainers:${rootProject.extra["testcontainersVersion"]}")
     testImplementation("org.testcontainers:junit-jupiter:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("org.testcontainers:localstack:${rootProject.extra["testcontainersVersion"]}")
+    testImplementation("io.floci:testcontainers-floci:${rootProject.extra["flociTestcontainersVersion"]}")
+    // Lambda + API Gateway control planes, used only by FlociLambdaApiGatewayIntegrationTest to
+    // deploy the shadow jar into the emulator and front it with a REST API. Not shipped.
+    testImplementation("aws.sdk.kotlin:lambda:${rootProject.extra["awsSdkKotlinVersion"]}")
+    testImplementation("aws.sdk.kotlin:apigateway:${rootProject.extra["awsSdkKotlinVersion"]}")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -60,6 +64,25 @@ tasks.test {
         }
     }
     systemProperty("net.bytebuddy.experimental", "true")
+    // Emulator image pin for the integration tests, from the root version catalog.
+    systemProperty("floci.image", rootProject.extra["flociImage"] as String)
+
+    // FlociLambdaApiGatewayIntegrationTest deploys the shadow jar into the emulated Lambda, so the
+    // jar has to exist on disk. The path is passed via a CommandLineArgumentProvider (not a plain
+    // systemProperty) because `org.gradle.configuration-cache=true` is on and the archive location
+    // must be resolved lazily at execution time.
+    val fatJar = tasks.shadowJar.flatMap { it.archiveFile }
+    inputs.file(fatJar).withPropertyName("lambdaFatJar")
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf("-Dstreaming.fatJar=${fatJar.get().asFile.absolutePath}")
+        },
+    )
+    // Only pay for building the fat jar when the integration tests will actually run. CI passes
+    // -PexcludeTags=integration, so its unit-test job stays as fast as it was.
+    if ((project.findProperty("excludeTags") as? String)?.contains("integration") != true) {
+        dependsOn(tasks.shadowJar)
+    }
 }
 
 // ---- Fat jar for Lambda deployment (Shadow) -------------------------------------------------

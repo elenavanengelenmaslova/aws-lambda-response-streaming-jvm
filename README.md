@@ -133,7 +133,7 @@ An oversized prelude then raises `MetadataTooLargeException` **before anything i
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
-Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and LocalStack integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer.
+Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer.
 
 ## License
 

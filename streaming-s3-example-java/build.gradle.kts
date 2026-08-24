@@ -39,13 +39,13 @@ dependencies {
     // --- CRaC priming hook for SnapStart ---
     implementation("org.crac:crac:${rootProject.extra["cracVersion"]}")
 
-    // --- Testing: JUnit Jupiter + Mockito (Java standard), TestContainers + LocalStack ---
+    // --- Testing: JUnit Jupiter + Mockito (Java standard), TestContainers + Floci ---
     testImplementation("org.junit.jupiter:junit-jupiter:${rootProject.extra["junitVersion"]}")
     testImplementation("org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")
     testImplementation("org.mockito:mockito-junit-jupiter:${rootProject.extra["mockitoVersion"]}")
     testImplementation("org.testcontainers:testcontainers:${rootProject.extra["testcontainersVersion"]}")
     testImplementation("org.testcontainers:junit-jupiter:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("org.testcontainers:localstack:${rootProject.extra["testcontainersVersion"]}")
+    testImplementation("io.floci:testcontainers-floci:${rootProject.extra["flociTestcontainersVersion"]}")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -68,6 +68,9 @@ tasks.test {
     // recognises the JDK 25 class-file version, so all Mockito-based tests pass without the
     // `net.bytebuddy.experimental=true` opt-in the Kotlin/MockK module still requires. Confirmed at
     // the task-14.1 checkpoint (167 unit+property tests green with the flag absent). See docs/log.md.
+
+    // Emulator image pin for the integration tests, from the root version catalog.
+    systemProperty("floci.image", rootProject.extra["flociImage"] as String)
 }
 
 // ---- Fat jar for Lambda deployment (Shadow) -------------------------------------------------

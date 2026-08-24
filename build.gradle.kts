@@ -20,6 +20,12 @@ extra["junitVersion"] = "6.0.0"
 extra["mockkVersion"] = "1.14.5"
 extra["coroutinesVersion"] = "1.10.2"
 extra["testcontainersVersion"] = "1.21.4"
+// Floci — local AWS emulator used by the integration tests (replaces LocalStack). The 1.x line of
+// the Testcontainers module builds against Testcontainers 1.21.4, matching the version above; the
+// 2.x line requires Testcontainers 2.x. `flociImage` pins the emulator itself, since the module's
+// no-arg constructor would otherwise track `floci/floci:latest`.
+extra["flociTestcontainersVersion"] = "1.14.0"
+extra["flociImage"] = "floci/floci:1.7.0"
 
 // ---- Java example module (streaming-s3-example-java) ----------------------------------------
 // The Java example uses the AWS SDK for Java v2 (not the Kotlin SDK), Jackson for request parsing,

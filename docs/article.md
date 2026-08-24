@@ -14,7 +14,7 @@ The short answer is **yes** - AWS Lambda introduced response payload streaming o
 
 ## Does it work on the JVM?
 
-ough the short answer is yes, there is a caveat. When I started implementing response streaming, the first thing I looked for was a Kotlin or Java library. AWS provides awslambda.HttpResponseStream.from() for Node.js, but I could not find an equivalent library or SDK for the AWS-managed JVM Lambda runtime. Most examples were written in JavaScript or TypeScript, while the official JVM guidance focused on custom runtimes and Lambda Layers rather than the managed Java runtime.
+Although the short answer is yes, there is a caveat. When I started implementing response streaming, the first thing I looked for was a Kotlin or Java library. AWS provides awslambda.HttpResponseStream.from() for Node.js, but I could not find an equivalent library or SDK for the AWS-managed JVM Lambda runtime. Most examples were written in JavaScript or TypeScript, while the official JVM guidance focused on custom runtimes and Lambda Layers rather than the managed Java runtime.
 
 Rather than implementing the protocol directly inside MockNest Serverless, I extracted it into aws-lambda-streaming-core lightweight library [12] with no AWS SDK dependency. This article explains how that implementation works and lessons learnt along the way.
 
@@ -60,7 +60,7 @@ This seemingly small change has several important consequences:
 
 - **Flushing matters.** Writing bytes to an `OutputStream` does not necessarily mean the client receives them immediately - you need to flush explicitly.
 
-- **Testing becomes more involved.** Unit tests can verify the new request / response trsanformations, and local integration tests with Floci or LocalStack can verify the handler and API Gateway configuration. However, only testing a deployed AWS endpoint can truly prove that bytes are delivered progressively through the managed streaming path. 
+- **Testing becomes more involved.** Unit tests can verify the new request / response transformations, and local integration tests with Floci or LocalStack can verify the handler against real-shaped AWS services — S3, and a Lambda function behind an API Gateway proxy integration. What they cannot verify is the streaming path itself: neither emulator implements `InvokeWithResponseStream` [14][15], and neither models API Gateway's `responseTransferMode`. Only testing a deployed AWS endpoint can prove that bytes are delivered progressively through the managed streaming path. 
 
 The implementation is not complex; instead, the main challenge here is understanding the new lifecycle. Once that is clear, the implementation should be pretty much straightforward. We start by replacing the familiar `RequestHandler` with `RequestStreamHandler`.
 
@@ -453,6 +453,8 @@ The next layer tested the handler and the runtime path more realistically.
 
 For MockNest Serverless, that meant registering a mock, invoking it through the local or test runtime path, and checking the response. For another application, it could mean generating a CSV, reading from S3, or streaming from a database cursor.
 
+In the library's example project [12], this layer runs against a local AWS emulator. The shadow jar is deployed into an emulated Lambda on the `java25` runtime, behind an emulated REST API whose `/{proxy+}` route uses an `AWS_PROXY` integration. That proves things an in-process test cannot: the fat jar is a valid deployment package, the handler class resolves and runs inside a real Lambda container, the response written from inside the managed runtime really is metadata JSON followed by eight null bytes and then a body, and the route reaches the handler. It also demonstrates the flip side of Step 2 — called through a *buffered* proxy integration, the committed status reaches the client but the body is dropped, the classic "right status, no bytes" symptom. What it deliberately does not prove is progressive delivery: the emulators implement neither `InvokeWithResponseStream` nor `responseTransferMode` [14][15], so the streaming invocation path is only ever exercised against deployed AWS.
+
 I used integration tests to cover both sides of the original limit:
 
 * a normal response below 6 MB
@@ -666,3 +668,9 @@ https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime
 
 [13] API Gateway documentation — Lambda proxy integration format for response streaming
 https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode-lambda.html
+
+[14] Floci — Lambda service coverage (`InvokeWithResponseStream` listed under "Not Implemented")
+https://floci.io/floci/services/lambda/
+
+[15] LocalStack — Lambda documentation ("Response streaming is currently not supported, so it will still return a synchronous/full response instead")
+https://docs.localstack.cloud/aws/services/lambda/

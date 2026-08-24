@@ -15,7 +15,7 @@ A complete AWS Lambda deployment that streams files from S3 using the [`aws-lamb
 - **Kotlin 2.3.x / Java 25** (Gradle 9, multi-module)
 - **AWS SAM** — Lambda + API Gateway REST (RESPONSE_STREAM) + S3
 - **SnapStart** + CRaC priming + arm64 + tiered compilation (L1)
-- **TestContainers + LocalStack** for integration tests (Colima)
+- **TestContainers + Floci** for integration tests (Colima) — emulated S3, Lambda, and API Gateway
 
 ## Quick Start
 
@@ -28,7 +28,7 @@ A complete AWS Lambda deployment that streams files from S3 using the [`aws-lamb
 ### Build and Test
 
 ```bash
-# Unit + property tests (no LocalStack needed)
+# Unit + property tests (no Docker needed)
 ./gradlew :streaming-s3-example:test -PexcludeTags=integration
 
 # All tests including integration (requires Colima)
@@ -110,7 +110,7 @@ streaming-s3-example/
 │   ├── RequestParserTest.kt
 │   ├── S3SourceTest.kt
 │   ├── PrimingTest.kt
-│   └── *IntegrationTest.kt     # Require LocalStack (tag: integration)
+│   └── *IntegrationTest.kt     # Require Floci (tag: integration)
 deployment/aws/sam/             # SAM template + config + build/deploy scripts
 deployment/aws/oidc/            # OIDC bootstrap CloudFormation template
 scripts/                        # setup-oidc.sh, pipeline-streaming-test.sh, post-deploy-test.sh

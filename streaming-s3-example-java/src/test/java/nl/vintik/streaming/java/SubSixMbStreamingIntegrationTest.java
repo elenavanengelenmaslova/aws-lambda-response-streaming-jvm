@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * LocalStack S3 integration test proving the <b>sub-6 MB</b> streaming path end to end
+ * Floci S3 integration test proving the <b>sub-6 MB</b> streaming path end to end
  * (Req 6.5, 13.2, 13.4).
  *
  * <p>A sub-6 MB object is uploaded to the shared containerized S3 through the AWS SDK for
@@ -28,13 +28,13 @@ import org.junit.jupiter.api.Test;
  * <p>The 5 MB fixture is comfortably under the legacy 6 MB buffered limit yet larger than the
  * library's 1 MB transfer buffer, so the bounded-buffer copy loops over several full chunks
  * plus a partial final chunk. Container lifecycle, S3 client wiring, and protocol parsing are
- * inherited from {@link LocalStackS3IntegrationTestBase}; the ~15 MB companion test reuses the
+ * inherited from {@link FlociS3IntegrationTestBase}; the ~15 MB companion test reuses the
  * same base.
  *
  * <p>Validates: Requirements 6.5, 13.2, 13.4
  */
 @Tag("integration")
-class SubSixMbStreamingIntegrationTest extends LocalStackS3IntegrationTestBase {
+class SubSixMbStreamingIntegrationTest extends FlociS3IntegrationTestBase {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
