@@ -22,7 +22,7 @@ This is an example repo with no business logic, so it is a **single Gradle modul
 ├── gradle.properties
 ├── src/
 │   ├── main/kotlin/            # Handler, API GW request parser, streaming response writer, S3 source, priming hook
-│   └── test/kotlin/            # Unit/property tests + LocalStack integration tests
+│   └── test/kotlin/            # Unit/property tests + Floci integration tests
 │       └── ...
 │   └── test/resources/         # Test data / fixtures
 ├── deployment/aws/sam/

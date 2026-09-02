@@ -22,7 +22,7 @@
 
 - **JUnit 6** (`org.junit.jupiter:junit-jupiter` 6.x, `useJUnitPlatform()`).
 - **MockK** for mocking; **kotlinx-coroutines-test** for coroutine tests.
-- **TestContainers + LocalStack** for S3 integration tests (real Kotlin AWS SDK calls against a containerized S3). Use `Wait.forHttp("/_localstack/health").forStatusCode(200)` as readiness; share one container across the class via `@BeforeAll`/`@AfterAll`, clean only data between tests.
+- **TestContainers + Floci** (`io.floci:testcontainers-floci`, 1.x line — it targets Testcontainers 1.x) for integration tests: real AWS SDK calls against an emulated S3, plus an emulated Lambda + API Gateway. No explicit readiness wait is needed — `FlociContainer` gates startup on its own `/_floci/init` endpoint and re-binds the Docker socket so it can spawn sibling containers. Share one container across the class via `@BeforeAll`/`@AfterAll`, clean only data between tests. Extend the module's `FlociS3IntegrationTestBase` rather than wiring a container per test class. Note: no local emulator implements `InvokeWithResponseStream` or API Gateway's `responseTransferMode`, so progressive delivery can only be proven by the post-deploy script against real AWS.
 
 ### Container runtime: Colima (not Docker Desktop)
 

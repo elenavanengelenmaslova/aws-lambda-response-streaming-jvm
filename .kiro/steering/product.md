@@ -29,7 +29,7 @@ The example is only "done" when all of these hold against a **deployed** endpoin
 2. **First byte arrives early** — well before the full response completes (proves real streaming, not buffering at any layer).
 3. **Lambda memory does not grow with response size** — the body is never materialized as a `String`/`ByteArray`.
 
-Proven with layered tests (protocol/unit, handler/integration with LocalStack, and a **post-deploy script** that measures first-byte timing), mirroring the MockNest test strategy.
+Proven with layered tests (protocol/unit, handler/integration with Floci, and a **post-deploy script** that measures first-byte timing), mirroring the MockNest test strategy.
 
 ## Knowledge capture
 
