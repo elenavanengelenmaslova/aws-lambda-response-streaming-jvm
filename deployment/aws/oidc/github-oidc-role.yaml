@@ -12,7 +12,15 @@ Parameters:
   GitHubRepo:
     Type: String
     Description: GitHub repository name
-    Default: aws-lambda-streaming-jvm-runtime
+    Default: aws-lambda-response-streaming-jvm
+  GitHubOwnerId:
+    Type: String
+    Description: Immutable numeric GitHub owner ID (account/organisation ID, never changes on rename)
+    Default: '113334433'
+  GitHubRepoId:
+    Type: String
+    Description: Immutable numeric GitHub repository ID (never changes on rename or transfer)
+    Default: '1261291270'
   RoleName:
     Type: String
     Description: Name for the GitHub Actions role
@@ -83,11 +91,30 @@ Resources:
             Condition:
               StringEquals:
                 'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              # This repository uses GitHub's IMMUTABLE subject claims, so the token's `sub`
+              # carries numeric IDs rather than the repository name:
+              #   repo:<owner>@<owner_id>/<repo-name>@<repo_id>:<scope>
+              # A repository is moved onto this format by a rename or a transfer; this one was
+              # renamed (aws-lambda-streaming-jvm-runtime -> aws-lambda-response-streaming-jvm).
+              # The authoritative prefix is whatever GitHub reports for the repo:
+              #   gh api /repos/OWNER/REPO/actions/oidc/customization/sub
+              # (`use_immutable_subject: true` plus the exact `sub_claim_prefix`) — read it there
+              # rather than assembling it by hand.
+              #
+              # Both IDs are pinned and only the mutable NAME segment is wildcarded. The IDs are
+              # the security-bearing parts, so this still admits exactly one repository under
+              # exactly one owner — just as tight as a name-based pattern, but it survives the
+              # next rename. Never wildcard either ID, and never drop the ${GitHubOrg} segment.
+              #
+              # The legacy `repo:${GitHubOrg}/${GitHubRepo}:*` patterns were REMOVED rather than
+              # left in place: a stale name-based pattern is an active hazard, not dead weight.
+              # The owner can create a new repository reusing the old name, and that unrelated
+              # repository would then inherit this role's trust.
               StringLike:
                 'token.actions.githubusercontent.com:sub':
-                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/main'
-                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/feature/*'
-                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:environment:*'
+                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:ref:refs/heads/main'
+                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:ref:refs/heads/feature/*'
+                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:environment:*'
       Policies:
         - PolicyName: StreamingDeploymentPolicy
           PolicyDocument:

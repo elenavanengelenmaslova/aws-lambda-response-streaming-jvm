@@ -1074,6 +1074,39 @@ Each entry uses the form:
   (`attempted.displayName`) and the resolution `failure.message` for every failed edge. Output on a
   healthy tree is byte-identical to before the change.
 
+---
+
+## A repo rename silently broke GitHub OIDC: immutable subject claims stop matching name-based `sub`
+
+- **Symptom / trigger:** Every GitHub Actions deploy failed at the credentials step with
+  `Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+  What made this confusing is that everything you would normally check was *correct*: the role
+  existed, the OIDC provider existed, and the live trust policy on the role matched
+  `deployment/aws/oidc/github-oidc-role.yaml` exactly — so there was no drift to find and nothing
+  in AWS looked wrong. The only clue was the timeline: last success 2026-08-02, failing from
+  2026-08-16. **Cause:** the repository had been renamed
+  (`aws-lambda-streaming-jvm-runtime` -> `aws-lambda-response-streaming-jvm`; the git remote still
+  points at the old name, which now only redirects), and a rename after 2026-07-15 moves a repo
+  onto GitHub's **immutable subject claims**. The token's `sub` is then
+  `repo:<owner>@<owner_id>/<repo-name>@<repo_id>:<scope>`, not `repo:<owner>/<repo-name>:<scope>`.
+  The trust policy only carried the legacy name-based patterns, so no `sub` pattern matched and STS
+  denied — the failure is a policy mismatch, not a missing permission, which is why nothing looked
+  misconfigured. Get the authoritative prefix from GitHub rather than guessing:
+  `gh api /repos/OWNER/REPO/actions/oidc/customization/sub` returns `use_immutable_subject: true`
+  and the exact `sub_claim_prefix` (here
+  `repo:elenavanengelenmaslova@113334433/aws-lambda-response-streaming-jvm@1261291270`).
+- **Resolution / status:** **FIXED IN TEMPLATE, NOT YET LIVE.** The three `StringLike` `sub`
+  patterns now use `repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:...` with the same three
+  scopes (`ref:refs/heads/main`, `ref:refs/heads/feature/*`, `environment:*`), via two new
+  parameters `GitHubOwnerId` (`113334433`) and `GitHubRepoId` (`1261291270`); `GitHubRepo` default
+  moved to the canonical `aws-lambda-response-streaming-jvm`. Both immutable IDs are pinned and
+  only the mutable name segment is wildcarded — still exactly one repository under one owner, but
+  it survives the next rename. The legacy patterns were deleted rather than kept alongside: a stale
+  `repo:<owner>/<old-name>` pattern would extend this role's trust to any future repository the
+  owner creates reusing that name. **The template edit has no effect until the OIDC CloudFormation
+  stack is redeployed** — the live role keeps the old trust policy, so deploys keep failing with
+  the same error until then.
+
 # Plan
 Right now it's somewhere between:
 
