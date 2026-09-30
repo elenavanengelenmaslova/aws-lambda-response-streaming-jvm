@@ -2,6 +2,7 @@ import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.result.ResolvedComponentResult
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -52,6 +53,7 @@ subprojects {
             outputs.upToDateWhen { false }
 
             doLast {
+                val unresolved = mutableListOf<String>()
                 val lines = roots.flatMap { (configName, rootComponent) ->
                     val seen = mutableSetOf<ComponentIdentifier>()
                     val coordinates = sortedSetOf<String>()
@@ -63,11 +65,27 @@ subprojects {
                         (component.id as? ModuleComponentIdentifier)?.let { id ->
                             coordinates += "${id.group}:${id.module}:${id.version}"
                         }
-                        component.dependencies
-                            .filterIsInstance<ResolvedDependencyResult>()
-                            .forEach { queue += it.selected }
+                        // The unresolved case is fatal, not skippable: `incoming.resolutionResult`
+                        // does not fail on its own — it represents a failed edge as a graph node —
+                        // so silently dropping one would let the baseline diff pass on a tree whose
+                        // resolution is actually broken. `else` is required because DependencyResult
+                        // is not sealed from Kotlin's point of view.
+                        component.dependencies.forEach { dependency ->
+                            when (dependency) {
+                                is ResolvedDependencyResult -> queue += dependency.selected
+                                is UnresolvedDependencyResult ->
+                                    unresolved += "$configName  ${dependency.attempted.displayName}: ${dependency.failure.message}"
+                                else -> {}
+                            }
+                        }
                     }
                     coordinates.map { "$configName  $it" }
+                }
+
+                // Fail before the write: a snapshot derived from a broken graph must not land on
+                // disk, or a later `diff -ru before after` would compare two equally broken trees.
+                if (unresolved.isNotEmpty()) {
+                    error(unresolved.joinToString(prefix = "Unresolved dependencies:\n  - ", separator = "\n  - "))
                 }
 
                 out.get().asFile.apply {

@@ -1052,6 +1052,28 @@ Each entry uses the form:
   scope, open-PR limit 5) is still the escalation, and is the thing to apply if the corrected
   config is rejected again.
 
+---
+
+## `resolvedCoordinates` could write a clean baseline from a broken dependency graph
+
+- **Symptom / trigger:** Nothing visible — which is the problem. The graph walk in
+  `resolvedCoordinates` filtered its edges with `filterIsInstance<ResolvedDependencyResult>()`,
+  which silently discards every `UnresolvedDependencyResult`. **Cause:**
+  `configurations.named(name).incoming.resolutionResult` does **not** throw on an unresolved
+  dependency; it represents the failed edge as a node in the graph. So a genuinely broken
+  resolution produced no error and no missing-line signal, just a snapshot with the broken edge
+  omitted — and since the baseline's whole value is that an empty `diff -ru before after` proves
+  resolution is unchanged, the diff could pass on a tree whose resolution was actually broken.
+  Third instance of the same silent-false-pass class in this file's tooling, after the
+  `outputs.upToDateWhen { false }` guards on `resolvedCoordinates` and `verifyCoverageReports`.
+- **Resolution / status:** **FIXED** — the walk now branches exhaustively over each
+  `DependencyResult` (`else -> {}` included, since `DependencyResult` is not sealed to Kotlin) and
+  accumulates unresolved edges across all four configurations. If that list is non-empty the task
+  calls `error(...)` **before** writing the snapshot file, so nothing derived from a broken graph
+  lands on disk, and the message names the configuration, the attempted coordinate
+  (`attempted.displayName`) and the resolution `failure.message` for every failed edge. Output on a
+  healthy tree is byte-identical to before the change.
+
 # Plan
 Right now it's somewhere between:
 
