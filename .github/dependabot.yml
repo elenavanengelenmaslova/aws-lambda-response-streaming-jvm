@@ -5,6 +5,11 @@
 # omitting an `ignore` block means. Do not add one, and do not add an `allow` allow-list —
 # either would narrow the update types below what this repository wants.
 #
+# The cadence lives on the group ONLY. `schedule` is required on an update entry *unless* that
+# entry names a `multi-ecosystem-group` — the group owns the schedule. Duplicating `schedule`
+# on a grouped update entry is what GitHub rejected with "Your .github/dependabot.yml contained
+# invalid details", so do not put it back on the entries below.
+#
 # Labels `dependencies`, `gradle` and `github-actions` must exist in the repository;
 # Dependabot silently drops labels it cannot find, leaving generated pull requests unlabelled.
 version: 2
@@ -32,7 +37,6 @@ updates:
       - "/streaming-s3-example"
       - "/streaming-s3-example-java"
     multi-ecosystem-group: all-dependencies
-    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
     open-pull-requests-limit: 5
     labels: [dependencies, gradle]
     patterns: ["*"]
@@ -42,7 +46,6 @@ updates:
     # that other workflows reach through `uses:`.
     directory: "/"
     multi-ecosystem-group: all-dependencies
-    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
     open-pull-requests-limit: 5
     labels: [dependencies, github-actions]
     patterns: ["*"]

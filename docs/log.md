@@ -1025,6 +1025,33 @@ Each entry uses the form:
   badge points at a dead endpoint — as long as nobody reads its PASS as "this badge renders a real
   value".
 
+---
+
+## Dependabot rejected the whole config: `schedule` duplicated on a grouped update entry
+
+- **Symptom / trigger:** GitHub refused `.github/dependabot.yml` outright with "Your
+  `.github/dependabot.yml` contained invalid details". Not a partial failure — no Dependabot run
+  happened at all, so there were no pull requests and no per-ecosystem errors to read. The real
+  difficulty is that the message **names no key**: a generic validation error gives you nothing to
+  grep for, in the file or in the schema. **Cause:** `schedule` was set on the
+  `multi-ecosystem-groups` group **and** duplicated on every update entry. The Dependabot 2.0
+  schema states the rule in its own comment on the update entry — schedule is required *unless*
+  `multi-ecosystem-group` is specified — and GitHub's documented examples for grouped ecosystems
+  show update entries carrying only `package-ecosystem`, `directory`/`directories`, `patterns` and
+  `multi-ecosystem-group`, never `schedule`. The group owns the cadence; repeating it on a grouped
+  entry is the deviation.
+- **Resolution / status:** **FIXED** — `schedule` removed from both update entries (`gradle` and
+  `github-actions`) and kept only on the `all-dependencies` group, which remains the single source
+  of the weekly **Monday 06:00 Etc/UTC** cadence. Two follow-ups worth carrying forward. First,
+  **how to get the specific reason next time:** the red banner is generic, but the repository's
+  Insights → Dependency graph → **Dependabot** view — and the GitHub file view of
+  `.github/dependabot.yml` itself — surfaces the actual validation detail, so go there rather than
+  guessing from the banner. Second, `multi-ecosystem-groups` was **not** abandoned: it is a real,
+  current feature and the overall shape of the file was right. The design's **per-ecosystem
+  fallback** (one `groups:` entry per ecosystem, same schedule, same labels, `chore` prefix with
+  scope, open-PR limit 5) is still the escalation, and is the thing to apply if the corrected
+  config is rejected again.
+
 # Plan
 Right now it's somewhere between:
 
