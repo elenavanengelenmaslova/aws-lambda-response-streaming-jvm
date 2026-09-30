@@ -1,0 +1,48 @@
+# Dependabot configuration.
+#
+# One multi-ecosystem group consolidates Gradle and GitHub Actions updates into a single
+# weekly pull request. `major`, `minor` and `patch` updates are all permitted: that is what
+# omitting an `ignore` block means. Do not add one, and do not add an `allow` allow-list —
+# either would narrow the update types below what this repository wants.
+#
+# Labels `dependencies`, `gradle` and `github-actions` must exist in the repository;
+# Dependabot silently drops labels it cannot find, leaving generated pull requests unlabelled.
+version: 2
+
+multi-ecosystem-groups:
+  all-dependencies:
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    labels: [dependencies]
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+updates:
+  - package-ecosystem: gradle
+    # Dependabot's Gradle parser does not recurse into Gradle subprojects: each module's build file
+    # needs its own directory entry. "/" covers the root build file and gradle/libs.versions.toml.
+    directories:
+      - "/"
+      - "/streaming-core"
+      - "/streaming-s3-example"
+      - "/streaming-s3-example-java"
+    multi-ecosystem-group: all-dependencies
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    labels: [dependencies, gradle]
+    patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    # "/" covers every workflow file under .github/workflows, including the reusable workflows
+    # that other workflows reach through `uses:`.
+    directory: "/"
+    multi-ecosystem-group: all-dependencies
+    schedule: { interval: weekly, day: monday, time: "06:00", timezone: Etc/UTC }
+    open-pull-requests-limit: 5
+    labels: [dependencies, github-actions]
+    patterns: ["*"]

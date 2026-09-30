@@ -558,6 +558,473 @@ Each entry uses the form:
     S3 returns 403 for both — so a not-found handler that keys off `NoSuchKey` alone
     will mis-report missing objects as 5xx.
 
+## Negative-testing `verifyCoverageReports` — `dependsOn` silently repairs the sabotage
+
+- **Context:** `verifyCoverageReports` (root `build.gradle.kts`) asserts all three XML
+  coverage reports exist, parse, hold `<class>` entries, and report non-zero covered
+  lines. Proving it actually fails means breaking a report on purpose.
+- **Gotcha:** the task `dependsOn` `:streaming-core:koverXmlReport`,
+  `:streaming-s3-example:koverXmlReport` and `:streaming-s3-example-java:jacocoTestReport`.
+  Delete a report and re-run, and Gradle notices the missing output, re-runs the report
+  task, and regenerates the file *before* the assertion executes — the build goes green
+  and the negative test proves nothing. `outputs.upToDateWhen { false }` does not help:
+  it only stops the verify task itself from being skipped.
+- **Fix:** exclude the three producer tasks so the broken file survives into the
+  assertion:
+  ```bash
+  ./gradlew verifyCoverageReports -PexcludeTags=integration \
+    -x :streaming-core:koverXmlReport \
+    -x :streaming-s3-example:koverXmlReport \
+    -x :streaming-s3-example-java:jacocoTestReport
+  ```
+- **Proven, each exit code 1, each naming the offending module:**
+  - missing file — `:streaming-core: no coverage report at …/streaming-core/build/reports/kover/report.xml`
+  - valid XML, no classes — `:streaming-core: coverage report at … contains no <class> entries`
+  - classes present, nothing covered — `:streaming-core: coverage report at … reports zero covered lines across 2 class entries`
+  - truncated file — `:streaming-s3-example-java: coverage report at … does not parse as XML (XML document structures must start and end within the same entity.)`
+- **Second gotcha, when restoring:** copy the backups back byte-identically. The report
+  tasks stay `UP-TO-DATE` on a byte-identical output, so the next full run reuses the
+  restored files rather than regenerating them — a "close enough" restore would linger.
+  Verify with `shasum -a 256` against the backups, then confirm
+  `./gradlew verifyCoverageReports koverVerify koverHtmlReport -PexcludeTags=integration --continue`
+  exits 0 again.
+
+---
+
+## Dependabot cannot read Kotlin-DSL `extra[…]` versions — the version-catalog migration
+
+- **Symptom / trigger:** Every external version lived in the root `build.gradle.kts` as
+  `extra["awsSdkKotlinVersion"] = "1.6.59"` and was consumed from the modules as
+  `implementation("aws.sdk.kotlin:s3:${rootProject.extra["awsSdkKotlinVersion"]}")`. No
+  Dependabot pull request ever arrived for any of them. **Cause:** Dependabot's Gradle
+  parser is a *static* reader — it recognises literal coordinates in a build file,
+  `gradle.properties` values, and version catalogs, but it does not evaluate Kotlin DSL.
+  A map lookup like `rootProject.extra["…"]` is code, so the coordinate it produces is
+  invisible and the version is silently never updated. The whole dependency-automation
+  story fails quietly: the config looks correct, the alerts stay empty.
+- **Resolution / status:** **RESOLVED.** All versions moved into
+  `gradle/libs.versions.toml` (`[versions]`, `[libraries]`, one `[bundles]` entry, and
+  `[plugins]`), consumed through generated type-safe accessors (`libs.aws.sdk.kotlin.s3`,
+  `libs.bundles.integration.testing`, `alias(libs.plugins.bcv)`), and every
+  `extra["…"]` / `rootProject.extra[…]` entry deleted from the root and all three module
+  build files. Because the catalog is a first-class Dependabot input, each version now
+  has exactly one bumpable declaration site. The migration was proven
+  **resolution-neutral, not merely assumed to be:** `scripts/dependency-baseline.sh before`
+  was captured from the unmigrated tree, `… after` from the migrated one, and
+  `diff -ru build/dependency-baseline/before build/dependency-baseline/after` came back
+  **empty** — zero additions, removals or version changes across all three modules
+  (`streaming-core`, `streaming-s3-example`, `streaming-s3-example-java`) and all four
+  configurations (`compileClasspath`, `runtimeClasspath`, `testCompileClasspath`,
+  `testRuntimeClasspath`), with identical per-module MD5s. `:streaming-core:apiCheck`
+  was unchanged, confirming the public API dump was untouched. Only the *form* of the
+  declarations changed.
+
+---
+
+## The versionless-plugin trap — `alias(...)` re-introduces a version Gradle rejects
+
+- **Symptom / trigger:** Converting the module `plugins { }` blocks to catalog aliases
+  wholesale looks like the obvious completion of the migration, and it breaks the build
+  immediately: `alias(libs.plugins.kotlin.jvm)` in `streaming-core/build.gradle.kts`
+  fails with *"Plugin request for plugin already on the classpath must not include a
+  version"*. **Cause:** the root project applies `kotlin("jvm")`,
+  `kotlin("plugin.serialization")` and the Kover plugin with `apply false`, which puts
+  them on the **inherited script classpath**; the subprojects then apply them *without* a
+  version on purpose. A catalog alias always carries the version from `[plugins]`, so
+  switching to `alias(...)` silently re-adds the thing the versionless form exists to
+  omit. The error message names the plugin but not the mechanism, so it reads like a
+  catalog problem rather than a classpath one.
+- **Resolution / status:** **RESOLVED (convention fixed).** `alias(libs.plugins.…)` is
+  used **only** where the plugin is resolved by that build file itself: the root
+  (`kotlin.jvm`, `kotlin.serialization`, `shadow`, `kover`, all `apply false`) and the
+  two genuinely module-local plugins in `streaming-core`,
+  `alias(libs.plugins.maven.publish)` and `alias(libs.plugins.bcv)`. The three inherited
+  plugins stay versionless in every module — `kotlin("jvm")`,
+  `kotlin("plugin.serialization")`, `id("org.jetbrains.kotlinx.kover")`. Their versions
+  are still catalog-managed and Dependabot-visible; they are just declared once, in the
+  root, where the classpath is actually formed.
+
+---
+
+## `resolvedCoordinates` needs `outputs.upToDateWhen { false }` — and `plugins.withId("java")`
+
+- **Symptom / trigger:** Two ways the dependency baseline can pass while proving nothing.
+  **(1) Up-to-date skip.** The task declares an output file (
+  `build/reports/resolved-coordinates/<module>.txt`) but has **no file inputs** — its real
+  input is the resolution result, which Gradle does not model as a file. Gradle therefore
+  considers the task up to date on the second run and skips it, so an `after` capture
+  copies the *`before`* content forward and `diff -ru` compares a file against itself. The
+  baseline reports "no change" on a tree whose resolution genuinely changed — the exact
+  failure the check exists to catch, inverted into a false pass.
+  **(2) Empty `configurations`.** Registering the task in a bare `subprojects { }` body
+  produces zero coordinates. **Cause:** the root build script is evaluated *before* the
+  subprojects, so at that moment no subproject has applied the Java plugin and
+  `configurations` is empty; `configurations.named("compileClasspath")` either fails or
+  resolves nothing.
+- **Resolution / status:** **RESOLVED.** The task carries
+  `outputs.upToDateWhen { false }` so it re-resolves on every invocation, with a comment
+  on site explaining that the alternative is a baseline diff that passes on a changed
+  tree. It is registered inside `subprojects { plugins.withId("java") { … } }`, which
+  defers registration until the Java plugin is applied and the configurations exist. The
+  four `rootComponent` providers are captured outside `doLast` so the task stays
+  configuration-cache safe. `outputs.upToDateWhen { false }` on a verification task that
+  reads generated state is now the house rule here — the root's
+  `verifyCoverageReports` carries it for the same reason.
+
+---
+
+## Version literals that deliberately stay — the Requirement 9.8 allow-list
+
+- **Symptom / trigger:** "No version literals in build files" is the wrong rule: five
+  values cannot or must not be expressed as a catalog accessor, and a blanket grep for
+  version strings flags all five as violations. This matters beyond tidiness — the
+  verification script reads **this list** as its allow-list, so a literal that is *not*
+  recorded here fails the check. An incomplete list produces false failures; a vague one
+  lets a genuinely unmanaged version through.
+- **Resolution / status:** **RESOLVED — the allow-list is exactly these five, and is
+  complete:**
+  1. **`settings.gradle.kts`** — `id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"`.
+     Settings scripts are evaluated before the catalog exists and have no generated
+     accessors. Acceptable rather than merely unavoidable: Dependabot reads a literal
+     `version "…"` declaration fine, so the value stays automated.
+  2. **Both example modules** — `systemProperty("floci.image", "floci/floci:${libs.versions.flociImage.get()}")`.
+     The *image name* is not a Maven coordinate. The tag comes from the catalog
+     (`[versions] flociImage`), but no library entry references it, so Dependabot cannot
+     bump a **Docker** tag held there — this one is a **manual** bump, by design, and is
+     pinned rather than left tracking `floci/floci:latest`.
+  3. **`streaming-core`** — `version = providers.gradleProperty("releaseVersion").getOrElse("2.0.0-SNAPSHOT")`.
+     The project's *own* published version, derived from the git tag by the publish
+     workflow. Out of scope for the catalog; "migrating" it would break the rule that the
+     tag is the single source of truth.
+  4. **All three modules** — `junit-platform-launcher`, a **versionless** catalog entry.
+     Its version is constrained by `junit-jupiter`; pinning it separately invites a split.
+  5. **The Java example** — `aws-sdk-java-s3`, also **versionless**. The version comes from
+     `platform(libs.aws.sdk.java.bom)`.
+  Both versionless entries carry an inline comment in `gradle/libs.versions.toml` naming
+  where the version comes from, so the omission reads as intentional.
+
+---
+
+## The JaCoCo DTD gotcha — `report.dtd` is never written next to the XML
+
+- **Symptom / trigger:** `verifyCoverageReports` parses all three coverage XML reports,
+  and the JaCoCo one behaves differently from the two Kover ones. The JaCoCo report opens
+  with `<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">`, but
+  **`report.dtd` is never written next to the XML**. A default `DocumentBuilder` honours
+  that declaration: it either fails outright on the unresolvable relative system ID, or —
+  worse — resolves the public ID **over the network**, turning a coverage assertion into
+  a task that needs internet access and can hang or fail in CI for reasons unrelated to
+  coverage. Kover's XML has **no DOCTYPE at all**, so the Kotlin modules parse cleanly and
+  the problem looks module-specific rather than parser-specific.
+- **Resolution / status:** **RESOLVED.** The `DocumentBuilderFactory` in
+  `verifyCoverageReports` disables external DTD and entity loading —
+  `FEATURE_SECURE_PROCESSING` on, `load-external-dtd` off,
+  `external-general-entities` / `external-parameter-entities` off, `isValidating = false` —
+  with the feature calls guarded so an unsupported feature on a different parser cannot
+  break the build. Nothing is validated against the DTD; the task only needs the document
+  tree. (Separate gotcha on the same task, already logged above: *"Negative-testing
+  `verifyCoverageReports` — `dependsOn` silently repairs the sabotage"*.)
+
+---
+
+## Licence mismatch: `LICENSE` said MIT, the `streaming-core` POM said Apache-2.0
+
+- **Symptom / trigger:** The repository `LICENSE` file is **MIT**, while the
+  `streaming-core` Maven publication POM declared
+  `licenses { license { name = "Apache-2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0" } }`.
+  **Cause:** the publishing block was lifted from a template and the POM licence was never
+  reconciled with the file that actually governs the code. Nothing fails a build over it —
+  it only surfaces to consumers, who read the POM, not the repository, and to any
+  automated licence audit that compares the two.
+- **Resolution / status:** **RESOLVED — MIT kept.** `LICENSE` is treated as the
+  authoritative source and was **deliberately left untouched**; the POM was corrected to
+  match it. Files changed: `streaming-core/build.gradle.kts` only — the POM `licenses`
+  block now reads `name = "MIT"` / `url = "https://opensource.org/licenses/MIT"`, with a
+  comment stating that this identifier, `LICENSE`'s first line and the README licence badge
+  are deliberately the same string. The README licence badge already read MIT, so no badge
+  change was needed. **Not retroactively fixable:** versions already published carry the
+  Apache-2.0 POM, and Maven Central artefacts are immutable — those POMs cannot be
+  corrected. The fix applies from the next published version onward, and
+  `./gradlew :streaming-core:generatePomFileForMavenPublication` was run to confirm the
+  generated POM contains `<name>MIT</name>`.
+
+---
+
+## `timeout-minutes` is not supported on a job that calls a reusable workflow
+
+- **Symptom / trigger:** The two thin callers — `ci-main-build.yml` and
+  `ci-dependabot-validation.yml` — each consist of a single job whose entire body is a
+  `uses:` pointing at `workflow-build.yml`. Adding the required 30-minute bound to that
+  caller job is rejected by the workflow parser. **Cause:** a job that delegates to a
+  reusable workflow accepts only a small key set (`uses`, `with`, `secrets`, `needs`,
+  `if`, `permissions`, `strategy`, `concurrency`); `timeout-minutes` is not among them,
+  because the caller does not own the runner — the called workflow's jobs do. A run bound
+  declared where no runner exists has nothing to time out.
+- **Resolution / status:** **RESOLVED — the bound moved down one level.** Both jobs
+  *inside* `workflow-build.yml` (`test` and `validate-sam`) carry
+  `timeout-minutes: 30`, which is where the runners actually are, so the bound covers
+  every caller rather than being repeated per caller. The Codecov upload step carries its
+  own tighter `timeout-minutes: 10`. `ci-main-build.yml` keeps an inline comment stating
+  why the bound is not on the caller, so the apparent omission does not read as an
+  oversight. This is how Requirements 3.10 and 11.7 are satisfied — not in the workflows
+  those requirements name, but in the one they both call.
+
+---
+
+## The `secrets` context is unavailable in an `if:` expression
+
+- **Symptom / trigger:** The coverage upload must be skipped, with a log line, when no
+  Codecov token is available — the obvious spelling being
+  `if: secrets.CODECOV_TOKEN != ''` on the upload step. GitHub does not expose `secrets`
+  to `if:`. **Cause:** `if:` expressions are evaluated during job/step scheduling, before
+  the secrets context is made available to a step's environment; the allowed contexts in
+  a step `if:` do not include `secrets`. Writing it anyway yields an expression that
+  never evaluates the way it reads.
+- **Resolution / status:** **RESOLVED via a preceding eligibility step.**
+  `workflow-build.yml`'s `test` job has a `Determine coverage-upload eligibility` step
+  (`id: cov`) that maps the secret into `env:` — the one place it *is* available — tests
+  it with `[ -z "${CODECOV_TOKEN:-}" ]`, and writes `eligible=true|false` to
+  `$GITHUB_OUTPUT`. The upload step then gates on
+  `steps.cov.outputs.eligible == 'true'`, which is an ordinary step-output expression.
+  The token value is **never echoed** — only the emptiness test result leaves the step —
+  and the skip path emits a `::notice::` naming maintainer setup checklist item 2, so a
+  skipped upload is visible in the run log rather than silently absent. The same step
+  also asserts all three coverage XML reports exist and are non-empty.
+
+---
+
+## `paths-ignore` on a `pull_request` trigger blocks merges forever
+
+- **Symptom / trigger:** `ci-main-build.yml` carries
+  `paths-ignore: ['**.md', 'docs/**', '.kiro/**']`, and the tempting move is to put it on
+  both triggers so docs-only changes never burn a build. Doing that on `pull_request`
+  deadlocks the repository. **Cause:** when a path filter excludes a pull request, the
+  workflow is not skipped-with-success — it **never reports a check at all**. Combined
+  with maintainer setup checklist item 12, which makes this workflow a *required* status
+  check on `main`, a docs-only pull request would sit forever waiting for a check that
+  will never arrive. There is no timeout and no override short of editing the branch
+  rule.
+- **Resolution / status:** **RESOLVED — the exclusions are on `push` only.** The
+  `pull_request` trigger has no `paths-ignore`, so every pull request into `main` reports
+  the required check, including docs-only ones (they simply run a fast, fully cached
+  build). The `push` trigger keeps the exclusions, which is where they pay off: a
+  docs-only commit landing on `main` runs no build. The workflow carries the reason as an
+  inline comment directly above the trigger block, so nobody "tidies up" the asymmetry.
+
+---
+
+## `pull_request` offers no head-branch filter — and a Dependabot run cannot read secrets
+
+- **Symptom / trigger:** `ci-dependabot-validation.yml` must run only for branches
+  Dependabot opened. `push` takes `branches: ['dependabot/**']` and does exactly that;
+  `pull_request`'s `branches:` filters the **base** branch, not the head, so there is no
+  trigger-level way to say "only pull requests *from* `dependabot/**`". Without a filter
+  the workflow would run a second, redundant build on every human pull request into
+  `main`. Separately, passing `CODECOV_TOKEN` through this workflow looked consistent with
+  `ci-main-build.yml` but cannot work. **Cause:** a Dependabot-triggered run gets a
+  read-only `GITHUB_TOKEN` and a **separate** secrets store (Dependabot secrets, not
+  Actions secrets), so an Actions secret referenced here resolves to empty.
+- **Resolution / status:** **RESOLVED with a job-level `if:` and no secrets at all.** The
+  head-branch test lives on the job:
+  `if: ${{ github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/') }}`.
+  On a human pull request the job is **skipped, not run** — and a skipped job still
+  reports, so nothing hangs; `ci-main-build.yml` covers those pull requests. The
+  `uses: ./.github/workflows/workflow-build.yml` call passes **no `secrets:` block
+  whatsoever**, which is only valid because `workflow-build.yml` declares
+  `CODECOV_TOKEN` with `required: false` — had it been required, every Dependabot run
+  would fail at workflow resolution rather than at the upload step. Coverage still runs
+  and the gates still apply; only publishing is absent. The concurrency key is
+  `${{ github.workflow }}-${{ github.head_ref || github.ref_name }}`: `head_ref` on
+  `pull_request`, `ref_name` on `push`, both resolving to the same Dependabot branch name
+  so the two events for one branch share a group instead of racing each other.
+
+---
+
+## `--continue` is load-bearing on the coverage command, not a convenience flag
+
+- **Symptom / trigger:** The coverage command in `workflow-build.yml` is
+  `./gradlew verifyCoverageReports koverVerify koverHtmlReport -PexcludeTags=integration --continue`.
+  Dropping `--continue` — which reads like a tolerance flag nobody needs in CI — silently
+  removes the diagnostics on exactly the runs that need them most. **Cause:** Gradle's
+  default is fail-fast: the first failing task aborts the build and every task after it is
+  skipped. `koverVerify` is the coverage *gate*, and `koverHtmlReport` comes after it. So a
+  build that trips the gate never generates the report, the Codecov upload finds nothing to
+  send, and the one build where you want to see which lines are uncovered is the one build
+  that produces no coverage artefact.
+- **Resolution / status:** **RESOLVED — `--continue` stays, and the reason is an inline
+  comment on the step.** With it, a failed gate still lets `koverHtmlReport` run: the XML
+  reports stay on disk for the Codecov upload, the HTML report is still uploaded as a
+  build artefact, and the job still fails (`--continue` changes *how much runs*, never the
+  build outcome). Requirements 4.8 and 5.1 only hold together because of this flag — the
+  gate enforcement and the coverage publish would otherwise be mutually exclusive on a
+  failing build. One invocation, three XML reports, three gates.
+
+---
+
+## Badges that render unresolved on day one — and are kept anyway
+
+- **Symptom / trigger:** Four of the README badges point at signals that do not exist yet
+  at the moment the badge block is added, so a fresh clone shows a badge row with
+  placeholder text in it. The temptation is to delete or comment out the unresolved ones
+  until their data appears. **Cause:** each badge depends on a maintainer action or a
+  first event that has not happened yet — not on anything wrong in the repository. Named
+  exactly as they appear in the README badge block:
+  1. **`GitHub release`** — renders as **"no release"**. Unblocked when the first
+     `vMAJOR.MINOR.PATCH` tag is pushed and a GitHub release exists for it; no checklist
+     item covers it, it is simply the first release.
+  2. **`Maven Central`** — renders as **unresolved / "not found"** for
+     `nl.vintik:aws-lambda-streaming-core`. Unblocked when the first `v*` tag triggers
+     `workflow-publish.yml` and the version is indexed on Maven Central. (Indexing lags
+     the publish by minutes to hours, so "unresolved" briefly survives a successful
+     publish.)
+  3. **`codecov`** — renders as **"unknown"**. Unblocked by maintainer setup checklist
+     **items 1 and 2** (create the Codecov project, then store `CODECOV_TOKEN` as a
+     repository secret) followed by one push to `main`; until item 2 lands, the
+     eligibility step skips the upload with a `::notice::` naming that item.
+  4. **`CodeQL`** — renders as **"no status"**. Unblocked by maintainer setup checklist
+     **item 7** (enable code scanning via the advanced workflow, leaving GitHub's default
+     CodeQL setup off) plus the first `codeql.yml` run on `main`; the badge is filtered to
+     `?branch=main&event=push`, so runs on other branches do not resolve it.
+- **Resolution / status:** **EXPECTED, not broken — all four badges stay.** A badge is a
+  status report; removing or commenting one out to make the row look clean would be
+  falsifying the report, and the unresolved rendering is itself accurate information about
+  a repository whose setup is incomplete. The verification script treats these four as
+  **`PENDING`**: reported, excluded from the failure count, never a build failure — and it
+  asserts its own pending list agrees with **this entry**, so the two cannot drift. Each
+  badge resolves on its own, with no README edit, the moment its signal exists.
+
+---
+
+## Excluded badges and tooling — recorded so the omissions do not read as oversights
+
+- **Symptom / trigger:** The badge row is deliberately shorter than MockNest's, and three
+  tools a reader might expect are absent. Without a note, each absence looks like
+  something that was forgotten. **Cause:** each is a settled decision, not a gap.
+- **Resolution / status:** **DELIBERATE — three exclusions, recorded once here:**
+  1. **Both OpenSSF badges — Scorecard and Best Practices — are excluded together with
+     the workflows they would require.** Excluded by the requester. No `scorecard.yml`, no
+     `bestpractices.dev` reference, and the verification script actively asserts that no
+     substring of the README matches `securityscorecards` or `bestpractices.dev`,
+     **rendered or commented out** — a commented-out badge is treated as a violation, not
+     as a harmless leftover.
+  2. **The `Maven Central` badge replaces MockNest's AWS SAR badge.** MockNest publishes a
+     Serverless Application Repository application; this repository publishes a library to
+     Maven Central instead, so the SAR badge has no counterpart to point at. It is a
+     substitution, not a removal.
+  3. **Codacy is not used.** No Codacy config, project, or badge. Code quality here is
+     carried by the three per-module coverage gates, CodeQL, CodeRabbit and Snyk, all of
+     which are already represented in the badge row or in `SECURITY.md`'s tooling table;
+     adding a fourth overlapping grade service would add a third-party dependency to the
+     README without adding a signal.
+
+  (The OpenAPI/Swagger badge, semantic-release, deploy-on-`main` push and Dependabot
+  auto-merge are excluded too, but those are scope decisions recorded in the design and in
+  `SECURITY.md`'s "not used, and why" list rather than build-time gotchas.)
+
+---
+
+## Known documentation inaccuracy: `codeql.yml`'s comment about `./gradlew assemble`
+
+- **Symptom / trigger:** `.github/workflows/codeql.yml` carries a comment stating that
+  `./gradlew assemble` "does build both shadow jars". A `--dry-run` of the task graph
+  contradicts it: `assemble` resolves to `compileKotlin` / `compileJava` / `jar` per
+  module and **no `shadowJar` task appears at all**. **Cause:** the Shadow plugin does not
+  wire `shadowJar` into the `assemble` lifecycle task by default, so `assemble` builds the
+  thin jars only. The comment describes an assumption about the plugin rather than the
+  observed task graph.
+- **Resolution / status:** **OPEN — comment only, no functional impact.** The CodeQL
+  extractor needs *compiled sources*, not shaded output, and `assemble` compiles every
+  source set in all three modules, so extraction gets full source coverage and Requirement
+  6.2 still holds. The inaccuracy is purely in the comment text. Correcting it was
+  **explicitly out of scope** for the task that found this (no workflow edit was
+  permitted), so it is recorded here to avoid losing it: the fix is a one-line comment
+  change in `.github/workflows/codeql.yml`. Anyone who later needs the fat jars in that
+  workflow must name `shadowJar` explicitly rather than relying on `assemble`.
+
+---
+
+## What can only be verified after merge — the post-merge observation list
+
+- **Symptom / trigger:** The pre-merge gate is green and proven: `./scripts/verify-quality-signals.sh`
+  in full mode exits 0 with **119 passed, 0 failed, 2 pending, 1 skipped**, including
+  `check_sam_templates` (both templates `sam validate` exit 0) and `check_gradle_build`
+  (`./gradlew build -PexcludeTags=integration` exit 0, `verifyCoverageReports` exit 0, all three
+  coverage reports present), and `./gradlew :streaming-core:apiCheck` exits 0. A green local run
+  reads like "everything is verified", which it is not. **Cause:** a whole class of signals in this
+  feature is produced by GitHub, Codecov and Dependabot *in response to a merge* — a badge image
+  that has no workflow run to point at, an upload that needs a token stored on the repository, a
+  code-scanning result that needs the workflow enabled. None of them can be observed from a working
+  tree, no matter how thorough the script is. The only non-PASS results in the pre-merge run are of
+  exactly this kind: `CodeQL` image and target **PENDING** (blocked by maintainer checklist item 7)
+  and `Build Status` image **SKIP** (HTTP 404).
+- **Resolution / status:** **EXPECTED — recorded here so nothing in this list is mistaken for a
+  regression later.** Each item below names what to observe and where. Nothing here requires a
+  README or script edit; each resolves on its own once its signal exists.
+  1. **Badge rendering for the four day-one-unresolved badges** — `GitHub release`,
+     `Maven Central`, `codecov`, `CodeQL`. Observe the rendered README on `main`. Note the
+     shields.io nuance: `GitHub release` and `Maven Central` both return **HTTP 200** because
+     shields renders a "no release" / "not found" badge rather than erroring, so they **PASS**
+     reachability while still being visually unresolved. Reachability is not resolution; only the
+     rendered README tells you whether a badge reads a real value. These two resolve after the
+     first `vX.Y.Z` tag and publish.
+  2. **The first Codecov upload from `main`, and the badge turning from "unknown" to a
+     percentage** — needs maintainer checklist items **1** and **2** (Codecov project plus the
+     stored token). Observe the Codecov project page for the first report, then the `codecov`
+     badge in the README.
+  3. **CodeQL results under Security → Code scanning for both analyses** — the `java-kotlin`
+     and `actions` matrix entries, checklist item **7**. Also unverifiable until then: **whether
+     the shipped CodeQL bundle supports the Kotlin 2.3.0 extractor.** If the `java-kotlin` matrix
+     entry fails on an unsupported language level, apply the design's escalation ladder — first
+     pin `tools:` to a bundle that does support it, and only if that fails reduce the matrix to
+     `actions` only — and log the exact Kotlin / JDK / CodeQL bundle combination that failed here,
+     since that combination is the whole finding.
+  4. **The dependency-graph submission naming the commit SHA and carrying entries for all three
+     modules** — checklist item **3**. Observe Insights → Dependency graph after the submission
+     workflow runs on `main`; the snapshot must be attributed to the merge commit SHA, not to a
+     detached or synthetic ref.
+  5. **Whether Dependabot accepts `multi-ecosystem-groups`** — observe the Dependabot log
+     (Insights → Dependency graph → Dependabot) for a config-parse error. If the key is rejected,
+     apply the per-ecosystem fallback: the same weekly **Monday 06:00 Etc/UTC** schedule, the same
+     labels, a `chore` commit prefix **with scope**, and an open-PR limit of **5** per ecosystem —
+     and log that the fallback was taken, because that is the interesting result.
+  6. **The first Dependabot pull request turning `ci-dependabot-validation.yml` green with the
+     Codecov step skipped, and carrying its labels** — needs checklist item **6** (the labels must
+     exist before Dependabot can apply them). Observe the PR's checks tab: the Codecov step must
+     report as *skipped* rather than failing on a missing token, since `secrets` are not available
+     to Dependabot-triggered runs.
+  7. **The Gradle wrapper JAR checksum matching a published Gradle release** — observe
+     `gradle-wrapper-validation.yml` on the first pull request. The action compares against
+     Gradle's published checksum list, which is a network fact and cannot be asserted locally.
+  8. **The required-status-check blocking behaviour** — checklist items **11** and **12**.
+     Observe branch protection on `main` and then a deliberately failing check: the merge button
+     must actually be blocked. A configured check that does not block is indistinguishable from no
+     check at all.
+  9. **The `Build Status` badge image** — it 404s until `ci-main-build.yml` has run on `main`, so
+     `check_badge_urls` reports **SKIP** with that reason rather than a failure. It resolves on
+     merge, with the first run of that workflow.
+
+---
+
+## `check_badge_urls` cannot catch a wrong-but-well-formed shields.io path
+
+- **Symptom / trigger:** Found while proving each check fails on a deliberate defect (task 15.13).
+  The deliberate defect was a nonsense badge path,
+  `https://img.shields.io/nonexistent-endpoint-xyz/kotlin-2.3.0-blue.svg`, which was expected to
+  404 and fail the reachability check. It returns **HTTP 200** — shields.io renders an *error
+  badge* image instead of refusing the request — so `check_badge_urls` passed on a badge URL that
+  is unambiguously wrong. **Cause:** shields.io answers any well-formed request with a valid SVG,
+  including one describing its own error, so an HTTP status code cannot distinguish a real badge
+  from an error badge. Only an unresolvable host or a genuine non-2xx response fails the check.
+- **Resolution / status:** **KNOWN LIMITATION — not a defect, and not a gap in coverage.**
+  Reachability is deliberately the weakest of the three badge checks, and the other two close the
+  hole: `check_badge_block` asserts the whole badge block against an **exact literal**, so any
+  altered path is a mismatch, and `check_badge_sources` asserts each badge's **value against its
+  source of truth** (the version catalog, the coverage gates, the workflow filenames). A wrong
+  shields path is therefore caught by those two checks rather than by reachability. `check_badge_urls`
+  remains worth keeping for what it does prove — that the badge hosts are reachable and that no
+  badge points at a dead endpoint — as long as nobody reads its PASS as "this badge renders a real
+  value".
+
 # Plan
 Right now it's somewhere between:
 

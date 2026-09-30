@@ -1,0 +1,34 @@
+name: CI - Dependency Submission
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write        # the only write scope; required to submit the graph
+
+jobs:
+  dependency-submission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags, so the project version resolved here matches a release build
+          # of the same commit.
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      # Resolves every project's dependencies by default, so all three modules
+      # (:streaming-core, :streaming-s3-example, :streaming-s3-example-java) appear in the
+      # submitted graph. No step is gated on the event name, so a workflow_dispatch run
+      # against any ref does exactly what a push to main does.
+      - name: Submit resolved dependency graph
+        uses: gradle/actions/dependency-submission@v4

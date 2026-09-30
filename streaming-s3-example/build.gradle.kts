@@ -11,36 +11,34 @@ dependencies {
     implementation(project(":streaming-core"))
 
     // --- AWS Lambda runtime contracts ---
-    implementation("com.amazonaws:aws-lambda-java-core:${rootProject.extra["awsLambdaCoreVersion"]}")
+    implementation(libs.aws.lambda.core)
 
     // --- AWS SDK for Kotlin (NOT the Java SDK) ---
-    implementation("aws.sdk.kotlin:s3:${rootProject.extra["awsSdkKotlinVersion"]}")
+    implementation(libs.aws.sdk.kotlin.s3)
 
     // --- Logging ---
-    implementation("io.github.oshai:kotlin-logging-jvm:${rootProject.extra["kotlinLoggingVersion"]}")
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation(libs.kotlin.logging.jvm)
+    implementation(libs.slf4j.simple)
 
     // --- Coroutines (StreamHandler uses runBlocking) ---
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${rootProject.extra["coroutinesVersion"]}")
+    implementation(libs.kotlinx.coroutines.core)
 
     // --- Serialization (RequestParser and JsonRequestResolver use kotlinx-serialization) ---
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.extra["kotlinxSerializationVersion"]}")
+    implementation(libs.kotlinx.serialization.json)
 
     // --- CRaC priming hook for SnapStart ---
-    implementation("org.crac:crac:${rootProject.extra["cracVersion"]}")
+    implementation(libs.crac)
 
     // --- Testing ---
-    testImplementation("org.junit.jupiter:junit-jupiter:${rootProject.extra["junitVersion"]}")
-    testImplementation("io.mockk:mockk:${rootProject.extra["mockkVersion"]}")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${rootProject.extra["coroutinesVersion"]}")
-    testImplementation("org.testcontainers:testcontainers:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("org.testcontainers:junit-jupiter:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("io.floci:testcontainers-floci:${rootProject.extra["flociTestcontainersVersion"]}")
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.bundles.integration.testing)
     // Lambda + API Gateway control planes, used only by FlociLambdaApiGatewayIntegrationTest to
     // deploy the shadow jar into the emulator and front it with a REST API. Not shipped.
-    testImplementation("aws.sdk.kotlin:lambda:${rootProject.extra["awsSdkKotlinVersion"]}")
-    testImplementation("aws.sdk.kotlin:apigateway:${rootProject.extra["awsSdkKotlinVersion"]}")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.aws.sdk.kotlin.lambda)
+    testImplementation(libs.aws.sdk.kotlin.apigateway)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // ---- Toolchain & compilation: Java 25 -------------------------------------------------------
@@ -64,8 +62,9 @@ tasks.test {
         }
     }
     systemProperty("net.bytebuddy.experimental", "true")
-    // Emulator image pin for the integration tests, from the root version catalog.
-    systemProperty("floci.image", rootProject.extra["flociImage"] as String)
+    // Emulator image pin for the integration tests. The image name is not a Maven coordinate, so it
+    // stays here; only the tag comes from the version catalog.
+    systemProperty("floci.image", "floci/floci:${libs.versions.flociImage.get()}")
 
     // FlociLambdaApiGatewayIntegrationTest deploys the shadow jar into the emulated Lambda, so the
     // jar has to exist on disk. The path is passed via a CommandLineArgumentProvider (not a plain

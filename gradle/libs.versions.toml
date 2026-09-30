@@ -1,0 +1,77 @@
+# Single source of truth for every external dependency and plugin version.
+# Declared here rather than in build.gradle.kts `extra[...]` entries because Dependabot's
+# Gradle parser does not evaluate Kotlin-DSL map lookups. See docs/log.md.
+
+[versions]
+kotlin = "2.3.0"
+shadow = "9.0.2"
+kover = "0.9.1"
+mavenPublish = "0.31.0"
+bcv = "0.18.1"
+jacoco = "0.8.14"
+
+awsLambdaCore = "1.4.0"
+awsLambdaEvents = "3.16.1"
+awsSdkKotlin = "1.6.59"
+awsSdkJava = "2.50.2"
+kotlinxSerialization = "1.9.0"
+kotlinxCoroutines = "1.10.2"
+kotlinLogging = "7.0.7"
+slf4j = "2.0.16"
+jackson = "2.22.1"
+crac = "1.5.0"
+
+junit = "6.0.0"
+mockk = "1.14.5"
+mockito = "5.23.0"
+testcontainers = "1.21.4"
+# Floci — local AWS emulator used by the integration tests. The 1.x line of the Testcontainers
+# module builds against Testcontainers 1.21.4, matching the version above; the 2.x line requires
+# Testcontainers 2.x.
+flociTestcontainers = "1.14.0"
+# Docker image tag for the Floci emulator, not a Maven coordinate — Dependabot cannot bump this.
+# It pins the emulator itself, since the module's no-arg constructor would otherwise track
+# `floci/floci:latest`.
+flociImage = "1.7.0"
+
+[libraries]
+aws-lambda-core        = { module = "com.amazonaws:aws-lambda-java-core", version.ref = "awsLambdaCore" }
+aws-lambda-events      = { module = "com.amazonaws:aws-lambda-java-events", version.ref = "awsLambdaEvents" }
+aws-sdk-kotlin-s3         = { module = "aws.sdk.kotlin:s3", version.ref = "awsSdkKotlin" }
+aws-sdk-kotlin-lambda     = { module = "aws.sdk.kotlin:lambda", version.ref = "awsSdkKotlin" }
+aws-sdk-kotlin-apigateway = { module = "aws.sdk.kotlin:apigateway", version.ref = "awsSdkKotlin" }
+# The Java example uses the AWS SDK for Java v2 (not the Kotlin SDK), Jackson for request parsing,
+# and Mockito for mocking — none of which the Kotlin modules need.
+aws-sdk-java-bom       = { module = "software.amazon.awssdk:bom", version.ref = "awsSdkJava" }
+aws-sdk-java-s3        = { module = "software.amazon.awssdk:s3" }            # version from the BOM
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core    = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test    = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlin-logging-jvm     = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
+slf4j-simple           = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+jackson-databind       = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+crac                   = { module = "org.crac:crac", version.ref = "crac" }
+
+junit-jupiter          = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }  # version from junit-jupiter
+mockk                  = { module = "io.mockk:mockk", version.ref = "mockk" }
+mockito-core           = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+mockito-junit-jupiter  = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+testcontainers         = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+floci-testcontainers   = { module = "io.floci:testcontainers-floci", version.ref = "flociTestcontainers" }
+# Never added to a configuration. Declared so Dependabot sees the JaCoCo coordinate and bumps the
+# `jacoco` version entry that `jacoco.toolVersion` reads.
+jacoco-agent           = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" }
+
+[bundles]
+# Both example modules take exactly these three for their Floci integration tests.
+integration-testing = ["testcontainers", "testcontainers-junit-jupiter", "floci-testcontainers"]
+
+[plugins]
+kotlin-jvm    = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+shadow        = { id = "com.gradleup.shadow", version.ref = "shadow" }
+kover         = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }
+bcv           = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "bcv" }

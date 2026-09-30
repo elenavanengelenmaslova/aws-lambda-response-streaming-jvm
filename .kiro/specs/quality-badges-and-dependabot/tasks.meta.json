@@ -1,0 +1,917 @@
+{
+  "pbtResults": {
+    "3.1 Capture the post-migration baseline and diff it against `before`": {
+      "status": "passed",
+      "lastRunTimestamp": 1790658495004
+    }
+  },
+  "executionHistory": {
+    "1.1 Add the `resolvedCoordinates` task and the baseline capture script": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657417611
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657429395
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657777950
+      }
+    ],
+    "1.2 Capture the pre-migration Version_Catalog_Baseline": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657417710
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657781182
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657892534
+      }
+    ],
+    "2.1 Create `gradle/libs.versions.toml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657417777
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657895500
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658036316
+      }
+    ],
+    "2.2 Migrate `streaming-core/build.gradle.kts` to catalog accessors": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657417883
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658041793
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658204444
+      }
+    ],
+    "2.3 Migrate `streaming-s3-example/build.gradle.kts` to catalog accessors": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418042
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658045114
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658207524
+      }
+    ],
+    "2.4 Migrate `streaming-s3-example-java/build.gradle.kts` to catalog accessors": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418148
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658048433
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658210922
+      }
+    ],
+    "2.5 Strip the root `build.gradle.kts` of versions and switch its plugins to aliases": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418217
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658214204
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658284450
+      }
+    ],
+    "3.1 Capture the post-migration baseline and diff it against `before`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418270
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658291878
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658514947
+      }
+    ],
+    "3.2 Confirm the Java module's Kover-named aliases still resolve": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418531
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658295200
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658518309
+      }
+    ],
+    "4. Checkpoint - migration verified": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418624
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658534064
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658537656
+      }
+    ],
+    "5.1 Add the root `verifyCoverageReports` task": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418860
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658541340
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658815200
+      }
+    ],
+    "5.2 Prove `verifyCoverageReports` fails on a missing or empty report": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657418989
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658827116
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659233522
+      }
+    ],
+    "6.1 Declare MIT in the `streaming-core` publication POM": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419143
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659256647
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659571060
+      }
+    ],
+    "7.1 Create `codecov.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419219
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658830354
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659236742
+      }
+    ],
+    "7.2 Wire coverage and Codecov into `workflow-build.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419285
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659259832
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659575918
+      }
+    ],
+    "8.1 Create `.github/workflows/ci-main-build.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419409
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659895094
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790660011709
+      }
+    ],
+    "8.2 Create `.github/workflows/ci-dependabot-validation.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419534
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659903300
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790660015369
+      }
+    ],
+    "8.3 Create `.github/workflows/codeql.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419576
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659590903
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659889477
+      }
+    ],
+    "8.4 Create `.github/workflows/gradle-wrapper-validation.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419618
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658833702
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659240035
+      }
+    ],
+    "8.5 Create `.github/workflows/dependency-submission.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419678
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658836854
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659243421
+      }
+    ],
+    "9. Checkpoint - build green, workflows parse": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419752
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790660027241
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790705491592
+      }
+    ],
+    "10.1 Create `.github/dependabot.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419793
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659262852
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659579157
+      }
+    ],
+    "11.1 Create `.snyk`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419844
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658840883
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659248064
+      }
+    ],
+    "11.2 Create `.coderabbit.yaml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419885
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659267576
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659583602
+      }
+    ],
+    "11.3 Create `trufflehog-config.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419922
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659270536
+      },
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659586999
+      }
+    ],
+    "12.1 Write `CONTRIBUTING.md` including the maintainer setup checklist": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657419967
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790705492906
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706011950
+      }
+    ],
+    "12.2 Write `SECURITY.md`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420006
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706161420
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706432283
+      }
+    ],
+    "12.3 Write `CODE_OF_CONDUCT.md`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420051
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790705494814
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706433142
+      }
+    ],
+    "12.4 Add the community templates": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420093
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790705496222
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706009214
+      }
+    ],
+    "12.5 Add `.github/FUNDING.yml`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420140
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790705497681
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706010627
+      }
+    ],
+    "12.6 Link `SECURITY.md` and `CONTRIBUTING.md` from the README": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420206
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706460461
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706572398
+      }
+    ],
+    "13.1 Insert the eight-badge block under the README title": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420249
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706598301
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706707707
+      }
+    ],
+    "14.1 Append the Gradle, coverage and licence entries": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420290
+      },
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706712075
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790711458711
+      }
+    ],
+    "14.2 Append the workflow, CI and badge entries": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420332
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790711483327
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713096374
+      }
+    ],
+    "15.1 Build the `verify-quality-signals.sh` scaffold": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420377
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713116606
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713883316
+      }
+    ],
+    "15.2 Implement `check_badge_block`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420424
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713888429
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790743898273
+      }
+    ],
+    "15.3 Implement `check_badge_sources`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420468
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713889440
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790745305782
+      }
+    ],
+    "15.4 Implement `check_licence`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420541
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713890313
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790743898819
+      }
+    ],
+    "15.5 Implement `check_catalog`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420582
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713891779
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790781436059
+      }
+    ],
+    "15.6 Implement `check_coverage_paths`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420644
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713893154
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790743899883
+      }
+    ],
+    "15.7 Implement `check_permissions`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420707
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790745307009
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790747292482
+      }
+    ],
+    "15.8 Implement `check_workflows`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420807
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790747295256
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790781437416
+      }
+    ],
+    "15.9 Implement `check_dependabot_isolation`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420857
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790745308421
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790747293808
+      }
+    ],
+    "15.10 Implement `check_config_paths`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420899
+      },
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790747296700
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790781438410
+      }
+    ],
+    "15.11 Implement `check_docs`": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420940
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790781439852
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790782178427
+      }
+    ],
+    "15.12 Implement `check_badge_urls` (network mode)": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657420982
+      },
+      {
+        "executionId": "405c09ad-58b7-4724-803f-f667015d399d",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790782180266
+      },
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790782811794
+      },
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790789011333
+      }
+    ],
+    "15.13 Prove each check fails on a deliberate failure": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657421026
+      },
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790789011596
+      }
+    ],
+    "16. Final checkpoint - ensure everything passes and record what remains post-merge": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657421077
+      },
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790789034902
+      },
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790794095695
+      }
+    ],
+    "1. Dependency-resolution baseline tooling and capture": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790657892599
+      }
+    ],
+    "2. Version catalog and build-file migration": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658284539
+      }
+    ],
+    "3. Prove the migration changed declaration form only": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790658518352
+      }
+    ],
+    "5. Coverage aggregation": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659233589
+      }
+    ],
+    "6. Licence alignment": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659571153
+      }
+    ],
+    "7. Codecov configuration and upload wiring": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659575964
+      }
+    ],
+    "10. Dependabot configuration": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659579214
+      }
+    ],
+    "11. Third-party review and scanning configuration": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790659587051
+      }
+    ],
+    "8. New CI workflows": [
+      {
+        "executionId": "8aff8776-204b-4bf3-bf6a-2285c020f359",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790660015418
+      }
+    ],
+    "12. Documentation, community templates, and the maintainer setup checklist": [
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706572445
+      }
+    ],
+    "13. README badge block": [
+      {
+        "executionId": "fd51d850-182f-416d-9f37-016e0cba67a3",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790706707781
+      }
+    ],
+    "14. Knowledge capture in `docs/log.md`": [
+      {
+        "executionId": "043b52c5-4fe3-41a9-9248-8de153dc5790",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790713096432
+      }
+    ],
+    "15. Verification script": [
+      {
+        "executionId": "033fee6a-3944-4261-bad3-ae2d2d2137c2",
+        "chatSessionId": "sess_9790cabf-27b1-401f-a4b6-9812f76309f7",
+        "timestamp": 1790789011643
+      }
+    ]
+  }
+}

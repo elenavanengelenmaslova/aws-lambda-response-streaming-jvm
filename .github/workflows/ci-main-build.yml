@@ -1,0 +1,28 @@
+name: CI - Main Build
+
+on:
+  # paths-ignore is on `push` only. On `pull_request` it would make a docs-only PR never report
+  # the required check, and a required check that never reports blocks the merge forever.
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.kiro/**']
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One job, one `uses:`, no deploy or streaming-test stage. The 30-minute bound lives on
+  # workflow-build.yml's jobs: `timeout-minutes` is not supported on a reusable-workflow caller job.
+  build:
+    uses: ./.github/workflows/workflow-build.yml
+    with:
+      aws-region: 'eu-west-1'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
