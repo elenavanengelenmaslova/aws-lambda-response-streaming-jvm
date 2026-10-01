@@ -1107,6 +1107,38 @@ Each entry uses the form:
   stack is redeployed** — the live role keeps the old trust policy, so deploys keep failing with
   the same error until then.
 
+---
+
+## Fixing the OIDC template was not enough: the deploy path never passed the new parameters
+
+- **Symptom / trigger:** The trust-policy fix above looked complete, but a redeploy would have
+  changed nothing observable. **Cause:** `scripts/setup-oidc.sh` is the deploy path for the OIDC
+  stack, and its `--parameter-overrides` string only carried `GitHubOrg` and `GitHubRepo`. The new
+  ID parameters were never passed, so CloudFormation would have silently fallen back to the
+  template defaults — correct for this repository by luck, wrong for any fork, and invisible either
+  way because a `sub` mismatch surfaces only as a generic `sts:AssumeRoleWithWebIdentity` denial at
+  the next workflow run. The script also still defaulted `DEFAULT_REPO` to the stale
+  `aws-lambda-streaming-jvm-runtime`. The deeper hazard was the reverse direction: hardcoded
+  numeric IDs make the template immutable-only, so a fork or any repository still on the legacy
+  name-based claim format would get a policy that can never match — again with no error at deploy
+  time.
+- **Resolution / status:** **FIXED** — the two ID parameters collapsed into one `SubjectPrefix`
+  (default `repo:elenavanengelenmaslova@113334433/*@1261291270`) and the three `StringLike`
+  patterns are now `!Sub '${SubjectPrefix}:<scope>'`. One parameter rather than hardcoded IDs is
+  the point: the prefix is exactly what GitHub reports, and it expresses both claim formats.
+  `scripts/setup-oidc.sh` now derives it per repository — `gh api
+  /repos/OWNER/REPO/actions/oidc/customization/sub` for `use_immutable_subject`, plus `gh api
+  /repos/OWNER/REPO` for `.owner.id` and `.id` — building
+  `repo:<owner>@<owner_id>/*@<repo_id>` on immutable claims and `repo:<owner>/<repo>` (with a
+  printed note) on legacy, overridable by a pre-set `SUBJECT_PREFIX` env var when `gh` is absent.
+  It prints the resolved prefix and all three `sub` patterns in the Configuration block before
+  asking to continue, so a mismatch is visible *before* the deploy instead of at the next workflow
+  run. Also fixed two latent bugs in the same script: the `if [ $? -eq 0 ]` check after
+  `aws cloudformation deploy` was dead code under `set -e` (the deploy now runs under `if ! ...`
+  so a failure actually prints the red message and exits non-zero), and the deliberately unquoted
+  `$PARAMS` word-splitting is now documented with a `# shellcheck disable=SC2086`. Added
+  `--yes`/`-y` and `OIDC_SETUP_NON_INTERACTIVE=1` for unattended runs.
+
 # Plan
 Right now it's somewhere between:
 

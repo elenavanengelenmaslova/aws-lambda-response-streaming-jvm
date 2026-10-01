@@ -7,20 +7,25 @@ Description: >-
 Parameters:
   GitHubOrg:
     Type: String
-    Description: GitHub organization or username
+    Description: >-
+      GitHub organization or username. Informational only — it documents intent and is echoed by
+      scripts/setup-oidc.sh; the trust policy matches on SubjectPrefix, not on this value.
     Default: elenavanengelenmaslova
   GitHubRepo:
     Type: String
-    Description: GitHub repository name
+    Description: >-
+      GitHub repository name. Informational only — it documents intent and is echoed by
+      scripts/setup-oidc.sh; the trust policy matches on SubjectPrefix, not on this value.
     Default: aws-lambda-response-streaming-jvm
-  GitHubOwnerId:
+  SubjectPrefix:
     Type: String
-    Description: Immutable numeric GitHub owner ID (account/organisation ID, never changes on rename)
-    Default: '113334433'
-  GitHubRepoId:
-    Type: String
-    Description: Immutable numeric GitHub repository ID (never changes on rename or transfer)
-    Default: '1261291270'
+    Description: >-
+      OIDC subject prefix that the `sub` patterns are built from. Obtain it from
+      `gh api /repos/OWNER/REPO/actions/oidc/customization/sub` rather than assembling it by hand:
+      a repository on immutable claims (`use_immutable_subject: true`) yields
+      `repo:<owner>@<owner_id>/<repo>@<repo_id>`, while a legacy repository yields
+      `repo:<owner>/<repo>`. scripts/setup-oidc.sh derives this automatically for either format.
+    Default: 'repo:elenavanengelenmaslova@113334433/*@1261291270'
   RoleName:
     Type: String
     Description: Name for the GitHub Actions role
@@ -91,30 +96,29 @@ Resources:
             Condition:
               StringEquals:
                 'token.actions.githubusercontent.com:aud': sts.amazonaws.com
-              # This repository uses GitHub's IMMUTABLE subject claims, so the token's `sub`
-              # carries numeric IDs rather than the repository name:
-              #   repo:<owner>@<owner_id>/<repo-name>@<repo_id>:<scope>
-              # A repository is moved onto this format by a rename or a transfer; this one was
-              # renamed (aws-lambda-streaming-jvm-runtime -> aws-lambda-response-streaming-jvm).
-              # The authoritative prefix is whatever GitHub reports for the repo:
-              #   gh api /repos/OWNER/REPO/actions/oidc/customization/sub
-              # (`use_immutable_subject: true` plus the exact `sub_claim_prefix`) — read it there
-              # rather than assembling it by hand.
+              # The `sub` patterns below are the SubjectPrefix parameter plus a scope suffix.
+              # SubjectPrefix is COMPUTED BY scripts/setup-oidc.sh from what GitHub reports for
+              # the repository (`gh api /repos/OWNER/REPO/actions/oidc/customization/sub`) — it is
+              # never hand-assembled here, and it is a single parameter precisely because the
+              # shape differs per repository: immutable claims give
+              # `repo:<owner>@<owner_id>/<repo>@<repo_id>`, legacy claims give `repo:<owner>/<repo>`.
               #
-              # Both IDs are pinned and only the mutable NAME segment is wildcarded. The IDs are
-              # the security-bearing parts, so this still admits exactly one repository under
-              # exactly one owner — just as tight as a name-based pattern, but it survives the
-              # next rename. Never wildcard either ID, and never drop the ${GitHubOrg} segment.
+              # For a repository on IMMUTABLE claims (this one is, after the rename
+              # aws-lambda-streaming-jvm-runtime -> aws-lambda-response-streaming-jvm) the script
+              # pins both the owner ID and the repo ID and wildcards only the mutable NAME
+              # segment, so a future rename does not break the policy. The IDs are the
+              # security-bearing parts, so this still admits exactly one repository under exactly
+              # one owner — as tight as a name-based pattern. Never wildcard either ID.
               #
-              # The legacy `repo:${GitHubOrg}/${GitHubRepo}:*` patterns were REMOVED rather than
-              # left in place: a stale name-based pattern is an active hazard, not dead weight.
-              # The owner can create a new repository reusing the old name, and that unrelated
+              # The legacy `repo:<owner>/<repo>:*` patterns were REMOVED rather than left in place
+              # alongside: a stale name-based pattern is an active hazard, not dead weight. The
+              # owner can create a new repository reusing the old name, and that unrelated
               # repository would then inherit this role's trust.
               StringLike:
                 'token.actions.githubusercontent.com:sub':
-                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:ref:refs/heads/main'
-                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:ref:refs/heads/feature/*'
-                  - !Sub 'repo:${GitHubOrg}@${GitHubOwnerId}/*@${GitHubRepoId}:environment:*'
+                  - !Sub '${SubjectPrefix}:ref:refs/heads/main'
+                  - !Sub '${SubjectPrefix}:ref:refs/heads/feature/*'
+                  - !Sub '${SubjectPrefix}:environment:*'
       Policies:
         - PolicyName: StreamingDeploymentPolicy
           PolicyDocument:
