@@ -1,0 +1,15 @@
+gradle:
+  allProjects: true          # :streaming-core, :streaming-s3-example, :streaming-s3-example-java
+code:
+  enabled: true
+iac:
+  enabled: true
+  include:
+    - deployment/aws/sam/template.yaml
+    - deployment/aws/sam-java/template.yaml
+    - deployment/aws/oidc/github-oidc-role.yaml
+exclude:
+  global:
+    - "**/build/**"
+    - "**/bin/**"
+    - ".gradle/**"

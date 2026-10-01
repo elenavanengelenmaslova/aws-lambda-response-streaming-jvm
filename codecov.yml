@@ -1,0 +1,23 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  status:
+    project:
+      default:
+        # 80% matches the LOWEST per-module gate in the repository (the two example modules).
+        # :streaming-core is gated at 90% by koverVerify; that stricter gate stays the build's
+        # responsibility, not Codecov's, so a single aggregate target cannot be set to 90%.
+        target: 80%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+
+ignore:
+  - "**/test/**"
+  - "**/build/**"
+  - "**/bin/**"
+  - "deployment/**"

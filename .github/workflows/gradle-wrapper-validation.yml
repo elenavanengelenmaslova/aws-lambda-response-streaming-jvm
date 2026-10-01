@@ -1,0 +1,23 @@
+name: CI - Validate Gradle Wrapper
+
+# No paths/paths-ignore filter on either trigger: no change may bypass wrapper
+# validation. This workflow deliberately invokes no Gradle task and adds no
+# setup-gradle step -- setup-gradle would both run Gradle tooling and duplicate
+# the validation it performs internally.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
+        with:
+          min-wrapper-count: 1     # zero wrapper JARs is a failure, not a pass

@@ -1,0 +1,26 @@
+# TruffleHog secret-scanning configuration.
+#
+# INERT: nothing in this repository consumes this file yet. No workflow and no
+# installed app reads it, so committing or changing it has no observable effect.
+# Enabling a secret-scanning run that consumes it is maintainer setup checklist
+# item 10 in CONTRIBUTING.md; SECURITY.md records the same.
+#
+# Detector sets are deliberately narrower than the reference repository's six:
+# there is no GitLab or Slack integration here, so those detectors could only
+# produce false positives.
+detectors:
+  - AWS
+  - GitHub
+  - Generic
+
+# Generated and gitignored trees. The Eclipse/JDT `bin/main` and `bin/test`
+# trees under all three modules hold stale copies of every source file: a
+# git-tree scan never sees them, but a local CLI run walks the working tree and
+# would report every finding twice. Test fixtures are sample payloads, and any
+# placeholder credential put in one would be a finding by construction rather
+# than a leaked secret.
+exclude_paths:
+  - "**/build/**"
+  - "**/bin/**"
+  - ".gradle/**"
+  - "**/src/test/resources/**"

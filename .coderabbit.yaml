@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit review scope for this repository.
+#
+# `path_filters` is a single ordered list: bare patterns include, `!`-prefixed
+# patterns exclude, and an exclusion wins for any path matched by both lists.
+# The `**/bin/**` exclusion is not cosmetic here: Eclipse/JDT writes `bin/main`
+# and `bin/test` trees under all three modules holding stale copies of every
+# source file. They are gitignored, so a git-tree review never sees them, but
+# anything walking the working tree would review every file twice.
+language: en-US
+
+reviews:
+  path_filters:
+    # include
+    - "streaming-core/**"
+    - "streaming-s3-example/**"
+    - "streaming-s3-example-java/**"
+    - "deployment/**"
+    - "build.gradle.kts"
+    - "settings.gradle.kts"
+    - "gradle.properties"
+    - "gradle/libs.versions.toml"
+    - "**/*.md"
+    # exclude (takes precedence over the include patterns above)
+    - "!**/build/**"
+    - "!**/bin/**"
+    - "!.gradle/**"
+    - "!**/*.jar"
+    - "!**/*.class"
+
+  path_instructions:
+    - path: "streaming-core/**"
+      instructions: >-
+        This is the published library module and its public API is a contract.
+        Review for public-API stability and `explicitApi()` compliance: every
+        public declaration must state its visibility and its return type
+        explicitly. Any change to a public declaration requires a matching
+        `apiDump` — flag a public-API change that does not come with an updated
+        `streaming-core/api/streaming-core.api`. Treat a removal or a
+        signature change of an existing public declaration as breaking unless
+        the pull request says otherwise.
+    # One entry for both example modules: `streaming-s3-example/**` and
+    # `streaming-s3-example-java/**` share the same review focus.
+    - path: "{streaming-s3-example,streaming-s3-example-java}/**"
+      instructions: >-
+        These are the example modules: AWS integration glue plus the API
+        Gateway streaming-response protocol. Review for protocol correctness.
+        Validate the request and the S3 object before committing the status
+        code — the status is final once the metadata and the delimiter are
+        written. The wire order is metadata JSON, then the 8-byte null
+        delimiter, then body bytes. The body must be copied with a bounded
+        buffer and never materialised as a `String` or a byte array, and each
+        chunk must be flushed so the client observes progressive delivery.
+    - path: "**/src/test/**"
+      instructions: >-
+        Test names use Given-When-Then phrasing in backticks, for example
+        `` `Given a 15MB S3 object When streamed Then body is byte-identical` ``.
+        Check that new or changed code stays inside the coverage gates: 90% for
+        `streaming-core`, 80% for each example module. Flag production changes
+        that arrive without the tests needed to hold those gates.

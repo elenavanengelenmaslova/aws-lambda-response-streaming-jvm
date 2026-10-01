@@ -1,0 +1,63 @@
+name: CI - CodeQL
+
+# No paths/paths-ignore filter on any trigger: documentation-only changes and
+# workflow-only changes must both be analysed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'      # Mondays 04:17 UTC, ahead of Dependabot's Monday 06:00 UTC run
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Exactly these four scopes. No id-token: write -- the reference repository declares
+    # it, but nothing here assumes an AWS or OIDC role.
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      packages: read
+    strategy:
+      # A failure in one language must not cancel the other.
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: actions
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 25 is the highest toolchain in the build; the foojay resolver in
+      # settings.gradle.kts provisions Java 21 for :streaming-core during assemble,
+      # so this one setup covers all three modules.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # Must sit between init and analyze for build-mode: manual. assemble runs no test
+      # task; it does build both shadow jars, which keeps the extractor's classpath complete.
+      - name: Build all modules for extraction
+        if: matrix.build-mode == 'manual'
+        run: ./gradlew assemble --stacktrace
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

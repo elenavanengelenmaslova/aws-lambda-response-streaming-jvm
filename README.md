@@ -1,5 +1,15 @@
 # aws-lambda-streaming-core
 
+[![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/releases/latest)
+[![Maven Central](https://img.shields.io/maven-central/v/nl.vintik/aws-lambda-streaming-core)](https://central.sonatype.com/artifact/nl.vintik/aws-lambda-streaming-core)
+[![Build Status](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml/badge.svg?branch=main)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml)
+[![codecov](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/graph/badge.svg)](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)
+[![CodeQL](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/security/code-scanning)
+
+[![Kotlin](https://img.shields.io/badge/kotlin-2.3.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
+[![JVM](https://img.shields.io/badge/JVM-21-orange.svg)](https://openjdk.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A JVM library that implements the **AWS Lambda / API Gateway HTTP response streaming protocol** for Kotlin and Java.
 
 AWS provides Node.js helpers (`HttpResponseStream.from()`) that hide the wire format. On the JVM there is no equivalent — you write the protocol by hand or use this library.
@@ -134,6 +144,16 @@ An oversized prelude then raises `MetadataTooLargeException` **before anything i
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
 Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer.
+
+## Contributing and security
+
+| Document | What it covers |
+|---|---|
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Build commands, test tags, coverage gates, the version-catalog rule, commit conventions, and the checks to run before opening a pull request |
+| [`SECURITY.md`](SECURITY.md) | How to report a vulnerability privately, the response windows, and what each security and quality tool here is for |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Expected and unacceptable behaviour, scope, and the enforcement contact |
+
+Repository settings only the owner can change — accounts, secrets, labels, security toggles — are listed once, in dependency order, under [Maintainer setup checklist](CONTRIBUTING.md#maintainer-setup-checklist).
 
 ## License
 

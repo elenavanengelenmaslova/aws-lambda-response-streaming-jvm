@@ -2,11 +2,16 @@ import com.vanniktech.maven.publish.SonatypeHost
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    // Versionless: these three come from the root build script's `apply false` declarations, so
+    // they are already on the inherited script classpath. Re-requesting them through
+    // `alias(...)` would re-introduce a version, which Gradle rejects.
     kotlin("jvm")
     kotlin("plugin.serialization")
-    id("com.vanniktech.maven.publish") version "0.31.0"
     id("org.jetbrains.kotlinx.kover")
-    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
+    // Module-local plugins — the root never declares them, so their versions come from
+    // gradle/libs.versions.toml.
+    alias(libs.plugins.maven.publish)
+    alias(libs.plugins.bcv)
 }
 
 group = "nl.vintik"
@@ -20,12 +25,13 @@ dependencies {
     // --- Serialization ---
     // The only runtime dependency. No AWS artifacts: this module implements the wire protocol and
     // never touches the Lambda or S3 APIs, so consumers pick their own AWS dependencies.
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.extra["kotlinxSerializationVersion"]}")
+    implementation(libs.kotlinx.serialization.json)
 
     // --- Testing ---
-    testImplementation("org.junit.jupiter:junit-jupiter:${rootProject.extra["junitVersion"]}")
-    testImplementation("io.mockk:mockk:${rootProject.extra["mockkVersion"]}")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.mockk)
+    // Versionless by design: the launcher's version is constrained by junit-jupiter.
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // ---- Toolchain & compilation: Java 21 (LTS, Lambda-standard) --------------------------------
@@ -81,9 +87,12 @@ mavenPublishing {
         description = "JVM implementation of the AWS Lambda / API Gateway streaming response protocol (metadata JSON + 8-byte delimiter + body). ResponseWriter encodes the wire format; copy() streams large payloads with bounded memory. Depends only on kotlinx-serialization — no AWS artifacts, no logging framework."
         url = "https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime"
         licenses {
+            // MIT, matching the repository LICENSE file — the authoritative source for the
+            // licence value. The identifier here, LICENSE's first line and the README licence
+            // badge are deliberately the same string.
             license {
-                name = "Apache-2.0"
-                url = "https://www.apache.org/licenses/LICENSE-2.0"
+                name = "MIT"
+                url = "https://opensource.org/licenses/MIT"
             }
         }
         developers {

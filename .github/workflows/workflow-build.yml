@@ -8,6 +8,10 @@ on:
         required: false
         type: string
         default: 'eu-west-1'
+    secrets:
+      CODECOV_TOKEN:
+        description: 'Codecov upload token. Omit on runs that cannot read repository secrets.'
+        required: false
 
 permissions:
   contents: read
@@ -15,6 +19,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -31,8 +36,48 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # One invocation, three XML reports, three coverage gates. `--continue` keeps the reports on
+      # disk when a gate fails, so the Codecov upload below still has something to send.
       - name: Run tests with coverage
-        run: ./gradlew :streaming-core:test :streaming-core:koverHtmlReport :streaming-core:koverVerify :streaming-s3-example:test :streaming-s3-example-java:test :streaming-s3-example-java:koverVerify -PexcludeTags=integration
+        run: ./gradlew verifyCoverageReports koverVerify koverHtmlReport -PexcludeTags=integration --continue
+
+      # The `secrets` context is unavailable in `if:`, so the token is mapped into `env` here and
+      # the decision is handed to the upload step as a step output. The value is never echoed.
+      - name: Determine coverage-upload eligibility
+        id: cov
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          set -uo pipefail
+          missing=0
+          for f in streaming-core/build/reports/kover/report.xml \
+                   streaming-s3-example/build/reports/kover/report.xml \
+                   streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml; do
+            [ -s "$f" ] || { echo "::error::coverage report missing or empty: $f"; missing=1; }
+          done
+          if [ -z "${CODECOV_TOKEN:-}" ]; then
+            echo "::notice::Coverage publishing skipped — no CODECOV_TOKEN available (maintainer setup checklist item 2)."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "reports-missing=$missing" >> "$GITHUB_OUTPUT"
+
+      # `continue-on-error` with `fail_ci_if_error`: the error lands in the log and the step is
+      # marked failed, but the job conclusion stays owned by the tests, the gates and sam validate.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && steps.cov.outputs.eligible == 'true' }}
+        uses: codecov/codecov-action@v5
+        timeout-minutes: 10
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: >-
+            streaming-core/build/reports/kover/report.xml,
+            streaming-s3-example/build/reports/kover/report.xml,
+            streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml
+          fail_ci_if_error: true
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
@@ -42,6 +87,7 @@ jobs:
 
   validate-sam:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:

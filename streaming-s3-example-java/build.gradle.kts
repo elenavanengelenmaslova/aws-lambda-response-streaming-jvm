@@ -16,14 +16,15 @@ dependencies {
     implementation(project(":streaming-core"))
 
     // --- AWS Lambda runtime contracts (RequestStreamHandler, Context) ---
-    implementation("com.amazonaws:aws-lambda-java-core:${rootProject.extra["awsLambdaCoreVersion"]}")
+    implementation(libs.aws.lambda.core)
 
     // --- AWS SDK for Java v2 (synchronous S3), NOT the coroutine-based Kotlin SDK ---
-    implementation(platform("software.amazon.awssdk:bom:${rootProject.extra["awsSdkJavaVersion"]}"))
-    implementation("software.amazon.awssdk:s3")
+    implementation(platform(libs.aws.sdk.java.bom))
+    // Versionless by design: the S3 version comes from the BOM above.
+    implementation(libs.aws.sdk.java.s3)
 
     // --- JSON: Jackson parses the API Gateway proxy event (idiomatic Java JSON reader) ---
-    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["jacksonVersion"]}")
+    implementation(libs.jackson.databind)
 
     // --- kotlinx-serialization-json: required on the compile classpath purely to reference the
     // library's `ResponseWriter(json, maxPreludeLen)` constructor from Java.
@@ -31,22 +32,21 @@ dependencies {
     // Java consumer must re-declare it to name `kotlinx.serialization.json.Json` (e.g. Json.Default)
     // at compile time. The Java module never serializes with it directly — the library owns that.
     // Interop friction logged for Req 1.5/14 (see docs/log.md via task 3.2). ---
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:${rootProject.extra["kotlinxSerializationVersion"]}")
+    implementation(libs.kotlinx.serialization.json)
 
     // --- Logging ---
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation(libs.slf4j.simple)
 
     // --- CRaC priming hook for SnapStart ---
-    implementation("org.crac:crac:${rootProject.extra["cracVersion"]}")
+    implementation(libs.crac)
 
     // --- Testing: JUnit Jupiter + Mockito (Java standard), TestContainers + Floci ---
-    testImplementation("org.junit.jupiter:junit-jupiter:${rootProject.extra["junitVersion"]}")
-    testImplementation("org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")
-    testImplementation("org.mockito:mockito-junit-jupiter:${rootProject.extra["mockitoVersion"]}")
-    testImplementation("org.testcontainers:testcontainers:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("org.testcontainers:junit-jupiter:${rootProject.extra["testcontainersVersion"]}")
-    testImplementation("io.floci:testcontainers-floci:${rootProject.extra["flociTestcontainersVersion"]}")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.junit.jupiter)
+    testImplementation(libs.bundles.integration.testing)
+    // Versionless by design: the launcher's version is constrained by junit-jupiter.
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 // ---- Toolchain & compilation: Java 25 -------------------------------------------------------
@@ -69,8 +69,9 @@ tasks.test {
     // `net.bytebuddy.experimental=true` opt-in the Kotlin/MockK module still requires. Confirmed at
     // the task-14.1 checkpoint (167 unit+property tests green with the flag absent). See docs/log.md.
 
-    // Emulator image pin for the integration tests, from the root version catalog.
-    systemProperty("floci.image", rootProject.extra["flociImage"] as String)
+    // Emulator image pin for the integration tests: the image name stays here, the tag comes from
+    // gradle/libs.versions.toml (a Docker tag, so Dependabot cannot bump it — see docs/log.md).
+    systemProperty("floci.image", "floci/floci:${libs.versions.flociImage.get()}")
 }
 
 // ---- Fat jar for Lambda deployment (Shadow) -------------------------------------------------
@@ -88,9 +89,11 @@ tasks.build {
 
 // ---- Coverage gate: 80% line coverage via JaCoCo --------------------------------------------
 // JaCoCo 0.8.14 is the first release to officially support Java 25 class files (0.8.13 was
-// experimental); pin it so the Java 25 toolchain's bytecode instruments cleanly.
+// experimental); pin it so the Java 25 toolchain's bytecode instruments cleanly. The version comes
+// from gradle/libs.versions.toml, where a never-configured `jacoco-agent` library entry keeps the
+// coordinate visible to Dependabot.
 jacoco {
-    toolVersion = "0.8.14"
+    toolVersion = libs.versions.jacoco.get()
 }
 
 // The report/verification tasks read the execution data produced by the `test` task (the JaCoCo
