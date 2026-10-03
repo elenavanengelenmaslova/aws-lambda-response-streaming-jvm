@@ -1,9 +1,6 @@
 name: CI - Dependabot Validation
 
 on:
-  push:
-    branches:
-      - 'dependabot/**'
   pull_request:
     branches:
       - main
@@ -12,16 +9,18 @@ permissions:
   contents: read
 
 concurrency:
-  # head_ref on pull_request, ref_name on push — both resolve to the dependabot branch name, so
-  # the two events for one branch share a group instead of racing.
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  # One run per Dependabot PR, keyed on its head branch. Dependabot always opens a PR, so
+  # pull_request alone covers every update — there is no push trigger to race against.
+  # cancel-in-progress only coalesces repeated synchronises of the SAME PR (a new push to that
+  # branch supersedes the in-flight run), which is the behaviour we want.
+  group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     # pull_request offers no head-branch filter, so the head-branch check lives here. On a human
     # pull request into main this job is skipped, not run — ci-main-build.yml covers those.
-    if: ${{ github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/') }}
+    if: ${{ startsWith(github.head_ref, 'dependabot/') }}
     # Build only: unit tests, coverage gates and both SAM template validations. A Dependabot run
     # gets a read-only token and a separate credential store, so this workflow hands the reusable
     # build nothing to authenticate with and passes whenever the build passes.
