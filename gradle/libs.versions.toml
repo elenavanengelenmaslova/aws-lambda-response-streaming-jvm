@@ -18,7 +18,7 @@ kotlinxSerialization = "1.9.0"
 kotlinxCoroutines = "1.10.2"
 kotlinLogging = "7.0.7"
 slf4j = "2.0.16"
-jackson = "2.22.1"
+jackson = "2.22.3"
 crac = "1.5.0"
 
 junit = "6.0.0"
