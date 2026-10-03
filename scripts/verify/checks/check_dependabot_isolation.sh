@@ -121,7 +121,7 @@ check_dependabot_isolation() {
         fi
 
         # --- 4. the head-branch guard on that job -----------------------------------------
-        local guard_expected="\${{ github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/') }}"
+        local guard_expected="\${{ startsWith(github.head_ref, 'dependabot/') }}"
         if [[ "$(_dbi_squash "$guard")" == "$(_dbi_squash "$guard_expected")" ]]; then
             report_pass "$dbi_file" "job '${name}' carries the head-branch guard 'if: ${guard_expected}' — pull_request has no head-branch filter, so this is what skips the job on a human pull request"
         elif [[ -z "$guard" ]]; then

@@ -1139,6 +1139,33 @@ Each entry uses the form:
   `$PARAMS` word-splitting is now documented with a `# shellcheck disable=SC2086`. Added
   `--yes`/`-y` and `OIDC_SETUP_NON_INTERACTIVE=1` for unattended runs.
 
+---
+
+## `CI - Dependabot Validation` runs twice on one Dependabot branch — one cancels the other
+
+- **Symptom / trigger:** A single Dependabot update (branch
+  `dependabot/gradle/gradle-747a0582b4`) produced **two** `CI - Dependabot Validation` runs
+  three seconds apart — the `push` run was cancelled and the `pull_request` run went green.
+  **Cause:** the workflow triggered on **both** `push` to `dependabot/**` **and** `pull_request`
+  to `main`, and a Dependabot update fires both (it pushes the branch *and* opens the PR). The
+  concurrency key `${{ github.workflow }}-${{ github.head_ref || github.ref_name }}` resolved to
+  the **same** value for both events (`head_ref` on the pull_request, `ref_name` on the push —
+  both the dependabot branch name), so with `cancel-in-progress: true` the second event cancelled
+  the first. The original concurrency comment claimed sharing a group made the two events "share
+  instead of race" — the reasoning was backwards: sharing a group *with* cancel-in-progress is
+  exactly what cancels one.
+
+- **Resolution / status:** **Resolved.** Dropped the redundant `push:` trigger — Dependabot always
+  opens a PR, so `pull_request` to `main` already covers every update with exactly one run. With
+  only `pull_request` left, the job guard simplifies from
+  `${{ github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/') }}` to
+  `${{ startsWith(github.head_ref, 'dependabot/') }}` (still skips a human PR into main, which
+  `ci-main-build.yml` covers), and the concurrency key drops the now-pointless push fallback to
+  `${{ github.workflow }}-${{ github.head_ref }}`. `cancel-in-progress: true` stays — it now only
+  coalesces successive synchronises of the *same* PR, which is correct. One behavioural
+  consequence worth noting: a `dependabot/**` branch *pushed with no PR* would no longer be
+  validated — which never happens, because Dependabot always opens a PR.
+
 # Plan
 Right now it's somewhere between:
 
