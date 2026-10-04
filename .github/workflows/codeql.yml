@@ -52,11 +52,19 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      # Must sit between init and analyze for build-mode: manual. assemble runs no test
-      # task; it does build both shadow jars, which keeps the extractor's classpath complete.
+      # Must sit between init and analyze for build-mode: manual, and runs no test task.
+      # It compiles all three modules' sources so CodeQL's manual-mode tracer actually
+      # sees them. `clean ... --no-build-cache` is deliberate: CodeQL's tracer only
+      # records source when the compiler truly runs under it, but setup-gradle restores
+      # the Gradle build cache, so a warm cache serves every compileKotlin/compileJava
+      # task FROM-CACHE and no compiler executes — leaving an empty database and the
+      # "no source code seen during build" / finalize exit 32 failure. `clean` defeats
+      # up-to-date checks on prior build/ outputs; `--no-build-cache` stops classes being
+      # pulled from the restored cache. (assemble builds the thin per-module jar, not the
+      # shadow jars.)
       - name: Build all modules for extraction
         if: matrix.build-mode == 'manual'
-        run: ./gradlew assemble --stacktrace
+        run: ./gradlew clean assemble --no-build-cache --stacktrace
 
       - uses: github/codeql-action/analyze@v3
         with:

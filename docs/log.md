@@ -1139,6 +1139,62 @@ Each entry uses the form:
   `$PARAMS` word-splitting is now documented with a `# shellcheck disable=SC2086`. Added
   `--yes`/`-y` and `OIDC_SETUP_NON_INTERACTIVE=1` for unattended runs.
 
+---
+
+## `CI - Dependabot Validation` runs twice on one Dependabot branch — one cancels the other
+
+- **Symptom / trigger:** A single Dependabot update (branch
+  `dependabot/gradle/gradle-747a0582b4`) produced **two** `CI - Dependabot Validation` runs
+  three seconds apart — the `push` run was cancelled and the `pull_request` run went green.
+  **Cause:** the workflow triggered on **both** `push` to `dependabot/**` **and** `pull_request`
+  to `main`, and a Dependabot update fires both (it pushes the branch *and* opens the PR). The
+  concurrency key `${{ github.workflow }}-${{ github.head_ref || github.ref_name }}` resolved to
+  the **same** value for both events (`head_ref` on the pull_request, `ref_name` on the push —
+  both the dependabot branch name), so with `cancel-in-progress: true` the second event cancelled
+  the first. The original concurrency comment claimed sharing a group made the two events "share
+  instead of race" — the reasoning was backwards: sharing a group *with* cancel-in-progress is
+  exactly what cancels one.
+
+- **Resolution / status:** **Resolved.** Dropped the redundant `push:` trigger — Dependabot always
+  opens a PR, so `pull_request` to `main` already covers every update with exactly one run. With
+  only `pull_request` left, the job guard simplifies from
+  `${{ github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/') }}` to
+  `${{ startsWith(github.head_ref, 'dependabot/') }}` (still skips a human PR into main, which
+  `ci-main-build.yml` covers), and the concurrency key drops the now-pointless push fallback to
+  `${{ github.workflow }}-${{ github.head_ref }}`. `cancel-in-progress: true` stays — it now only
+  coalesces successive synchronises of the *same* PR, which is correct. One behavioural
+  consequence worth noting: a `dependabot/**` branch *pushed with no PR* would no longer be
+  validated — which never happens, because Dependabot always opens a PR.
+
+---
+
+## CodeQL `java-kotlin` intermittently fails: "no source code seen during build" / finalize exit 32
+
+- **Symptom / trigger:** The `Analyze (java-kotlin)` job in `codeql.yml` failed
+  intermittently with `CodeQL could not process any code written in Java/Kotlin`
+  ("no source code seen during build") and `database finalize` exit code 32 — passing on
+  a cold cache but failing on a warm one. **Cause:** the `java-kotlin` leg uses CodeQL
+  `build-mode: manual`, whose tracer only records source when a compiler actually executes
+  under it. The build step ran `./gradlew assemble --stacktrace`, but
+  `gradle/actions/setup-gradle` restores the Gradle build cache, so with a warm cache every
+  compile task resolved `FROM-CACHE` (`:streaming-core:compileKotlin`,
+  `:streaming-s3-example:compileKotlin`, `:streaming-s3-example-java:compileJava`) and no
+  compiler ran — yielding an empty database. GitHub's own troubleshooting doc attributes the
+  error to a build that compiles no code under the tracer, which is exactly why it passed
+  cold and failed warm.
+
+- **Resolution / status:** **Resolved.** Changed the CodeQL build step to
+  `./gradlew clean assemble --no-build-cache --stacktrace`: `clean` defeats up-to-date
+  checks on prior `build/` outputs and `--no-build-cache` stops classes being pulled from the
+  restored Gradle build cache, so `compileKotlin`/`compileJava` genuinely execute under the
+  tracer. `setup-gradle` is kept (toolchain provisioning and dependency caching are still
+  wanted); only the compile-output cache is bypassed, and only for this one step — no other
+  workflow's cache behaviour changes. Also corrected the stale step comment, which claimed
+  `assemble` "does build both shadow jars": it does not — `assemble` builds the thin
+  per-module `jar`, not `shadowJar` (this doc inaccuracy was noted earlier and is now fixed in
+  the comment). Cannot be fully proven until it runs in CI on a warm cache, which only happens
+  post-push.
+
 # Plan
 Right now it's somewhere between:
 
