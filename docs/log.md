@@ -1166,6 +1166,35 @@ Each entry uses the form:
   consequence worth noting: a `dependabot/**` branch *pushed with no PR* would no longer be
   validated — which never happens, because Dependabot always opens a PR.
 
+---
+
+## CodeQL `java-kotlin` intermittently fails: "no source code seen during build" / finalize exit 32
+
+- **Symptom / trigger:** The `Analyze (java-kotlin)` job in `codeql.yml` failed
+  intermittently with `CodeQL could not process any code written in Java/Kotlin`
+  ("no source code seen during build") and `database finalize` exit code 32 — passing on
+  a cold cache but failing on a warm one. **Cause:** the `java-kotlin` leg uses CodeQL
+  `build-mode: manual`, whose tracer only records source when a compiler actually executes
+  under it. The build step ran `./gradlew assemble --stacktrace`, but
+  `gradle/actions/setup-gradle` restores the Gradle build cache, so with a warm cache every
+  compile task resolved `FROM-CACHE` (`:streaming-core:compileKotlin`,
+  `:streaming-s3-example:compileKotlin`, `:streaming-s3-example-java:compileJava`) and no
+  compiler ran — yielding an empty database. GitHub's own troubleshooting doc attributes the
+  error to a build that compiles no code under the tracer, which is exactly why it passed
+  cold and failed warm.
+
+- **Resolution / status:** **Resolved.** Changed the CodeQL build step to
+  `./gradlew clean assemble --no-build-cache --stacktrace`: `clean` defeats up-to-date
+  checks on prior `build/` outputs and `--no-build-cache` stops classes being pulled from the
+  restored Gradle build cache, so `compileKotlin`/`compileJava` genuinely execute under the
+  tracer. `setup-gradle` is kept (toolchain provisioning and dependency caching are still
+  wanted); only the compile-output cache is bypassed, and only for this one step — no other
+  workflow's cache behaviour changes. Also corrected the stale step comment, which claimed
+  `assemble` "does build both shadow jars": it does not — `assemble` builds the thin
+  per-module `jar`, not `shadowJar` (this doc inaccuracy was noted earlier and is now fixed in
+  the comment). Cannot be fully proven until it runs in CI on a warm cache, which only happens
+  post-push.
+
 # Plan
 Right now it's somewhere between:
 
