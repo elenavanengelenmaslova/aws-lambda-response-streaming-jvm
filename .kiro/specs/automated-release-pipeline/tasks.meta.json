@@ -1,0 +1,332 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Set up the release script directory and test harness": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799291
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483805554
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484200160
+      }
+    ],
+    "2.1 Write unit tests for `compute-version.sh`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799552
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484203684
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484348852
+      }
+    ],
+    "2.2 Implement `scripts/release/compute-version.sh`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799599
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484352701
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484431122
+      }
+    ],
+    "2.3 Make the compute-version tests pass": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799650
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484434204
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484446681
+      }
+    ],
+    "3. Checkpoint - version computation": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799705
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485150875
+      }
+    ],
+    "4.1 Write unit tests for `update-readme-version.sh`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799805
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484204448
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484349711
+      }
+    ],
+    "4.2 Implement `scripts/release/update-readme-version.sh`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799847
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484353765
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484430390
+      }
+    ],
+    "4.3 Make the update-readme tests pass": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799891
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484435347
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484447738
+      }
+    ],
+    "5. Checkpoint - README edit": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799931
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485153282
+      }
+    ],
+    "6.1 Create `.github/workflows/release-tag.yml` trigger and `compute` job": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483799974
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484454284
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484527312
+      }
+    ],
+    "6.2 Add the `tag` job (guard, create+push tag, GitHub Release)": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483800021
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484530608
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484622807
+      }
+    ],
+    "6.3 Add the `readme-pr` job (branch, edit, commit, PR)": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483800112
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484628229
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485061527
+      }
+    ],
+    "7.1 Add a static assertion over `release-tag.yml` `on.push.paths`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483800155
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484627430
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485062569
+      }
+    ],
+    "8. Document known gotchas in `docs/log.md`": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483800191
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485065536
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485141692
+      }
+    ],
+    "9. Final checkpoint - maintainer manual validation (documented, not code)": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791483800234
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485156542
+      },
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485231693
+      },
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485482094
+      }
+    ],
+    "2. Version computation — tests first, then the script": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484446762
+      }
+    ],
+    "4. README version edit — tests first, then the script": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791484447778
+      }
+    ],
+    "6. Wire the release workflow": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485061582
+      }
+    ],
+    "7. Static path-filter / loop-guard assertion": [
+      {
+        "executionId": "45064b05-097d-4c5a-a679-498c33985bfc",
+        "chatSessionId": "sess_330471b6-75bf-4fca-8565-1dafbe269610",
+        "timestamp": 1791485062668
+      }
+    ],
+    "9.1 Create the `RELEASE_PAT` repository secret (repo admin)": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485472032
+      }
+    ],
+    "9.2 Trigger a real release (one-time live validation)": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485476509
+      }
+    ],
+    "9.3 Confirm the computed tag": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485477452
+      }
+    ],
+    "9.4 Confirm the two parallel tag consumers": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485478837
+      }
+    ],
+    "9.5 Confirm the README PR": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485479785
+      }
+    ],
+    "9.6 Confirm the loop guard (critical negative test)": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485481214
+      }
+    ],
+    "9.7 Record the outcome": [
+      {
+        "executionId": "06ce732a-2424-410f-9b47-d9a48d62b93e",
+        "chatSessionId": "sess_315b9719-beff-4dc2-960e-b581baf66149",
+        "timestamp": 1791485482045
+      }
+    ]
+  }
+}
