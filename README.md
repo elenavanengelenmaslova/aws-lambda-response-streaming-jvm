@@ -136,6 +136,14 @@ val writer = ResponseWriter(maxPreludeLen = OBSERVED_MAX_PRELUDE_LEN)
 
 An oversized prelude then raises `MetadataTooLargeException` **before anything is written**, so the stream is untouched and the status is still uncommitted — you can write a different response instead. Note that `OBSERVED_MAX_PRELUDE_LEN` (16376) is not an AWS-documented limit; it is the commonly cited 16 KiB budget less the delimiter. A negative `maxPreludeLen` is rejected by the constructor with `IllegalArgumentException`, since no prelude could ever satisfy it.
 
+## Limitations (AWS Lambda response streaming)
+
+These are platform limits of Lambda response streaming itself — they apply to **any** streaming Lambda (Node.js, JVM, or other), not to this library specifically. See [Response streaming for Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html) (the "Bandwidth limits for response streaming" section covers the rate cap).
+
+- **Bandwidth cap after the first 6 MB.** The first 6 MB of the response is streamed uncapped; beyond that, Lambda caps the rate at ~2 MB/s. Large responses are delivered more slowly past the initial burst — a throughput limit, independent of your function's memory or buffer size.
+- **Max payload size 200 MB.** A streamed response can be up to 200 MB (versus 6 MB for a buffered response). This is a size limit, separate from the bandwidth cap above.
+- **Billed for the full duration, even on client disconnect.** A streamed response is not stopped when the client connection breaks; the function keeps running until it returns or times out, and you are billed for the whole duration. Keep function timeouts tight for large or long-running streams.
+
 ## Example modules
 
 | Module | Language | Description |
