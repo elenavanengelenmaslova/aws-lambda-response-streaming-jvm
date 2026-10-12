@@ -1505,3 +1505,193 @@ It's:
 "Everything I had to learn to implement AWS Lambda response streaming on the JVM because AWS only provides a high-level helper for Node.js."
 
 That framing is what makes it likely to become the article people find when they search for Kotlin or Java Lambda response streaming. It also naturally leads readers to your library as the reusable implementation, rather than making the article feel like a library announcement.
+
+---
+
+## `GITHUB_TOKEN`-pushed tags don't fire `on: push` tag workflows — the publish hand-off needs `RELEASE_PAT`
+
+- **Symptom / trigger:** The release pipeline (`release-tag.yml`) hands off to the
+  existing `workflow-publish.yml` purely by **pushing a `vX.Y.Z` tag** — that workflow
+  already triggers on `push:` tags `v*` and must not be modified. The obvious wiring is
+  to let the `tag` job push with the default `GITHUB_TOKEN`. It silently never fires the
+  publish run. **Cause:** GitHub deliberately suppresses workflow triggers for events
+  created by the default `GITHUB_TOKEN`, to prevent a workflow from recursively
+  triggering itself. A tag pushed by one workflow using `GITHUB_TOKEN` therefore does
+  **not** raise the `push` tag event that `workflow-publish.yml` waits on, so Maven
+  Central publishing never starts. Nothing errors — the tag appears, the release run goes
+  green, and the missing publish only shows up as "the version was tagged but never
+  reached Maven Central".
+- **Resolution / status:** **RESOLVED — `RELEASE_PAT` is required, with no fallback.**
+  The `tag` job checks out, pushes and calls `gh` with `secrets.RELEASE_PAT` only. A tag
+  pushed under a personal access token is an ordinary external push and **does** raise
+  the `push` tag event, so `workflow-publish.yml` fires and publishes. The first version
+  of the pipeline fell back to `GITHUB_TOKEN`, which was a trap of its own: the run would
+  create a tag and a Release that never reach Maven Central, and because the tag then
+  exists, the next run would not try again. A preflight step now fails the job before
+  anything is written when the secret is missing. Referenced by name only; no token value
+  is recorded here (Req 7.3).
+
+---
+
+## `GITHUB_TOKEN`-opened PRs start their checks only after a manual approval
+
+- **Symptom / trigger:** After the tag is cut, the `readme-pr` job opens a
+  `release/vX.Y.Z` pull request that bumps the README dependency coordinate. Under branch
+  protection on `main` it must pass the required status checks before it can merge. If
+  the PR is opened with the default `GITHUB_TOKEN`, its `pull_request` runs are created
+  in an **approval-required** state: the merge box shows a banner, and nothing runs until
+  a user with write access selects **Approve workflows to run**. The first draft of the
+  design assumed the checks would never report and needed an admin override. That was
+  wrong, at least under current GitHub behaviour
+  ([GITHUB_TOKEN docs](https://docs.github.com/en/actions/concepts/security/github_token)).
+  Tag pushes are different: `GITHUB_TOKEN` still never triggers `on: push` tag workflows
+  (see the entry above).
+- **Resolution / status:** **RESOLVED — the PR is opened with `RELEASE_PAT`.** A PR opened
+  under a personal access token starts its checks straight away, with no approval step.
+  The PAT is not the only way to start them: approving the runs by hand works too. It is
+  used here because `RELEASE_PAT` is required for the tag push anyway, and it keeps the
+  README PR hands-off. Token referenced by name only (Req 7.3).
+
+---
+
+## `chore(deps)` / `build(deps)` are promoted to a **patch** bump — a repo-specific deviation from vanilla Conventional Commits
+
+- **Symptom / trigger:** `compute-version.sh` derives the next SemVer bump from the
+  Conventional Commits since the latest tag. Under **vanilla** Conventional Commits a
+  `chore:` commit carries **no** version bump — it is explicitly a non-releasing type. But
+  this repository's releases are meant to pick up **Dependabot** dependency updates, and
+  Dependabot writes its updates as `chore(deps): ...`, `chore(deps-dev): ...`, and
+  `build(deps): ...`. If those followed the vanilla rule they would produce **no bump**,
+  so a run whose only changes were dependency upgrades would compute `bump=none` and cut
+  no release — the dependency bumps would silently never reach a published version.
+- **Resolution / status:** **RESOLVED — a documented, repo-specific promotion rule.**
+  `compute-version.sh` classifies commits as follows:
+  - plain **`chore:`** (and other non-releasing types) → **no bump** (vanilla behavior,
+    unchanged);
+  - the **dependency scopes** `chore(deps)`, `chore(deps-dev)`, `build(deps)` (and
+    `build(deps-dev)`) → promoted to **`patch`**.
+  This is **not** standard Conventional Commits — it is a deliberate local convention so
+  that a Dependabot-only commit set still cuts a patch release. The promotion is applied
+  inside the same aggregate commit set and under the same max-severity precedence
+  (major > minor > patch) as every other commit (Req 2.6, 2.7): e.g. a set of
+  `{fix:, feat:, chore(deps):}` still resolves to `minor` (the `feat:` wins), while a set
+  of only `{chore(deps):}` resolves to `patch` rather than `none`. The rule is flagged
+  with an inline comment at the classification site in `compute-version.sh` so the
+  deviation from vanilla Conventional Commits is obvious to anyone reading or editing the
+  script. **Takeaway for the article:** if automated dependency PRs are meant to trigger
+  releases, the version-computation step has to opt their `chore(deps)`/`build(deps)`
+  scopes into a bump explicitly — the Conventional Commits spec leaves `chore` as
+  non-releasing by default.
+
+---
+
+## No runtime secrets recorded for the release pipeline — tokens referenced by name only
+
+- **Symptom / trigger:** The release pipeline is credential-sensitive: it pushes tags,
+  creates GitHub Releases, and opens pull requests, all of it done under the required
+  `RELEASE_PAT` (see the two token gotchas above). The temptation when
+  documenting the hand-off is to paste an example token, a token prefix, or the exact
+  secret value used during a live validation so the write-up is concrete.
+- **Resolution / status:** **Honored the steering rule — nothing secret is written
+  here.** Per the log's own header ("No runtime secrets") and the product/structure
+  steering, this entry (and the two above) refer to credentials **by name only**
+  (`GITHUB_TOKEN`, `RELEASE_PAT`) and never record a token value, prefix, scope string, or
+  any other secret material. The `RELEASE_PAT` is created and stored by a repo
+  administrator as a repository secret during the one-time maintainer setup (task 9); its
+  value lives only in GitHub's encrypted secret store, never in this log, the workflow
+  files, or any script. `docs/log.md` is for developer gotchas, not for runtime secrets
+  (Req 7.3).
+
+---
+
+## Maintainer handoff: `RELEASE_PAT` setup and the one-time live end-to-end release validation
+
+- **Symptom / trigger:** The release pipeline (`release-tag.yml` → `compute` → `tag` →
+  `readme-pr`, handing off to the untouched `workflow-publish.yml`) is proven only as far
+  as a working tree can prove it: every release script and the static path-filter
+  assertion pass (`bash scripts/release/test/run-tests.sh` → 4 files pass, 0 fail), and
+  the two token gotchas above explain *why* the pushed tag and the opened PR need
+  `RELEASE_PAT`. What a green local run **cannot** prove is the live hand-off: that a real
+  `vX.Y.Z` tag actually fires `workflow-publish.yml`, that the GitHub Release carries
+  non-empty generated notes, that the README PR starts its required checks without approval, and —
+  critically — that merging that README PR does **not** start a *second* release run (the
+  loop guard). Those are produced by GitHub in response to a real merge and are
+  observable only against the live repository, so they are deliberately left as **repo
+  admin / maintainer actions**, not coding-agent tasks. The hazard is treating the green
+  pre-merge suite as "the release pipeline is verified end to end" when the live hand-off
+  is still unproven.
+- **Resolution / status:** **MAINTAINER HANDOFF CHECKLIST — one-time, repo admin only.**
+  Perform these in order against the live repository; none require a code or script edit.
+
+  1. **Create the `RELEASE_PAT` repository secret (repo admin required).** Store a
+     personal access token as the repository secret named `RELEASE_PAT`, scoped with
+     `contents: write` **and** `pull-requests: write`. The pipeline requires it and fails
+     its preflight without it: a tag **pushed** under `RELEASE_PAT` is an external push
+     and fires `workflow-publish.yml` (a `GITHUB_TOKEN` push does not — see the tag-push
+     gotcha above), and a README PR **opened** under `RELEASE_PAT` starts its required
+     `pull_request` checks without the approval step a `GITHUB_TOKEN`-opened PR needs
+     (see the PR gotcha above). **Status:** done; `gh secret list` shows `RELEASE_PAT`. Reference the secret
+     **by name only**; its value lives solely in GitHub's encrypted secret store and is
+     never recorded in this log, the workflows, or any script (Req 7.3).
+
+  2. **Run the one-time live end-to-end validation.** Merge a `feat:`-prefixed (or
+     `fix:`-prefixed) change that touches a file under `streaming-core/src/main/**` into
+     `main`, so the `release-tag.yml` path filter actually fires, then confirm each of:
+     - **Computed tag** — the `compute` job emits the expected `vX.Y.Z` (e.g. a `feat:`
+       bumps the minor, a `fix:` the patch), and the `tag` job creates and pushes exactly
+       that tag.
+     - **GitHub Release with non-empty notes** — a Release exists for `vX.Y.Z` and its
+       body is **non-empty** (the draft-first guard deletes the draft and fails the job
+       rather than publishing an empty-notes release, so a published release proves the
+       notes are present).
+     - **Parallel publish run** — pushing the tag under `RELEASE_PAT` fires
+       `workflow-publish.yml` (Maven Central publish), running alongside the release
+       pipeline rather than requiring any manual trigger (Req 3.3, 4.4, 8.1).
+     - **README PR** — the `readme-pr` job opens a `release/vX.Y.Z` pull request that
+       bumps only the README dependency coordinate
+       (`nl.vintik:aws-lambda-streaming-core:X.Y.Z`), is docs-only, and — opened under
+       `RELEASE_PAT` — has its required checks running (Req 8.2).
+     - **Loop guard** — **merge that `release/vX.Y.Z` README PR and confirm it does NOT
+       start a new release run.** The README change lands outside the
+       `streaming-core/src/main/**` / `streaming-core/build.gradle.kts` path filter, so
+       `release-tag.yml` must not trigger. This is the single most important thing to
+       observe: it proves the pipeline cannot recurse on its own README commit (Req 6.1).
+
+  3. **Confirm the handoff gate before handing off.** All release scripts and the static
+     path-filter assertion must be green first: `bash scripts/release/test/run-tests.sh`
+     → **4 files pass, 0 fail** (`compute-version_test.sh`, `harness_selftest_test.sh`,
+     `path-filter_test.sh`, `update-readme-version_test.sh`). Verified at this task's
+     completion. If any question arises during the live run, stop and ask before cutting
+     a real release — this entry documents the maintainer actions; it does **not** itself
+     execute a release.
+
+---
+
+## `%s%n%b` turned body lines into subjects — a squash-merge body could force a major bump
+
+- **Symptom / trigger:** `compute-version.sh` read `git log --format='%s%n%b'` and
+  classified **every line** as if it were a commit subject. A `fix:` commit whose body
+  listed squashed sub-commits (`* feat: …`, `refactor!: …`) was promoted to minor or
+  major, and a plain `chore:` with `fix: …` in its prose cut a patch release. The
+  existing fixtures never put a Conventional Commits prefix in a body, so the suite
+  stayed green.
+- **Resolution / status:** **RESOLVED.** The script now walks commits by SHA. The subject
+  alone decides the type and the `!` marker. The body is scanned only for a
+  `BREAKING CHANGE:` footer line. Three regression cases were added to
+  `compute-version_test.sh`; two of them fail against the old script and pass now.
+
+---
+
+## An existing tag is not a finished release — re-runs reconcile instead of no-opping
+
+- **Symptom / trigger:** The first version of the Req 3.4 guard treated "tag already
+  exists" as "release done" and skipped everything after it. If a run pushed the tag and
+  then failed creating the Release (or opening the README PR), **Re-run failed jobs**
+  saw the tag and did nothing, leaving the release half-finished with no automated way to
+  complete it.
+- **Resolution / status:** **RESOLVED.** The guard now only skips the tag push. The
+  Release step leaves a published Release alone, verifies and publishes a leftover draft,
+  and creates the Release (`--verify-tag`) when it is missing. The `readme-pr` job skips
+  when a PR for `release/vX.Y.Z` already exists (open or merged), reuses a pushed branch
+  that has no PR, and otherwise creates the branch. If everything already exists, the run
+  does nothing.

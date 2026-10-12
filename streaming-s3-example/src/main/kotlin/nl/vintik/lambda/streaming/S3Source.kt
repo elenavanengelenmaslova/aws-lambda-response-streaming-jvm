@@ -29,7 +29,7 @@ class S3Source(
 ) : StreamSource<FileRequest> {
     /**
      * Confirms the requested object's existence and size via `headObject`, bounded by a
-     * 10 second timeout (Req 3.1). A not-found response maps to [HeadResult.NotFound]
+     * 60 second timeout (Req 3.1). A not-found response maps to [HeadResult.NotFound]
      * (Req 3.2); any other failure, including the timeout, maps to [HeadResult.Failure]
      * (Req 3.4). Cooperative cancellation other than the timeout is propagated.
      */

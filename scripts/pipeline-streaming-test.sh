@@ -7,6 +7,9 @@
 #
 #   1. Large payload delivery   — 12 MB body received in full, byte count matches
 #   2. Progressive delivery     — TTFB < 50% of total time (not buffered)
+#   3. Truncation detectable    — on an early client disconnect the bytes received
+#                                 are fewer than the committed Content-Length, so a
+#                                 client can detect an incomplete transfer
 #
 # Configuration via environment variables (resolved from CloudFormation outputs
 # when not explicitly set):
@@ -183,6 +186,69 @@ test_streaming_large_payload() {
 }
 
 # ---------------------------------------------------------------------------
+# Test 3: Truncation is detectable against Content-Length
+#
+# The handler commits a Content-Length header (the size from the S3 head) before
+# streaming any body bytes. If the transfer is cut short, the committed length is
+# already on the wire and cannot be rewritten — so a client that compares the
+# bytes it actually received against Content-Length can tell the download is
+# incomplete. This proves that detection from the client's point of view.
+#
+# We force an early client-side disconnect with a tight --max-time so curl stops
+# reading mid-body, then assert: Content-Length equals the full object size, and
+# the bytes actually received are fewer than Content-Length.
+# ---------------------------------------------------------------------------
+test_streaming_truncation_detectable() {
+  info "Testing truncation detection against Content-Length..."
+
+  local url header_file body_file content_length received_bytes rc=0
+  url="$(build_url "$TEST_OBJECT_KEY")"
+  header_file="$WORK_DIR/trunc_headers.txt"
+  body_file="$WORK_DIR/trunc_body.bin"
+
+  # Warmup so the committed Content-Length reflects a warm invocation, not a cold start.
+  curl --silent --max-time 120 --http1.1 --header "x-api-key: $API_KEY" --output /dev/null "$url" || true
+
+  # Stream the object but force an early client-side disconnect: throttle the read
+  # and cap the time so curl stops reading mid-body. We dump headers to capture the
+  # committed Content-Length; a non-zero curl exit from the abort is expected.
+  received_bytes=$(curl --silent --http1.1 --no-buffer \
+    --header "x-api-key: $API_KEY" \
+    --dump-header "$header_file" \
+    --limit-rate 200k \
+    --max-time 2 \
+    --output "$body_file" \
+    --write-out '%{size_download}' \
+    "$url") || rc=$?
+
+  # A timeout (curl exit 28) is the intended early disconnect; any other failure is real.
+  if (( rc != 0 && rc != 28 )); then
+    fail "unexpected curl failure during truncation test (exit $rc)"
+  fi
+
+  # Extract the committed Content-Length header (case-insensitive, strip CR).
+  content_length=$(grep -i '^content-length:' "$header_file" | tail -n1 \
+    | cut -d: -f2 | tr -d ' \r' || true)
+
+  [[ -n "$content_length" ]] \
+    || fail "no Content-Length header was committed by the endpoint"
+  info "  committed Content-Length: $content_length"
+  info "  bytes received before disconnect: $received_bytes"
+
+  # The committed length must describe the full object, not the truncated body.
+  if (( content_length != TEST_OBJECT_SIZE )); then
+    fail "Content-Length ($content_length) does not match full object size ($TEST_OBJECT_SIZE)"
+  fi
+
+  # The client got fewer bytes than Content-Length -> an incomplete transfer it can detect.
+  if (( received_bytes < content_length )); then
+    pass "truncation detectable: received $received_bytes < Content-Length $content_length"
+  else
+    fail "transfer completed ($received_bytes bytes) — could not force an early disconnect to demonstrate truncation detection"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Test 2: Progressive delivery (TTFB < 50% of total time)
 # Validates: response is streamed progressively, not buffered
 # ---------------------------------------------------------------------------
@@ -238,6 +304,7 @@ main() {
 
   test_streaming_large_payload
   test_streaming_progressive_delivery
+  test_streaming_truncation_detectable
 
   info "============================================="
   info "All streaming pipeline tests passed ✓"
