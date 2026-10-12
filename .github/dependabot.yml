@@ -12,6 +12,11 @@
 #
 # Labels `dependencies`, `gradle` and `github-actions` must exist in the repository;
 # Dependabot silently drops labels it cannot find, leaving generated pull requests unlabelled.
+#
+# `open-pull-requests-limit` must NOT appear on an update entry that belongs to a
+# multi-ecosystem group — GitHub rejects the whole config with "open-pull-requests-limit
+# should only be set on the associated multi-ecosystem group". It is omitted entirely here
+# (the default limit is 5, the value previously set), so no PR-limit key sits on the entries.
 version: 2
 
 multi-ecosystem-groups:
@@ -37,7 +42,6 @@ updates:
       - "/streaming-s3-example"
       - "/streaming-s3-example-java"
     multi-ecosystem-group: all-dependencies
-    open-pull-requests-limit: 5
     labels: [dependencies, gradle]
     patterns: ["*"]
 
@@ -46,6 +50,5 @@ updates:
     # that other workflows reach through `uses:`.
     directory: "/"
     multi-ecosystem-group: all-dependencies
-    open-pull-requests-limit: 5
     labels: [dependencies, github-actions]
     patterns: ["*"]
