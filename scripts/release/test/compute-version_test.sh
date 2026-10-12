@@ -271,6 +271,34 @@ _cv_bump() {
     _cv_cleanup "$repo"
 }
 
+# --- Body lines are NOT subjects: a `feat:` line in a fix commit's body stays patch -----
+{
+    repo="$(_cv_new_repo)"
+    _cv_commit "$repo" "chore: seed"; _cv_tag "$repo" "v2.1.0"
+    _cv_commit "$repo" "fix: squash of two changes" "* feat: listed sub-commit
+refactor!: listed sub-commit"
+    assert_eq "patch" "$(_cv_bump "$repo")" "body-classification: feat/bang body lines do not raise a fix commit"
+    _cv_cleanup "$repo"
+}
+
+# --- Body prose in a plain chore: does not cut a release --------------------------------
+{
+    repo="$(_cv_new_repo)"
+    _cv_commit "$repo" "chore: seed"; _cv_tag "$repo" "v2.1.0"
+    _cv_commit "$repo" "chore: tidy" "fix: prose only, not a subject"
+    assert_eq "none" "$(_cv_bump "$repo")" "body-classification: fix line in a chore body -> bump=none"
+    _cv_cleanup "$repo"
+}
+
+# --- Scoped breaking subject fix(x)!: -> major ------------------------------------------
+{
+    repo="$(_cv_new_repo)"
+    _cv_commit "$repo" "chore: seed"; _cv_tag "$repo" "v2.1.0"
+    _cv_commit "$repo" "fix(core)!: change error contract"
+    assert_eq "major" "$(_cv_bump "$repo")" "body-classification: scoped bang subject -> bump=major"
+    _cv_cleanup "$repo"
+}
+
 # =====================================================================================
 # Property-style assertions over the fixtures above (design "Correctness Properties")
 # =====================================================================================

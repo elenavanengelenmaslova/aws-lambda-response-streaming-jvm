@@ -46,37 +46,46 @@ if [ -z "$latest" ]; then
   exit 0
 fi
 
-# 3. Classify every non-merge commit in latest..HEAD.
-#    `%s%n%b` prints the subject then the full body, so a `BREAKING CHANGE:` footer
-#    lands on its own line and is matched directly.
+# 3. Classify every non-merge commit in latest..HEAD, one commit at a time.
+#    The SUBJECT alone decides the Conventional Commits type and the `!` marker; the
+#    BODY is scanned only for a `BREAKING CHANGE:` footer. Classifying body lines as
+#    subjects would let prose such as "fix: typo" or a squash-merge's listed sub-commits
+#    inflate the bump.
 range="${latest}..HEAD"
 major=0; minor=0; patch=0
 
-while IFS= read -r line; do
-  # `!` before the first `:` -> breaking (feat!:, fix!:, refactor!: …).
-  case "$line" in
+while IFS= read -r sha; do
+  subject="$(git log -1 --format='%s' "$sha")"
+  body="$(git log -1 --format='%b' "$sha")"
+
+  # `!` immediately before the first `:` of the subject -> breaking (feat!:, fix(x)!: …).
+  case "$subject" in
     *":"*)
-      type_field="${line%%:*}"
+      type_field="${subject%%:*}"
       case "$type_field" in
         *"!") major=1 ;;
       esac
       ;;
   esac
-  case "$line" in
-    "BREAKING CHANGE:"*)              major=1 ;;
-    feat\(*\):*|feat:*)               minor=1 ;;
-    fix\(*\):*|fix:*)                 patch=1 ;;
+  case "$subject" in
+    feat\(*\):*|feat:*|feat\(*\)!:*|feat!:*)  minor=1 ;;
+    fix\(*\):*|fix:*|fix\(*\)!:*|fix!:*)      patch=1 ;;
     # Dependabot / build dependency scopes -> patch (repo convention; see header).
     chore\(deps\):*|chore\(deps-dev\):*|build\(deps\):*|build\(deps-dev\):*) patch=1 ;;
   esac
-done < <(git log --no-merges --format='%s%n%b' "$range")
+
+  # Footer scan: a body line starting with `BREAKING CHANGE:` -> major.
+  if printf '%s\n' "$body" | grep -q '^BREAKING CHANGE:'; then
+    major=1
+  fi
+done < <(git log --no-merges --format='%H' "$range")
 
 # 4. Max-severity precedence: major > minor > patch (Req 2.7). Compute next vX.Y.Z.
 IFS='.' read -r cur_major cur_minor cur_patch <<< "${latest#v}"
-if   [ "$major" = 1 ]; then next="v$((cur_major + 1)).0.0";                        bump=major
-elif [ "$minor" = 1 ]; then next="v${cur_major}.$((cur_minor + 1)).0";             bump=minor
-elif [ "$patch" = 1 ]; then next="v${cur_major}.${cur_minor}.$((cur_patch + 1))";  bump=patch
-else                        next="";                                               bump=none
+if   [ "$major" = 1 ]; then next="v$((cur_major + 1)).0.0";                        bump="major"
+elif [ "$minor" = 1 ]; then next="v${cur_major}.$((cur_minor + 1)).0";             bump="minor"
+elif [ "$patch" = 1 ]; then next="v${cur_major}.${cur_minor}.$((cur_patch + 1))";  bump="patch"
+else                        next="";                                               bump="none"
 fi
 
 # 5. Emit the result. `bump=none` carries an empty version by contract.

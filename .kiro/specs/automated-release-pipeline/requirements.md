@@ -19,7 +19,8 @@ The new pipeline watches `main` for changes to the published library's productio
 - **Generated_Release_Notes**: GitHub's auto-generated release notes derived from merged pull requests and commits since the previous `Release_Tag` (e.g. via `gh release create vX.Y.Z --generate-notes`).
 - **Initial_Version**: The `Release_Tag` used when no prior `Release_Tag` exists in the repository.
 - **GITHUB_TOKEN**: The default token GitHub Actions provides to a workflow run.
-- **Release_PAT**: A personal access token (or equivalent credential) that can be used in place of `GITHUB_TOKEN` so that an opened pull request re-triggers required status checks under branch protection.
+- **Release_PAT**: A personal access token (or equivalent credential), stored as the repository secret `RELEASE_PAT`, that the Release_Pipeline is required to use for pushing the Release_Tag, creating the GitHub Release, and opening the README-update pull request. It is required because a tag pushed with GITHUB_TOKEN does not trigger `on: push` tag workflows, so the Publish_Workflow would not run; and a pull request opened with GITHUB_TOKEN gets `pull_request` runs in an approval-required state that a user with write access must approve, which the Release_PAT avoids.
+- **Dependency_Scope_Commit**: A Dependabot commit whose subject uses a dependency scope: `chore(deps)`, `chore(deps-dev)`, `build(deps)`, or `build(deps-dev)`.
 
 ## Requirements
 
@@ -44,9 +45,10 @@ The new pipeline watches `main` for changes to the published library's productio
 3. WHEN the commits since the Latest_Tag contain at least one `feat:` prefix and no major-level change, THE Release_Pipeline SHALL increment the minor version and reset the patch version to zero.
 4. WHEN the commits since the Latest_Tag contain at least one `fix:` prefix and no minor-level or major-level change, THE Release_Pipeline SHALL increment the patch version.
 5. IF no Release_Tag exists in the repository when a release run starts, THEN THE Release_Pipeline SHALL use the Initial_Version `v1.0.0` as the computed version.
-6. WHERE a Dependabot commit updating `streaming-core/build.gradle.kts` uses a Conventional_Commits message, THE Release_Pipeline SHALL include that commit in the same aggregate commit set as all other commits since the Latest_Tag and apply the standard bump rules to it.
-7. WHEN the aggregate commit set since the Latest_Tag contains commits of differing bump levels, THE Release_Pipeline SHALL select the highest bump level present using the precedence major > minor > patch, treating Dependabot commits identically to all other commits.
+6. WHEN the commits since the Latest_Tag contain a Dependency_Scope_Commit, THE Release_Pipeline SHALL treat that Dependency_Scope_Commit as a patch-level change (a repository-specific convention that extends vanilla Conventional_Commits), and SHALL apply the standard bump rules to all other Dependabot commits.
+7. WHEN the aggregate commit set since the Latest_Tag contains commits of differing bump levels, THE Release_Pipeline SHALL select the highest bump level present using the precedence major > minor > patch, including Dependabot commits and Dependency_Scope_Commits in the same aggregate commit set as all other commits.
 8. THE Release_Pipeline SHALL express the computed version as a Release_Tag of the exact form `vMAJOR.MINOR.PATCH`.
+9. WHEN the Release_Pipeline classifies a commit, THE Release_Pipeline SHALL determine the commit type and the `!` breaking marker from the commit subject alone, and SHALL examine the commit body only for a `BREAKING CHANGE:` footer.
 
 ### Requirement 3: Create and push the release tag
 
@@ -57,7 +59,9 @@ The new pipeline watches `main` for changes to the published library's productio
 1. WHEN the next version has been computed, THE Release_Pipeline SHALL create a Git tag equal to the computed Release_Tag.
 2. WHEN the Release_Tag has been created, THE Release_Pipeline SHALL push the Release_Tag to the repository.
 3. THE Release_Pipeline SHALL NOT publish any artifact to Maven Central.
-4. IF the computed Release_Tag already exists in the repository, THEN THE Release_Pipeline SHALL stop the release run without creating or pushing a tag.
+4. IF the computed Release_Tag already exists in the repository, THEN THE Release_Pipeline SHALL NOT create or push a tag, SHALL reuse the existing Release_Tag to create any missing GitHub Release or README-update pull request without creating duplicates, and SHALL make no changes when both the GitHub Release and the README-update pull request already exist.
+5. THE Release_Pipeline SHALL push the Release_Tag using the Release_PAT so that the push triggers the Publish_Workflow.
+6. IF the Release_PAT is not configured, THEN THE Release_Pipeline SHALL fail the release run before creating or pushing a tag, so that a Release_Tag and GitHub Release are never created without triggering artifact publication.
 
 ### Requirement 4: Create the GitHub Release with generated notes
 
@@ -98,7 +102,7 @@ The new pipeline watches `main` for changes to the published library's productio
 
 1. WHERE the Release_Pipeline is granted `contents: write` permission, THE Release_Pipeline SHALL use it to create tags, create branches, and create GitHub Releases, and THE Release_Pipeline SHALL be configured with `contents: write` so these capabilities are available.
 2. THE Release_Pipeline SHALL run with `pull-requests: write` permission to open the README-update pull request.
-3. THE Release_Pipeline SHALL provide optional support for using a Release_PAT in place of GITHUB_TOKEN so that, where branch protection on `main` requires status checks, an administrator MAY configure the Release_PAT to make the opened pull request re-trigger the required status checks; using GITHUB_TOKEN SHALL remain acceptable and the Release_PAT SHALL be used only when explicitly configured.
+3. THE Release_Pipeline SHALL use the Release_PAT to push the Release_Tag, create the GitHub Release, and open the README-update pull request, so that the Publish_Workflow is triggered and the pull request's required status checks run without manual approval.
 
 ### Requirement 8: Ordering of post-tag steps
 

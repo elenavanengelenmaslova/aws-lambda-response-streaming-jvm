@@ -1505,6 +1505,7 @@ It's:
 "Everything I had to learn to implement AWS Lambda response streaming on the JVM because AWS only provides a high-level helper for Node.js."
 
 That framing is what makes it likely to become the article people find when they search for Kotlin or Java Lambda response streaming. It also naturally leads readers to your library as the reusable implementation, rather than making the article feel like a library announcement.
+
 ---
 
 ## `GITHUB_TOKEN`-pushed tags don't fire `on: push` tag workflows — the publish hand-off needs `RELEASE_PAT`
@@ -1520,39 +1521,36 @@ That framing is what makes it likely to become the article people find when they
   Central publishing never starts. Nothing errors — the tag appears, the release run goes
   green, and the missing publish only shows up as "the version was tagged but never
   reached Maven Central".
-- **Resolution / status:** **RESOLVED by convention — the tag push uses `RELEASE_PAT`
-  when configured.** The `tag` job checks out and pushes with
-  `token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}`. A tag pushed under a
-  personal access token (`RELEASE_PAT`) is seen by GitHub as an ordinary external push and
-  **does** raise the `push` tag event, so `workflow-publish.yml` fires and publishes.
-  Using `GITHUB_TOKEN` remains acceptable (the fallback), but then the maintainer must be
-  aware the publish will not auto-trigger — the one-time maintainer checklist (task 9)
-  calls out creating `RELEASE_PAT` precisely so the hand-off is automatic. Referenced by
-  name only; no token value is recorded here (Req 7.3).
+- **Resolution / status:** **RESOLVED — `RELEASE_PAT` is required, with no fallback.**
+  The `tag` job checks out, pushes and calls `gh` with `secrets.RELEASE_PAT` only. A tag
+  pushed under a personal access token is an ordinary external push and **does** raise
+  the `push` tag event, so `workflow-publish.yml` fires and publishes. The first version
+  of the pipeline fell back to `GITHUB_TOKEN`, which was a trap of its own: the run would
+  create a tag and a Release that never reach Maven Central, and because the tag then
+  exists, the next run would not try again. A preflight step now fails the job before
+  anything is written when the secret is missing. Referenced by name only; no token value
+  is recorded here (Req 7.3).
 
 ---
 
-## `GITHUB_TOKEN`-opened PRs don't fire `on: pull_request` workflows — required checks never start on the README PR
+## `GITHUB_TOKEN`-opened PRs start their checks only after a manual approval
 
 - **Symptom / trigger:** After the tag is cut, the `readme-pr` job opens a
   `release/vX.Y.Z` pull request that bumps the README dependency coordinate. Under branch
-  protection on `main`, that PR must pass the required status checks before it can be
-  merged. When the PR is opened with the default `GITHUB_TOKEN`, those checks **never
-  run**, so the PR is stuck: it reports no checks and branch protection blocks the merge
-  indefinitely. **Cause:** the same recursion guard as the tag-push gotcha above — events
-  created by `GITHUB_TOKEN` (including opening a pull request) do **not** trigger further
-  workflow runs. So an `on: pull_request` workflow that provides a required check is not
-  invoked for a PR opened by `GITHUB_TOKEN`, and there is no timeout or override short of
-  editing the branch rule.
-- **Resolution / status:** **RESOLVED by convention — open the PR with `RELEASE_PAT` when
-  configured.** The `readme-pr` job checks out and runs `gh pr create` with
-  `token` / `GH_TOKEN` set from `${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}`. A PR
-  opened under a personal access token is treated as an external event and **does**
-  trigger the `pull_request` workflows, so the required checks run and the PR becomes
-  mergeable. `GITHUB_TOKEN` stays an acceptable fallback, but then an administrator must
-  re-run or waive the required checks manually; the maintainer checklist (task 9) records
-  configuring `RELEASE_PAT` as the way to make the README PR satisfy branch protection on
-  its own. Token referenced by name only (Req 7.3).
+  protection on `main` it must pass the required status checks before it can merge. If
+  the PR is opened with the default `GITHUB_TOKEN`, its `pull_request` runs are created
+  in an **approval-required** state: the merge box shows a banner, and nothing runs until
+  a user with write access selects **Approve workflows to run**. The first draft of the
+  design assumed the checks would never report and needed an admin override. That was
+  wrong, at least under current GitHub behaviour
+  ([GITHUB_TOKEN docs](https://docs.github.com/en/actions/concepts/security/github_token)).
+  Tag pushes are different: `GITHUB_TOKEN` still never triggers `on: push` tag workflows
+  (see the entry above).
+- **Resolution / status:** **RESOLVED — the PR is opened with `RELEASE_PAT`.** A PR opened
+  under a personal access token starts its checks straight away, with no approval step.
+  The PAT is not the only way to start them: approving the runs by hand works too. It is
+  used here because `RELEASE_PAT` is required for the tag push anyway, and it keeps the
+  README PR hands-off. Token referenced by name only (Req 7.3).
 
 ---
 
@@ -1590,8 +1588,8 @@ That framing is what makes it likely to become the article people find when they
 ## No runtime secrets recorded for the release pipeline — tokens referenced by name only
 
 - **Symptom / trigger:** The release pipeline is credential-sensitive: it pushes tags,
-  creates GitHub Releases, and opens pull requests, all gated on either `GITHUB_TOKEN` or
-  the optional `RELEASE_PAT` (see the two token gotchas above). The temptation when
+  creates GitHub Releases, and opens pull requests, all of it done under the required
+  `RELEASE_PAT` (see the two token gotchas above). The temptation when
   documenting the hand-off is to paste an example token, a token prefix, or the exact
   secret value used during a live validation so the write-up is concrete.
 - **Resolution / status:** **Honored the steering rule — nothing secret is written
@@ -1603,6 +1601,7 @@ That framing is what makes it likely to become the article people find when they
   value lives only in GitHub's encrypted secret store, never in this log, the workflow
   files, or any script. `docs/log.md` is for developer gotchas, not for runtime secrets
   (Req 7.3).
+
 ---
 
 ## Maintainer handoff: `RELEASE_PAT` setup and the one-time live end-to-end release validation
@@ -1614,7 +1613,7 @@ That framing is what makes it likely to become the article people find when they
   the two token gotchas above explain *why* the pushed tag and the opened PR need
   `RELEASE_PAT`. What a green local run **cannot** prove is the live hand-off: that a real
   `vX.Y.Z` tag actually fires `workflow-publish.yml`, that the GitHub Release carries
-  non-empty generated notes, that the README PR re-triggers the required checks, and —
+  non-empty generated notes, that the README PR starts its required checks without approval, and —
   critically — that merging that README PR does **not** start a *second* release run (the
   loop guard). Those are produced by GitHub in response to a real merge and are
   observable only against the live repository, so they are deliberately left as **repo
@@ -1626,12 +1625,12 @@ That framing is what makes it likely to become the article people find when they
 
   1. **Create the `RELEASE_PAT` repository secret (repo admin required).** Store a
      personal access token as the repository secret named `RELEASE_PAT`, scoped with
-     `contents: write` **and** `pull-requests: write`. This is the one piece that makes
-     the hand-off automatic: a tag **pushed** under `RELEASE_PAT` is seen by GitHub as an
-     external push and fires `workflow-publish.yml` (whereas a `GITHUB_TOKEN` push does
-     not — see the tag-push gotcha above), and a README PR **opened** under `RELEASE_PAT`
-     re-triggers the required `pull_request` checks under branch protection (whereas a
-     `GITHUB_TOKEN`-opened PR does not — see the PR gotcha above). Reference the secret
+     `contents: write` **and** `pull-requests: write`. The pipeline requires it and fails
+     its preflight without it: a tag **pushed** under `RELEASE_PAT` is an external push
+     and fires `workflow-publish.yml` (a `GITHUB_TOKEN` push does not — see the tag-push
+     gotcha above), and a README PR **opened** under `RELEASE_PAT` starts its required
+     `pull_request` checks without the approval step a `GITHUB_TOKEN`-opened PR needs
+     (see the PR gotcha above). **Status:** done; `gh secret list` shows `RELEASE_PAT`. Reference the secret
      **by name only**; its value lives solely in GitHub's encrypted secret store and is
      never recorded in this log, the workflows, or any script (Req 7.3).
 
@@ -1666,3 +1665,33 @@ That framing is what makes it likely to become the article people find when they
      a real release — this entry documents the maintainer actions; it does **not** itself
      execute a release.
 
+---
+
+## `%s%n%b` turned body lines into subjects — a squash-merge body could force a major bump
+
+- **Symptom / trigger:** `compute-version.sh` read `git log --format='%s%n%b'` and
+  classified **every line** as if it were a commit subject. A `fix:` commit whose body
+  listed squashed sub-commits (`* feat: …`, `refactor!: …`) was promoted to minor or
+  major, and a plain `chore:` with `fix: …` in its prose cut a patch release. The
+  existing fixtures never put a Conventional Commits prefix in a body, so the suite
+  stayed green.
+- **Resolution / status:** **RESOLVED.** The script now walks commits by SHA. The subject
+  alone decides the type and the `!` marker. The body is scanned only for a
+  `BREAKING CHANGE:` footer line. Three regression cases were added to
+  `compute-version_test.sh`; two of them fail against the old script and pass now.
+
+---
+
+## An existing tag is not a finished release — re-runs reconcile instead of no-opping
+
+- **Symptom / trigger:** The first version of the Req 3.4 guard treated "tag already
+  exists" as "release done" and skipped everything after it. If a run pushed the tag and
+  then failed creating the Release (or opening the README PR), **Re-run failed jobs**
+  saw the tag and did nothing, leaving the release half-finished with no automated way to
+  complete it.
+- **Resolution / status:** **RESOLVED.** The guard now only skips the tag push. The
+  Release step leaves a published Release alone, verifies and publishes a leftover draft,
+  and creates the Release (`--verify-tag`) when it is missing. The `readme-pr` job skips
+  when a PR for `release/vX.Y.Z` already exists (open or merged), reuses a pushed branch
+  that has no PR, and otherwise creates the branch. If everything already exists, the run
+  does nothing.

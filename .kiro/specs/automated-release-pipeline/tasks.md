@@ -36,7 +36,7 @@ Grounding facts (verified against the repo):
   - [x] 2.2 Implement `scripts/release/compute-version.sh`
     - `set -euo pipefail`. Select Latest_Tag via `git tag --list 'v*' --sort=-v:refname` filtered by strict `^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`, newest first.
     - No prior tag → emit `version=v1.0.0`, `bump=initial`.
-    - Enumerate `latest..HEAD` with `git log --no-merges --format='%s%n%b'`; classify each commit: `!` before `:` or `BREAKING CHANGE:` footer → major; `feat`/`feat(scope)` → minor; `fix`/`fix(scope)` → patch; `chore(deps)` / `chore(deps-dev)` / `build(deps)` / `build(deps-dev)` scopes → patch (repo-specific Dependabot promotion, documented inline).
+    - Enumerate `latest..HEAD` (`--no-merges`) and iterate commits by SHA; subject decides type and `!`, body scanned only for `BREAKING CHANGE:` footer. Classify each commit: `!` before `:` or `BREAKING CHANGE:` footer → major; `feat`/`feat(scope)` → minor; `fix`/`fix(scope)` → patch; `chore(deps)` / `chore(deps-dev)` / `build(deps)` / `build(deps-dev)` scopes → patch (repo-specific Dependabot promotion, documented inline).
     - Apply max-severity precedence major > minor > patch; compute next `vX.Y.Z`; `bump=none` when nothing bumpable.
     - Emit `version`, `bump` (and `exists` placeholder) to `$GITHUB_OUTPUT`. Add an inline comment flagging the `chore(deps)`→patch convention.
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
@@ -75,16 +75,18 @@ Grounding facts (verified against the repo):
     - _Requirements: 1.1, 1.2, 1.3, 2.1, 7.1_
 
   - [x] 6.2 Add the `tag` job (guard, create+push tag, GitHub Release)
-    - `needs: compute`; condition `if` to skip when `bump == none`; `permissions: contents: write`; checkout `fetch-depth: 0` with `token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}`.
-    - Guard: `git rev-parse -q --verify "refs/tags/$version"` → set `exists`; stop before creating/pushing when the tag already exists.
-    - Create + push the tag. Never publish to Maven Central.
-    - Create the GitHub Release draft-first: `gh release create "$version" --generate-notes --draft`; read body via `gh release view --json body --jq .body`; if empty/whitespace, `gh release delete --cleanup-tag=false` + `exit 1`; otherwise `gh release edit "$version" --draft=false`. Set `GH_TOKEN` from `RELEASE_PAT || GITHUB_TOKEN`.
+    - `needs: compute`; condition `if` to skip when `bump == none`; `permissions: contents: write`; checkout `fetch-depth: 0` with `token: ${{ secrets.RELEASE_PAT }}`.
+    - Preflight step: `RELEASE_PAT` is required (no fallback); fail the run before tagging if it is missing.
+    - Guard: `git rev-parse -q --verify "refs/tags/$version"` → set `exists`; when the tag already exists, reuse it (no re-create/push) and reconcile a missing Release / README PR instead of stopping.
+    - Create + push the tag when absent. Never publish to Maven Central.
+    - Create the GitHub Release draft-first: `gh release create "$version" --generate-notes --draft`; read body via `gh release view --json body --jq .body`; if empty/whitespace, `gh release delete --cleanup-tag=false` + `exit 1`; otherwise `gh release edit "$version" --draft=false`. Skip creation if the Release already exists. Set `GH_TOKEN` from `RELEASE_PAT` (required).
     - Do **not** create or commit a `CHANGELOG.md`.
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 7.1, 7.3, 8.1, 8.4_
 
   - [x] 6.3 Add the `readme-pr` job (branch, edit, commit, PR)
-    - `needs: tag`; `permissions: contents: write, pull-requests: write`; checkout `fetch-depth: 0` with `token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}`.
-    - `git switch -c "release/$version"`; run `scripts/release/update-readme-version.sh "$version"`; commit `chore: update README dependency version to X.Y.Z`; push the branch; `gh pr create --base main --head "release/$version"` with title/body noting it is docs-only. Set `GH_TOKEN` from `RELEASE_PAT || GITHUB_TOKEN`.
+    - `needs: tag`; `permissions: contents: write, pull-requests: write`; checkout `fetch-depth: 0` with `token: ${{ secrets.RELEASE_PAT }}` (required; enforced by the tag job's preflight).
+    - Reconcile: if the README PR for `release/$version` is missing (e.g. a re-run on an existing tag), create it; if it already exists, do nothing.
+    - `git switch -c "release/$version"`; run `scripts/release/update-readme-version.sh "$version"`; commit `chore: update README dependency version to X.Y.Z`; push the branch; `gh pr create --base main --head "release/$version"` with title/body noting it is docs-only. Set `GH_TOKEN` from `RELEASE_PAT` (required).
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 7.1, 7.2, 7.3, 8.2, 8.3_
 
 - [x] 7. Static path-filter / loop-guard assertion
@@ -96,31 +98,32 @@ Grounding facts (verified against the repo):
 - [x] 8. Document known gotchas in `docs/log.md`
   - Append entries (Title / Symptom / Resolution form) for the release-pipeline gotchas:
     - `GITHUB_TOKEN`-pushed tags do **not** trigger `on: push` tag workflows → `workflow-publish.yml` won't auto-fire; use `RELEASE_PAT` for the tag push.
-    - `GITHUB_TOKEN`-opened PRs do **not** trigger `on: pull_request` workflows → required checks on the README PR won't auto-run under branch protection; use `RELEASE_PAT`.
+    - `GITHUB_TOKEN`-opened PRs get their `on: pull_request` runs in an approval-required state (a user with write access must approve them) → required checks on the README PR don't start on their own; use `RELEASE_PAT` to avoid the approval step.
     - `chore:` → no bump, but `chore(deps)` / `chore(deps-dev)` / `build(deps)` scopes are promoted to **patch** (repo-specific convention, not vanilla Conventional Commits).
     - No runtime secrets recorded (per steering).
     - _Requirements: 2.7, 7.3_
 
-- [x] 9. Final checkpoint - maintainer manual validation (documented, not code)
+- [ ] 9. Final checkpoint - maintainer manual validation (documented, not code)
   - This task documents one-time maintainer actions; it does not execute a real release from the pipeline. All sub-steps are **repo-admin actions**, not coding-agent tasks. Record the detailed checklist below in `docs/log.md` (or the implementation PR description) so it is captured in the repo.
 
   - [x] 9.1 Create the `RELEASE_PAT` repository secret (repo admin)
-    - **Why:** GitHub suppresses workflow re-triggering when the actor is the built-in `GITHUB_TOKEN`. A tag pushed with `GITHUB_TOKEN` will not fire `workflow-publish.yml`, and a PR opened with it will not fire the `on: pull_request` checks in `ci-main-build.yml`. A PAT is a distinct actor, so both downstream workflows run.
+    - **Why:** A tag pushed with the built-in `GITHUB_TOKEN` does not fire `workflow-publish.yml`. A PR opened with `GITHUB_TOKEN` gets its `on: pull_request` runs (e.g. `ci-main-build.yml`) in an approval-required state; a user with write access can approve them. A PAT is a distinct actor, so the publish fires and the PR checks start without that approval step.
     - **Token type:** prefer a **fine-grained PAT** scoped to only `aws-lambda-streaming-jvm-runtime`, with repository permissions **Contents: Read and write** (push tags, create the `release/vX.Y.Z` branch, create the Release) and **Pull requests: Read and write** (open the README PR). Set an expiry and a rotation reminder. A classic PAT with the `repo` scope also works but is broader.
     - **Create:** GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token; resource owner = the repo owner; Repository access = Only select repositories → this repo; set the two permissions; generate and copy the value (shown once).
-    - **Store as a repo secret** named exactly `RELEASE_PAT` (the workflow reads `secrets.RELEASE_PAT`, falling back to `GITHUB_TOKEN`): Repo → Settings → Secrets and variables → Actions → New repository secret. CLI equivalent:
+    - **Store as a repo secret** named exactly `RELEASE_PAT` (the workflow REQUIRES `secrets.RELEASE_PAT`, with no fallback; its preflight fails the run before tagging if it is missing): Repo → Settings → Secrets and variables → Actions → New repository secret. CLI equivalent:
       ```bash
       gh secret set RELEASE_PAT --repo elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime
       # paste the token when prompted (not echoed)
       ```
     - **Branch protection caveat:** if `main` is protected or rulesets restrict who may create tags, add the PAT's identity to the allow/bypass list so it can push the release branch and tag.
+    - Verified: `gh secret list` shows `RELEASE_PAT`.
     - _Requirements: 7.1, 7.2, 7.3_
 
-  - [x] 9.2 Trigger a real release (one-time live validation)
+  - [ ] 9.2 Trigger a real release (one-time live validation)
     - On a branch, make a trivial but real change under `streaming-core/src/main/**` (the reliable way to exercise the trigger path), commit with a Conventional Commit message that forces a known bump (e.g. `fix: trigger first automated release` → patch, or `feat: ...` → minor), open a PR into `main`, let `ci-main-build.yml` pass, and merge.
     - _Requirements: 1.1, 2.1_
 
-  - [x] 9.3 Confirm the computed tag
+  - [ ] 9.3 Confirm the computed tag
     - In the Actions tab, confirm `release-tag.yml` started and the `compute` job output matches expectation (latest tag + chosen bump), and the `tag` job pushed exactly that `vX.Y.Z`:
       ```bash
       git fetch --tags
@@ -128,7 +131,7 @@ Grounding facts (verified against the repo):
       ```
     - _Requirements: 2.1, 3.1, 3.2, 3.4_
 
-  - [x] 9.4 Confirm the two parallel tag consumers
+  - [ ] 9.4 Confirm the two parallel tag consumers
     - `workflow-publish.yml` run is green and the version appears on Maven Central (this is the real proof `RELEASE_PAT` is wired — it silently no-ops if the tag was pushed by `GITHUB_TOKEN`).
     - The Release step produced a **published** GitHub Release on the tag with **non-empty** auto-generated notes (not left as a draft, which would mean the empty-notes guard tripped):
       ```bash
@@ -136,18 +139,18 @@ Grounding facts (verified against the repo):
       ```
     - _Requirements: 3.3, 4.1, 4.2, 4.4, 8.1, 8.4_
 
-  - [x] 9.5 Confirm the README PR
-    - The `readme-pr` job created branch `release/vX.Y.Z` and opened a PR into `main`; the diff changes only the one README line to `nl.vintik:aws-lambda-streaming-core:X.Y.Z`; required checks are **reporting** on the PR (proves the PAT re-triggered them):
+  - [ ] 9.5 Confirm the README PR
+    - The `readme-pr` job created branch `release/vX.Y.Z` and opened a PR into `main`; the diff changes only the one README line to `nl.vintik:aws-lambda-streaming-core:X.Y.Z`; required checks started on the PR without an approval prompt (proves the PAT opened it):
       ```bash
       gh pr list --repo elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime --head release/v<X.Y.Z>
       ```
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.2, 8.3_
 
-  - [x] 9.6 Confirm the loop guard (critical negative test)
+  - [ ] 9.6 Confirm the loop guard (critical negative test)
     - Merge the README PR into `main` and confirm **no new `release-tag.yml` run starts** (the PR touched only `README.md`, matching neither trigger path). If a run does start, the path filter is wrong and must be fixed before relying on the automation.
     - _Requirements: 6.1, 6.2_
 
-  - [x] 9.7 Record the outcome
+  - [ ] 9.7 Record the outcome
     - Append to `docs/log.md`: the first version produced, confirmation of the parallel publish + non-empty Release, and that the loop guard held.
     - Ensure all script and static tests pass before handing off; ask the user if questions arise.
     - _Requirements: 3.3, 4.4, 6.1, 7.3, 8.1, 8.2_
