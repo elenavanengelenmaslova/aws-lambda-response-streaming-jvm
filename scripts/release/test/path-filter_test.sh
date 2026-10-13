@@ -4,15 +4,17 @@
 # `on.push.paths` filter.
 #
 # This is the loop-guard proof (Task 7.1). The release workflow must trigger ONLY on
-# changes to the published library's production sources or build file. If the path set
+# changes to the published library's production sources, build file, or the shared version
+# catalog (gradle/libs.versions.toml). If the path set
 # ever drifts (e.g. someone adds `**` or a docs path), docs/example/tooling pushes could
 # start a release (violating Req 1) and — critically — a README-only merge from the
 # release PR could re-trigger a run (violating Req 6, the loop guard). Pinning the exact
 # set of two paths here makes that drift a test failure.
 #
-# Expected `on.push.paths`, EXACTLY these two entries and no others:
+# Expected `on.push.paths`, EXACTLY these three entries and no others:
 #   - streaming-core/src/main/**
 #   - streaming-core/build.gradle.kts
+#   - gradle/libs.versions.toml
 #
 # Harness contract: this file is sourced by run-tests.sh, which has already sourced
 # assert.sh and zeroed ASSERT_FAILURES. It sources nothing itself and only calls the
@@ -31,6 +33,7 @@ WORKFLOW_FILE="$(cd "$_PF_HERE/../../.." && pwd)/.github/workflows/release-tag.y
 # The exact path set the trigger must carry — order-independent, but no more and no less.
 _PF_EXPECTED_1='streaming-core/src/main/**'
 _PF_EXPECTED_2='streaming-core/build.gradle.kts'
+_PF_EXPECTED_3='gradle/libs.versions.toml'
 
 # Sanity: the workflow file must exist before we can assert anything about it.
 if [[ -f "$WORKFLOW_FILE" ]]; then
@@ -86,22 +89,24 @@ if [[ -z "$_PF_PATHS" ]]; then
 else
     _PF_COUNT="$(printf '%s\n' "$_PF_PATHS" | grep -c .)"
 fi
-assert_eq "2" "$_PF_COUNT" "on.push.paths contains exactly two entries"
+assert_eq "3" "$_PF_COUNT" "on.push.paths contains exactly three entries"
 
 # Both expected entries must be present (order-independent containment).
 assert_contains "$_PF_PATHS" "$_PF_EXPECTED_1" \
     "on.push.paths includes $_PF_EXPECTED_1 (library production sources)"
 assert_contains "$_PF_PATHS" "$_PF_EXPECTED_2" \
     "on.push.paths includes $_PF_EXPECTED_2 (library build file)"
+assert_contains "$_PF_PATHS" "$_PF_EXPECTED_3" \
+    "on.push.paths includes $_PF_EXPECTED_3 (shared version catalog)"
 
 # No unexpected entry: every extracted line must be one of the two expected paths. This is
 # the real loop-guard check — a stray path like `**` or `README.md` would fail here.
 _PF_UNEXPECTED=""
 while IFS= read -r _pf_line; do
     [[ -z "$_pf_line" ]] && continue
-    if [[ "$_pf_line" != "$_PF_EXPECTED_1" && "$_pf_line" != "$_PF_EXPECTED_2" ]]; then
+    if [[ "$_pf_line" != "$_PF_EXPECTED_1" && "$_pf_line" != "$_PF_EXPECTED_2" && "$_pf_line" != "$_PF_EXPECTED_3" ]]; then
         _PF_UNEXPECTED+="$_pf_line "
     fi
 done <<< "$_PF_PATHS"
 assert_eq "" "${_PF_UNEXPECTED% }" \
-    "on.push.paths has no entries beyond the two Library_Source_Paths"
+    "on.push.paths has no entries beyond the three Library_Source_Paths"

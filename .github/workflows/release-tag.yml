@@ -1,14 +1,17 @@
 name: Release - compute, tag, README PR
 
 # Upstream of workflow-publish.yml. Reacts only to changes in the published library's
-# production sources or build file (Library_Source_Paths). A README-only merge touches
-# neither path, so the path filter structurally prevents a release re-trigger loop (Req 6).
+# production sources, its build file, or the shared version catalog (Library_Source_Paths).
+# The catalog (gradle/libs.versions.toml) is included so a Dependabot dependency bump cuts a
+# release even though it edits no .kt file. A README-only merge touches none of these paths,
+# so the path filter structurally prevents a release re-trigger loop (Req 6).
 on:
   push:
     branches: [main]
     paths:
       - 'streaming-core/src/main/**'
       - 'streaming-core/build.gradle.kts'
+      - 'gradle/libs.versions.toml'
 
 jobs:
   # Compute the next SemVer version from Conventional Commits since the latest tag.

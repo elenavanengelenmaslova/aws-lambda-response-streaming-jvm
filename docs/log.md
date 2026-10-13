@@ -1695,3 +1695,55 @@ That framing is what makes it likely to become the article people find when they
   when a PR for `release/vX.Y.Z` already exists (open or merged), reuses a pushed branch
   that has no PR, and otherwise creates the branch. If everything already exists, the run
   does nothing.
+
+---
+
+## `gradle/libs.versions.toml` added to the release trigger paths
+
+- **Symptom / trigger:** A Dependabot dependency bump merged to `main` — which edited only
+  `gradle/libs.versions.toml` — did not fire `release-tag.yml`. The path filter was
+  `streaming-core/src/main/**` and `streaming-core/build.gradle.kts`: the shared version
+  catalog was deliberately excluded because it covers all three modules, and a bump that
+  affects only the example or test modules is not a library change. But in practice,
+  Dependabot is the primary source of `streaming-core`'s transitive-dependency upgrades, and
+  those upgrades edit only the catalog. With the catalog excluded, no dependency-only commit
+  ever triggered a release.
+- **Resolution / status:** **RESOLVED — `gradle/libs.versions.toml` is now a third trigger
+  path.** The accepted tradeoff: a catalog bump that affects only the example/test/tooling
+  modules (not the published `streaming-core`) will also fire the pipeline and compute a
+  `chore(deps)` → patch release. The loop guard is unaffected — the README-only PR edits
+  only `README.md`, which is none of the three trigger paths, so the structural guarantee
+  holds. The path-filter static test (`path-filter_test.sh`) was updated to assert exactly
+  three paths.
+
+---
+
+## `SonatypeHost` removed from vanniktech maven-publish plugin 0.34.0 — migration to the no-arg API
+
+- **Symptom / trigger:** Dependabot PR #18 bumped `com.vanniktech.maven.publish`
+  `0.31.0 → 0.37.0`. The build failed with `Unresolved reference 'SonatypeHost'` in
+  `streaming-core/build.gradle.kts`. The plugin's 0.34.0 changelog says: "`SonatypeHost`
+  has been removed from the DSL." Since 0.33.0 deprecated `SonatypeHost` and the only
+  supported target is `CENTRAL_PORTAL`, the no-arg `publishToMavenCentral()` is the correct
+  replacement.
+- **Resolution / status:** **RESOLVED.** Removed the `SonatypeHost` import and changed
+  `publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)` → `publishToMavenCentral()`. POM
+  generation (`generatePomFileForMavenPublication`) confirmed correct (coordinate, version,
+  MIT license all intact). The full test and coverage suite passes with the bumped plugin.
+
+---
+
+## `open-pull-requests-limit` on a multi-ecosystem-group entry invalidates the Dependabot config
+
+- **Symptom / trigger:** The Dependabot page showed: *"open-pull-requests-limit should only
+  be set on the associated multi-ecosystem group, not directly on updates that are part of a
+  multi-ecosystem update group."* Every `Dependabot Updates` run in the repo's history was a
+  `security` job; the scheduled version-update job had **never executed**, and zero
+  dependency-update PRs had been opened. The config looked syntactically valid and no build
+  failed, so the misconfiguration was invisible from the Actions tab — it only surfaced on the
+  Dependabot page (Insights → Dependency graph → Dependabot).
+- **Resolution / status:** **RESOLVED.** Removed `open-pull-requests-limit: 5` from both
+  `updates:` entries. The default limit is 5 anyway, so no behavior change. After the fix
+  landed on `main`, Dependabot immediately opened PR #18 — the first real version-update PR.
+  Also created the missing `gradle` and `github-actions` repo labels (Dependabot silently
+  drops labels it can't find, leaving PRs unlabelled).

@@ -28,6 +28,7 @@ on:
     paths:
       - 'streaming-core/src/main/**'
       - 'streaming-core/build.gradle.kts'
+      - 'gradle/libs.versions.toml'
 ```
 
 Responsibilities: compute the next version, guard against an existing tag, create and push the tag. **This is the only workflow that reacts to library changes** (Req 1, 2, 3).
@@ -96,7 +97,7 @@ The version computation is a small **bash script** checked into the repo (`scrip
 
 | Component | File | Responsibility | Requirements |
 |---|---|---|---|
-| Trigger / path filter | `release-tag.yml` `on.push.paths` | React only to `Library_Source_Paths` | 1, 6 |
+| Trigger / path filter | `release-tag.yml` `on.push.paths` | React only to the three `Library_Source_Paths` | 1, 6 |
 | Version computer | `scripts/release/compute-version.sh` | Latest tag → aggregate commits → bump → next `vX.Y.Z` | 2 |
 | Tag guard | `tag` job step | Detect an existing tag; skip only the push and reconcile missing Release / PR | 3.4 |
 | Tag creator | `tag` job | Create + push `vX.Y.Z` | 3.1, 3.2 |
@@ -296,7 +297,9 @@ gh pr create --base main --head "$branch" \
 
 ### Loop guard (Req 6)
 
-The README PR edits only `README.md`. The `release-tag.yml` trigger is `paths: [streaming-core/src/main/**, streaming-core/build.gradle.kts]`. A README-only merge touches **neither** path, so the path filter excludes it and no release run starts (Req 6.1, 6.2). This is a structural guarantee from the trigger, not a runtime check — the strongest kind.
+The README PR edits only `README.md`. The `release-tag.yml` trigger is `paths: [streaming-core/src/main/**, streaming-core/build.gradle.kts, gradle/libs.versions.toml]`. A README-only merge touches **none** of the three paths, so the path filter excludes it and no release run starts (Req 6.1, 6.2). This is a structural guarantee from the trigger, not a runtime check — the strongest kind.
+
+**Why the version catalog is a trigger path.** `gradle/libs.versions.toml` is included so a Dependabot dependency bump — which edits only the shared catalog and no `.kt` file — still cuts a release. This matches the repo's intent that dependency upgrades produce releases (and lines up with the `chore(deps)` → patch rule above). Accepted tradeoff: because the catalog is shared across all three modules, a bump that affects only the example/test/tooling modules (not the published `streaming-core`) will also trigger a release. The loop guard is unaffected — the README-only PR edits only `README.md`, which is still none of the three trigger paths, so the structural guarantee holds.
 
 ### Branch protection + Release_PAT (Req 7.3)
 
@@ -368,7 +371,7 @@ For any replay of the same push, the computed version is the same; if that tag a
 **Validates: Requirements 3.4**
 
 ### Property 6: Loop exclusion
-A change set touching only `README.md` matches neither trigger path, so it can never start a release run.
+A change set touching only `README.md` matches none of the three trigger paths, so it can never start a release run.
 
 **Validates: Requirements 6.1, 6.2**
 
@@ -402,7 +405,7 @@ Mirroring steering's testing norms (layered; cheap unit tests over live runs; pr
 
 ### 3. Path filter + loop guard — static assertion
 
-- Assert `release-tag.yml`'s `on.push.paths` is exactly the two library paths (a `yq`/grep check in CI), proving docs/example/tooling pushes don't trigger (Req 1) and a README-only merge can't (Req 6).
+- Assert `release-tag.yml`'s `on.push.paths` is exactly the three Library_Source_Paths (a `yq`/grep check in CI), proving docs/example/tooling pushes don't trigger (Req 1) and a README-only merge can't (Req 6).
 
 ### 4. Release-notes guard — logic test
 
