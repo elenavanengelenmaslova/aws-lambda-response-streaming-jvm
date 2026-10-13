@@ -13,7 +13,7 @@ The new pipeline watches `main` for changes to the published library's productio
 - **Release_Tag**: A Git tag of the exact form `vMAJOR.MINOR.PATCH` (strict SemVer), e.g. `v2.1.0`. The single source of truth for the published version.
 - **Latest_Tag**: The most recent existing `Release_Tag` reachable in repository history, used as the baseline for computing the next version.
 - **Conventional_Commits**: The commit-message convention where a `fix:` prefix denotes a patch, `feat:` denotes a minor, and `feat!:` or a `BREAKING CHANGE` footer denotes a major change.
-- **Library_Source_Paths**: The path set `streaming-core/src/main/**` and `streaming-core/build.gradle.kts`. Changes to these paths are the only trigger for a release.
+- **Library_Source_Paths**: The path set `streaming-core/src/main/**`, `streaming-core/build.gradle.kts`, and `gradle/libs.versions.toml` (the shared Gradle version catalog). Changes to these paths are the only trigger for a release. The catalog is included because a Dependabot dependency bump edits only the catalog (no `.kt` file) yet should still cut a release; the tradeoff that catalog bumps affecting only the example/test modules also cut a release is accepted.
 - **Release_Branch**: A branch named `release/vMAJOR.MINOR.PATCH` created to carry the README version update.
 - **README_Artifact_Version**: The hardcoded dependency coordinate in `README.md` (~line 33): `implementation("nl.vintik:aws-lambda-streaming-core:X.Y.Z")`.
 - **Generated_Release_Notes**: GitHub's auto-generated release notes derived from merged pull requests and commits since the previous `Release_Tag` (e.g. via `gh release create vX.Y.Z --generate-notes`).
@@ -30,9 +30,9 @@ The new pipeline watches `main` for changes to the published library's productio
 
 #### Acceptance Criteria
 
-1. WHEN a push to the `main` branch includes a change to a path within `streaming-core/src/main/**` or to `streaming-core/build.gradle.kts`, THE Release_Pipeline SHALL start a release run.
+1. WHEN a push to the `main` branch includes a change to a path within `streaming-core/src/main/**`, to `streaming-core/build.gradle.kts`, or to `gradle/libs.versions.toml`, THE Release_Pipeline SHALL start a release run.
 2. IF a push to the `main` branch touches no path within `Library_Source_Paths`, THEN THE Release_Pipeline SHALL NOT start a release run.
-3. THE Release_Pipeline SHALL use GitHub Actions path filters to restrict the trigger to `Library_Source_Paths`.
+3. THE Release_Pipeline SHALL use GitHub Actions path filters to restrict the trigger to the three paths in `Library_Source_Paths` (`streaming-core/src/main/**`, `streaming-core/build.gradle.kts`, and `gradle/libs.versions.toml`).
 
 ### Requirement 2: Compute the next version from Conventional Commits
 
@@ -92,7 +92,7 @@ The new pipeline watches `main` for changes to the published library's productio
 #### Acceptance Criteria
 
 1. WHEN the README-update pull request is merged into `main`, THE Release_Pipeline SHALL NOT start a release run.
-2. THE Release_Pipeline SHALL restrict the README-update pull request to changes outside `streaming-core/src/main/**` and `streaming-core/build.gradle.kts` so that the path filter in Requirement 1 excludes the merge.
+2. THE Release_Pipeline SHALL restrict the README-update pull request to changes outside `streaming-core/src/main/**`, `streaming-core/build.gradle.kts`, and `gradle/libs.versions.toml` so that the path filter in Requirement 1 excludes the merge.
 
 ### Requirement 7: Required workflow permissions and branch-protection handling
 

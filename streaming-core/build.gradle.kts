@@ -1,4 +1,3 @@
-import com.vanniktech.maven.publish.SonatypeHost
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -77,7 +76,7 @@ kover {
 
 // ---- Maven Central publishing ---------------------------------------------------------------
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    publishToMavenCentral()
     signAllPublications()
 
     coordinates("nl.vintik", "aws-lambda-streaming-core", version.toString())
