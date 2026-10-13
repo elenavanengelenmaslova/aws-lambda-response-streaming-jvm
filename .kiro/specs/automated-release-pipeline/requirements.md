@@ -26,7 +26,7 @@ The new pipeline watches `main` for changes to the published library's productio
 
 ### Requirement 1: Trigger only on published-library changes
 
-**User Story:** As a library maintainer, I want releases to be cut only when the published library's production code or build file changes, so that documentation, example-module, tooling, and configuration changes never produce a release.
+**User Story:** As a library maintainer, I want releases to be cut only when the published library's production code, its build file, or the shared version catalog (`gradle/libs.versions.toml`) changes, so that dependency bumps still produce a release while other documentation, example-module, tooling, and configuration changes do not. Because the catalog is shared, a catalog change may produce a release even when it affects only the example or test modules; this tradeoff is accepted.
 
 #### Acceptance Criteria
 

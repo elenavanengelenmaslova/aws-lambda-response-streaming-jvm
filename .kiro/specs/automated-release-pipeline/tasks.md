@@ -70,7 +70,7 @@ Grounding facts (verified against the repo):
 
 - [x] 6. Wire the release workflow
   - [x] 6.1 Create `.github/workflows/release-tag.yml` trigger and `compute` job
-    - `on: push: branches: [main], paths: ['streaming-core/src/main/**', 'streaming-core/build.gradle.kts']`.
+    - `on: push: branches: [main], paths: ['streaming-core/src/main/**', 'streaming-core/build.gradle.kts', 'gradle/libs.versions.toml']`.
     - `compute` job: `permissions: contents: read`; `actions/checkout@v4` with `fetch-depth: 0`; run `scripts/release/compute-version.sh`; expose `version`, `bump`, `exists` as job outputs.
     - _Requirements: 1.1, 1.2, 1.3, 2.1, 7.1_
 
@@ -91,7 +91,7 @@ Grounding facts (verified against the repo):
 
 - [x] 7. Static path-filter / loop-guard assertion
   - [x] 7.1 Add a static assertion over `release-tag.yml` `on.push.paths`
-    - Create `scripts/release/test/path-filter_test.sh` asserting `on.push.paths` is **exactly** `streaming-core/src/main/**` and `streaming-core/build.gradle.kts` (use `yq` if present, else a grep/line check), proving docs/example/tooling pushes don't trigger (Req 1) and a README-only merge cannot start a run (Req 6).
+    - Create `scripts/release/test/path-filter_test.sh` asserting `on.push.paths` is **exactly** `streaming-core/src/main/**`, `streaming-core/build.gradle.kts`, and `gradle/libs.versions.toml` (use `yq` if present, else a grep/line check), proving docs/example/tooling pushes don't trigger (Req 1) and a README-only merge cannot start a run (Req 6).
     - **Property 6 (loop exclusion): Validates Requirements 6.1, 6.2**
     - _Requirements: 1.3, 6.1, 6.2_
 
