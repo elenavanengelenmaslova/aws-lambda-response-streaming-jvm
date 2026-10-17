@@ -1909,3 +1909,40 @@ That framing is what makes it likely to become the article people find when they
   separate time-to-first-byte, so the progressive (first-byte-within-50%) assertion is
   proven on the API Gateway path (real curl TTFB); the Function URL path asserts signed
   AWS_IAM access plus full byte-identical delivery of the >= 15 MB object.
+
+---
+
+## Lambda Function URL streaming needs the `http-integration-response` content-type marker — API Gateway does not
+
+- **Symptom / trigger:** With the Function URL deployed (`InvokeMode: RESPONSE_STREAM`,
+  `AuthType: AWS_IAM`) and the request correctly SigV4-signed, a signed GET returned a
+  21-byte `{"message":"Internal Server Error"}` with `Content-Type: application/json` —
+  **but the Lambda logs showed no exception**: the handler resolved the request, did the
+  S3 `GetObject`, ran to `END`/`REPORT` with normal duration and ~215 MB memory, and
+  returned cleanly. The identical handler and identical bytes stream perfectly over the
+  **API Gateway** path (`ResponseTransferMode: RESPONSE_STREAM`) — only the Function URL
+  path produced the 500.
+
+- **Root cause:** The handler writes the streaming prelude bytes (`metadata JSON` -> 8 NUL
+  -> body), which is correct, but the **Lambda Function URL** streaming runtime only treats
+  those bytes as a prelude-framed HTTP response if the response stream is tagged with the
+  content type `application/vnd.awslambda.http-integration-response`. On Node this tag is
+  applied by `awslambda.HttpResponseStream.from()`; on the managed Java runtime the
+  streaming `OutputStream` handed to the handler is AWS's `HttpResponseStream`, which exposes
+  `setContentType(String)`. Our writer never set it, so the Function URL runtime did not
+  recognise the stream, discarded the handler output, and substituted its own 500 — which is
+  why the function logs are clean. **API Gateway does not need the marker** (it infers the
+  protocol from the integration config), which is why that path worked and masked the gap.
+  This corrects the earlier `ResponseWriter` note that claimed writing the bytes in order was
+  "necessary and sufficient on the JVM" — it is sufficient for API Gateway, NOT for a
+  Function URL.
+
+- **Resolution / status:** **Resolved.** `ResponseWriter.writeMetadata` now sets the
+  content-type marker on the output stream (reflectively calling `setContentType(String)` if
+  the stream exposes it) BEFORE writing the first byte. One shared code path serves both
+  invocation types with no branching and no new dependency: the call is a no-op where the
+  method is absent (API Gateway's stream and plain `OutputStream`s in unit tests), and the
+  required tag on the Function URL path. The emitted bytes are unchanged, so the API Gateway
+  path and all existing tests are unaffected (a unit test asserts a tagged stream and a plain
+  stream produce byte-identical output). The marker must be set before any byte is written —
+  the content type cannot change once the response stream has started.
