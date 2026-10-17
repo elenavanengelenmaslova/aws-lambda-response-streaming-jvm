@@ -212,6 +212,10 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:s3-file-streaming-function-url'
                   - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:java-s3-file-streaming-function-url'
+                  # The URL is published on the SnapStart 'live' alias, so the invoke
+                  # target is the qualified ARN (function:<name>:<qualifier>).
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:s3-file-streaming-function-url:*'
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:java-s3-file-streaming-function-url:*'
                 Condition:
                   StringEquals:
                     'lambda:FunctionUrlAuthType': 'AWS_IAM'
