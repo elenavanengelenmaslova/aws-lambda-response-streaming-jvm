@@ -52,6 +52,7 @@ jobs:
       endpoint-url: ${{ steps.outputs.outputs.endpoint-url }}
       bucket-name: ${{ steps.outputs.outputs.bucket-name }}
       stack-name: ${{ steps.outputs.outputs.stack-name }}
+      function-url: ${{ steps.outputs.outputs.function-url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,10 +140,13 @@ jobs:
             --query 'Stacks[0].Outputs[?OutputKey==`StreamingEndpointUrl`].OutputValue' --output text)
           BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
             --query 'Stacks[0].Outputs[?OutputKey==`SourceBucketName`].OutputValue' --output text)
+          FUNCTION_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs[?OutputKey==`FunctionUrl`].OutputValue' --output text)
 
           echo "endpoint-url=$ENDPOINT_URL" >> $GITHUB_OUTPUT
           echo "bucket-name=$BUCKET_NAME" >> $GITHUB_OUTPUT
           echo "stack-name=$STACK_NAME" >> $GITHUB_OUTPUT
+          echo "function-url=$FUNCTION_URL" >> $GITHUB_OUTPUT
 
       - name: Create deployment summary
         if: steps.sam-deploy.outputs.deployed == 'true'
@@ -154,6 +158,7 @@ jobs:
           echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Stack Name:** ${{ steps.outputs.outputs.stack-name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Endpoint URL:** ${{ steps.outputs.outputs.endpoint-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Function URL:** ${{ steps.outputs.outputs.function-url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Source Bucket:** ${{ steps.outputs.outputs.bucket-name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📚 Next Steps" >> $GITHUB_STEP_SUMMARY

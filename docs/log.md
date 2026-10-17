@@ -1747,3 +1747,132 @@ That framing is what makes it likely to become the article people find when they
   landed on `main`, Dependabot immediately opened PR #18 — the first real version-update PR.
   Also created the missing `gradle` and `github-actions` repo labels (Dependabot silently
   drops labels it can't find, leaving PRs unlabelled).
+
+---
+
+## `InvokeMode: RESPONSE_STREAM` (Function URL) vs `ResponseTransferMode: RESPONSE_STREAM` (API Gateway SAM) — two knobs, one value, not interchangeable
+
+- **Symptom / trigger:** Adding a Lambda Function URL streaming path alongside the
+  existing API Gateway endpoint surfaces a second "turn on streaming" property whose
+  *value* is identical to the API Gateway one — `RESPONSE_STREAM` — but whose *property
+  name and layer* are different. For API Gateway, SAM enables streaming through the
+  function's `Api` **event** property `ResponseTransferMode: RESPONSE_STREAM` (see the
+  earlier `STREAM` vs `RESPONSE_STREAM` entry). For a Function URL there is no API event
+  at all: streaming is enabled on the function's `FunctionUrlConfig` via
+  `InvokeMode: RESPONSE_STREAM`. The shared `RESPONSE_STREAM` string makes it tempting to
+  reuse the wrong knob — putting `ResponseTransferMode` on the Function URL function
+  (ignored, so the URL stays buffered), or expecting an `Api` event to drive the URL — or
+  to leave `InvokeMode` at its default `BUFFERED`. Any of these silently defeats
+  streaming: the Function URL returns the body buffered (first byte not early, and a
+  payload over the 6 MB buffered limit fails), and because the property is accepted as
+  valid CloudFormation, nothing errors at `sam validate` or deploy — the regression only
+  shows up as a non-streaming response measured against the live URL.
+
+- **Resolution / status:** **Resolved (convention fixed, both templates).** The two knobs
+  are now set explicitly and distinctly, each with an inline comment flagging the trap:
+  - **API Gateway Lambda** — streaming via the `Api` event's
+    `ResponseTransferMode: RESPONSE_STREAM` (unchanged).
+  - **Function URL Lambda** — streaming via `FunctionUrlConfig: { AuthType: AWS_IAM,
+    InvokeMode: RESPONSE_STREAM }`. `InvokeMode` MUST be exactly `RESPONSE_STREAM`; any
+    other value — notably `BUFFERED` — is treated as invalid for this feature and is not
+    committed (Req 6.2, 6.3). The SAM `FunctionUrlConfig` generates the
+    `AWS::Lambda::Url` resource; SAM derives its logical ID by suffixing `Url` onto the
+    function's logical ID (`FunctionUrlFunction` → `FunctionUrlFunctionUrl`), which is
+    what the `FunctionUrl` stack output references. After every template change, run
+    `sam validate --template-file deployment/aws/sam/template.yaml` (and the `sam-java`
+    template) and require exit code 0 before committing (Req 6.5, 6.6). This is deployed
+    in both `deployment/aws/sam/template.yaml` and `deployment/aws/sam-java/template.yaml`.
+  - **Takeaway for the article:** this is the Function URL sibling of the earlier
+    `STREAM` vs `RESPONSE_STREAM` gotcha. The value you need is the same word; the
+    property that carries it is not. `ResponseTransferMode` is an API Gateway concept and
+    lives on the `Api` event; `InvokeMode` is a Function URL concept and lives on
+    `FunctionUrlConfig`. Picking the wrong one, or defaulting `InvokeMode` to `BUFFERED`,
+    is a quiet non-streaming endpoint that passes validation and only fails under a
+    first-byte / large-payload check.
+
+---
+
+## An `AuthType: AWS_IAM` Function URL returns 403 to unsigned requests — provable only against real AWS
+
+- **Symptom / trigger:** The Function URL uses `AuthType: AWS_IAM` (it is not public), so
+  every caller must sign the request with SigV4 for the `lambda` service and hold
+  `lambda:InvokeFunctionUrl`. An unsigned GET to the URL — the obvious first smoke test —
+  returns **HTTP 403** and serves no object content. The confusing part for the test
+  strategy is that this gate cannot be exercised locally: no local emulator (Floci /
+  LocalStack) implements the Function URL streaming invocation path *or* its SigV4 request
+  signing, so there is nothing to sign against and no 403 to observe before deploy. Trying
+  to prove IAM auth in a unit or integration test is a dead end.
+
+- **Resolution / status:** **Resolved — the IAM gate lives in the post-deploy script, not
+  in tests.** The Floci integration tests invoke the handler **directly** with an
+  `AWS_IAM`-shaped payload-2.0 event (including a `requestContext.authorizer.iam` section),
+  which proves the handler parses the right event shape and streams byte-identically — but
+  deliberately does **not** attempt real signing (Req 5.5). Proof that the IAM gate
+  actually rejects unsigned callers and admits signed ones is deferred to the signed
+  `scripts/post-deploy-test.sh` run against the deployed URL (Req 7.4, 7.5, 9.2): it signs
+  every request and treats a 403 / unreachable / non-2xx as a hard non-zero exit, never
+  falling back to an unsigned request. This mirrors the earlier platform-behaviour lesson
+  (API-key `ApiKeyRequired` → 403): authentication that the platform enforces is proven
+  against the platform, not mocked in a test.
+  - **Takeaway for the article:** IAM auth on a Function URL is a platform behaviour, not
+    handler code. The handler never sees a signature; AWS accepts or rejects the request
+    before the function runs. So the only honest proof is a signed request to the real
+    URL — the test suite proves the handler, the post-deploy script proves the gate.
+
+---
+
+## Deploying an `AWS::Lambda::Url` needs `FunctionUrlConfig` IAM actions on the deploy role — the stack fails at the `AWS::Lambda::Url` step without them
+
+- **Symptom / trigger:** SAM turns `FunctionUrlConfig` into an `AWS::Lambda::Url`
+  resource at deploy time. CloudFormation (acting as the deploy role) then calls the
+  Lambda control-plane APIs that create and manage that resource. If the deploy role lacks
+  them, the stack update fails specifically at the `AWS::Lambda::Url` step with an access
+  denial — after the function itself has been created — leaving a half-applied stack. The
+  function deploys fine; only the URL resource trips, so the failure points at the new
+  resource rather than at anything obviously IAM-shaped.
+
+- **Resolution / status:** **Resolved.** The OIDC deploy role
+  (`deployment/aws/oidc/github-oidc-role.yaml`) grants
+  `lambda:CreateFunctionUrlConfig`, `lambda:GetFunctionUrlConfig`,
+  `lambda:UpdateFunctionUrlConfig`, and `lambda:DeleteFunctionUrlConfig`, scoped to the
+  same `function:*` resource scope used by the existing function-management statement — no
+  wildcard function resource. No `lambda:AddPermission` is needed for the URL: with
+  `AuthType: AWS_IAM`, access is enforced through the caller's IAM
+  (`lambda:InvokeFunctionUrl`, granted separately and scoped to the specific Function URL
+  function ARNs with the `lambda:FunctionUrlAuthType = AWS_IAM` condition — Req 7.3), so no
+  public resource-based permission statement is created. Run `sam validate` (exit 0) on
+  both templates after the change before committing.
+  - **Takeaway for the article:** a `FunctionUrlConfig` one-liner in SAM expands into a
+    separate CloudFormation resource with its own control-plane API surface. Grant the
+    deploy role the four `*FunctionUrlConfig` actions up front, or the stack dies at the
+    URL step with the function already created.
+
+---
+
+## `curl --aws-sigv4` needs `x-amz-security-token` for temporary (assumed-role / OIDC) credentials
+
+- **Symptom / trigger:** The pipeline assumes an OIDC role, so its AWS credentials are
+  **temporary** — an access key, a secret key, **and** a session token. Signing a Function
+  URL request with `curl --aws-sigv4 "aws:amz:<region>:lambda" --user
+  "<AWS_ACCESS_KEY_ID>:<AWS_SECRET_ACCESS_KEY>"` but omitting the session token produces a
+  signature AWS rejects with 403, even though the key pair is valid and the SigV4 math is
+  correct. The missing piece is that temporary credentials require the session token to be
+  presented to the service as the `x-amz-security-token` header; `curl --aws-sigv4` signs
+  the request but does not add that header on its own. The failure looks identical to a
+  bad signature or a missing-permission denial, so it reads as a signing bug rather than a
+  missing header.
+
+- **Resolution / status:** **Resolved — the token header is added when present.**
+  `scripts/post-deploy-test.sh` builds its SigV4 curl args as
+  `--aws-sigv4 "aws:amz:${sign_region}:lambda" --user
+  "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"` and, **only when
+  `AWS_SESSION_TOKEN` is set**, appends `--header "x-amz-security-token:
+  ${AWS_SESSION_TOKEN}"`. That keeps the same script working with both long-lived
+  credentials (no session token, header omitted) and the pipeline's temporary OIDC
+  credentials (session token present, header added). The session token is a **runtime
+  secret**: it is referenced by name only, never echoed, and masked in CI logs — this log
+  records no token value (Req 7.3, 11.4).
+  - **Takeaway for the article:** SigV4 with temporary credentials is a three-part
+    secret. `--aws-sigv4` handles the key pair and the signature, but you must hand the
+    service the session token yourself via `x-amz-security-token`, or every signed request
+    from an assumed role 403s with a message that looks like a signing failure.

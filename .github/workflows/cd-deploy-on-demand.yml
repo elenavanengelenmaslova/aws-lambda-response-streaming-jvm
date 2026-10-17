@@ -67,6 +67,11 @@ jobs:
       aws-region: ${{ inputs.aws-region }}
       github-actions-role-name: ${{ inputs.github-actions-role-name || vars.OIDC_ROLE_NAME }}
       stack-name: ${{ matrix.stack-name }}
+      # Best-effort pass-through of the deployed Function URL. The deploy job is
+      # a matrix, so this output reflects only one leg; the streaming-test job
+      # therefore treats it as an override and falls back to resolving the
+      # Function URL from its own per-stack stack output when it does not match.
+      function-url: ${{ needs.deploy.outputs.function-url }}
       test-script: ${{ matrix.test-script }}
       test-object-key: ${{ matrix.test-object-key }}
     secrets:

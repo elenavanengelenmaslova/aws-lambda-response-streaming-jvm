@@ -119,6 +119,58 @@ Resources:
       RetentionInDays: !Ref LogRetentionDays
 
   # ---------------------------------------------------------------------------
+  # The Function URL streaming Lambda. Mirrors StreamingFunction (same library,
+  # S3Source, SnapStart + priming, cold-start settings) but is invoked via a
+  # Lambda Function URL instead of API Gateway. The streaming knob here is
+  # InvokeMode: RESPONSE_STREAM on FunctionUrlConfig - NOT interchangeable with
+  # API Gateway's ResponseTransferMode: RESPONSE_STREAM (see docs/log.md).
+  # ---------------------------------------------------------------------------
+  FunctionUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: java-s3-file-streaming-function-url
+      Handler: nl.vintik.streaming.java.S3FunctionUrlHandler
+      CodeUri: ../../../build/dist/streaming-endpoint-java.jar
+      MemorySize: !Ref MemorySizeMb
+      Timeout: !Ref TimeoutSeconds
+      # Cold-start optimization: SnapStart with an auto-published 'live' alias.
+      # FunctionUrlConfig attaches the URL to the 'live' alias, so it resolves
+      # to the SnapStart-enabled published version rather than $LATEST.
+      AutoPublishAlias: live
+      SnapStart:
+        ApplyOn: PublishedVersions
+      Environment:
+        Variables:
+          # Tiered compilation stop-at level 1 for faster restore-time warmup.
+          JAVA_TOOL_OPTIONS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+          # Source bucket passed by name; never hard-coded, never logged.
+          BUCKET_NAME: !Ref SourceBucket
+      # Least privilege: only s3:GetObject, only on this bucket's objects.
+      # No wildcard resource, no other S3 action.
+      Policies:
+        - Statement:
+            - Sid: GetObjectFromSourceBucketOnly
+              Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "${SourceBucket.Arn}/*"
+      # Lambda Function URL. AuthType AWS_IAM (not NONE) - every caller must sign
+      # with SigV4 and hold lambda:InvokeFunctionUrl. InvokeMode RESPONSE_STREAM
+      # (not BUFFERED) is the Function URL equivalent of the API GW streaming knob.
+      FunctionUrlConfig:
+        AuthType: AWS_IAM
+        InvokeMode: RESPONSE_STREAM
+    # No ProvisionedConcurrencyConfig anywhere - no always-on capacity (Req 11.3, 16.6).
+
+  # ---------------------------------------------------------------------------
+  # CloudWatch log group for the Function URL Lambda, same finite retention.
+  # ---------------------------------------------------------------------------
+  FunctionUrlFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FunctionUrlFunction}"
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ---------------------------------------------------------------------------
   # Private, encrypted S3 source bucket with bounded, finite-cost lifecycle.
   # ---------------------------------------------------------------------------
   SourceBucket:
@@ -160,6 +212,12 @@ Outputs:
   FunctionLiveAliasArn:
     Description: ARN of the SnapStart 'live' alias.
     Value: !Ref StreamingFunction.Alias
+  FunctionUrl:
+    Description: HTTPS Function URL (AWS_IAM auth, RESPONSE_STREAM). Append the file name.
+    Value: !GetAtt FunctionUrlFunctionUrl.FunctionUrl
+  FunctionUrlFunctionName:
+    Description: Name of the Function URL streaming Lambda function.
+    Value: !Ref FunctionUrlFunction
   SourceBucketName:
     Description: Name of the private, encrypted S3 source bucket.
     Value: !Ref SourceBucket

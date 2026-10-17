@@ -14,11 +14,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Orchestrates the streaming pipeline for the Java example: parse the API Gateway proxy
- * event, validate the requested file name, confirm the S3 object exists (and its size),
- * then drive the library's {@link ResponseWriter} to write a 200 metadata prelude and
- * stream the body. Owns the top-level mapping of every outcome to an HTTP status code
- * (400/404/502/200) and the status-committed-early ordering rule.
+ * Orchestrates the streaming pipeline for the Java example: resolve the incoming event into
+ * a validated {@link FileRequest} via a {@link RequestResolver}, confirm the S3 object exists
+ * (and its size), then drive the library's {@link ResponseWriter} to write a 200 metadata
+ * prelude and stream the body. Owns the top-level mapping of every outcome to an HTTP status
+ * code (400/404/502/200) and the status-committed-early ordering rule.
+ *
+ * <p>Request parsing and file-name validation live behind the {@link RequestResolver}
+ * abstraction (default {@link FileKeyResolver} for the API Gateway proxy event): a resolver
+ * returns either a {@link RequestResult.Resolved} carrying the {@link FileRequest} or a
+ * {@link RequestResult.Error} carrying the HTTP status and message to write. This keeps the
+ * handler agnostic of the event shape and lets the Function URL path reuse the same handler
+ * with a different resolver.
  *
  * <p>Java counterpart of the Kotlin example's {@code StreamHandler}. It is synchronous
  * straight-line code (no coroutines): the AWS SDK for Java v2 calls in {@link S3Source}
@@ -29,10 +36,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Ordering guarantees:
  * <ul>
- *   <li>No body bytes are written on any pre-commit error path &mdash; a parse failure, a
- *       validation rejection, a not-found, or a head failure/timeout all produce a
- *       metadata-only error response via {@link ResponseWriter#writeError} (Req 1.2, 2.2,
- *       2.3, 2.4, 3.7, 4.2, 4.4, 5.4).</li>
+ *   <li>No body bytes are written on any pre-commit error path &mdash; a resolver error
+ *       (parse failure or validation rejection), a not-found, or a head failure/timeout all
+ *       produce a metadata-only error response via {@link ResponseWriter#writeError} (Req 1.2,
+ *       2.2, 2.3, 2.4, 3.7, 4.2, 4.4, 5.4).</li>
  *   <li>Existence/size is confirmed before any metadata is written (head-before-commit,
  *       Req 4.1, 4.3).</li>
  *   <li>Once the metadata JSON and the 8 null-byte delimiter are written the status is
@@ -54,13 +61,13 @@ public final class StreamHandler implements RequestStreamHandler {
     @SuppressWarnings("unused")
     private static final Priming PRIMING = new Priming();
 
-    private final RequestParser parser;
-    private final FileNameValidator validator;
+    private final RequestResolver<FileRequest> resolver;
     private final S3Source source;
     private final ResponseWriter writer;
 
     /**
-     * Production constructor: wires the real collaborators. The {@link ResponseWriter} is
+     * Production constructor: wires the real collaborators. The request resolver defaults to
+     * {@link FileKeyResolver} (API Gateway proxy event). The {@link ResponseWriter} is
      * constructed via the library's Java-visible {@code (Json, Integer)} constructor &mdash;
      * Java cannot use Kotlin default arguments, so {@link Json#Default} and the top-level
      * {@code OBSERVED_MAX_PRELUDE_LEN} constant on the generated {@code *Kt} facade are passed
@@ -69,8 +76,7 @@ public final class StreamHandler implements RequestStreamHandler {
      */
     public StreamHandler() {
         this(
-            new RequestParser(),
-            new FileNameValidator(),
+            new FileKeyResolver(),
             new S3Source(),
             new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN));
     }
@@ -79,14 +85,12 @@ public final class StreamHandler implements RequestStreamHandler {
      * Package-private constructor for unit tests: injects the collaborators so the status
      * mapping and ordering can be exercised without touching AWS or the real wire format.
      *
-     * @param parser    parses the proxy event into a {@link StreamRequest}
-     * @param validator validates the requested file name
-     * @param source    confirms existence/size and streams the object body
-     * @param writer    the library writer that owns the wire-format encoding
+     * @param resolver resolves the incoming event into a {@link FileRequest} or an error
+     * @param source   confirms existence/size and streams the object body
+     * @param writer   the library writer that owns the wire-format encoding
      */
-    StreamHandler(RequestParser parser, FileNameValidator validator, S3Source source, ResponseWriter writer) {
-        this.parser = parser;
-        this.validator = validator;
+    StreamHandler(RequestResolver<FileRequest> resolver, S3Source source, ResponseWriter writer) {
+        this.resolver = resolver;
         this.source = source;
         this.writer = writer;
     }
@@ -94,31 +98,14 @@ public final class StreamHandler implements RequestStreamHandler {
     @Override
     public void handleRequest(InputStream input, OutputStream output, Context context) throws IOException {
         try (output) {
-            switch (parser.parse(input)) {
-                case ParseResult.ParseError _ -> {
-                    logger.warn("API Gateway proxy event could not be parsed; responding 400");
-                    writer.writeError(output, 400, "The request could not be parsed.");
-                }
-                case ParseResult.Parsed parsed -> handleValidated(parsed.request(), output);
+            switch (resolver.resolve(input)) {
+                case RequestResult.Error<FileRequest> error ->
+                        writer.writeError(output, error.statusCode(), error.message());
+                case RequestResult.Resolved<FileRequest> resolved -> handleValidObject(resolved.request(), output);
             }
             // Flush before the try-with-resources close so the streaming runtime drains its
             // buffer completely before receiving the close signal (Req 5.5).
             output.flush();
-        }
-    }
-
-    /**
-     * Validates the requested file name and maps every rejection to HTTP 400 with a specific
-     * message, issuing no S3 request for a rejected name (Req 2.2, 2.4, 3.7). A valid name
-     * proceeds to the existence check.
-     */
-    private void handleValidated(StreamRequest request, OutputStream output) throws IOException {
-        switch (validator.validate(request.fileName())) {
-            case ValidationResult.Invalid invalid -> {
-                logger.warn("File name rejected (reason={}); responding 400 with no S3 request", invalid.reason());
-                writer.writeError(output, 400, messageFor(invalid.reason()));
-            }
-            case ValidationResult.Valid valid -> handleValidObject(new FileRequest(valid.fileName()), output);
         }
     }
 
@@ -163,19 +150,5 @@ public final class StreamHandler implements RequestStreamHandler {
             logger.error("Body stream failed after status commit; response body truncated", e);
             throw e;
         }
-    }
-
-    /**
-     * Maps a rejection {@link ValidationResult.Reason} to a client-facing 400 message,
-     * mirroring the Kotlin example's wording. Missing and too-long names get distinct
-     * messages; every path-safety rejection collapses to a single generic message so the
-     * response does not disclose which specific rule tripped.
-     */
-    private static String messageFor(ValidationResult.Reason reason) {
-        return switch (reason) {
-            case MISSING -> "The file name is missing.";
-            case TOO_LONG -> "The file name is invalid.";
-            case ILLEGAL_CHARACTER, PATH_SEPARATOR, PARENT_DIR, ABSOLUTE_PATH -> "The file name was rejected.";
-        };
     }
 }

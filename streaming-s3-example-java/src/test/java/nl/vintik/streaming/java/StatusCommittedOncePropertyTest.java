@@ -150,7 +150,7 @@ class StatusCommittedOncePropertyTest {
         FileNameValidator validator = new FileNameValidator();
         S3Source source = mock(S3Source.class);
         ResponseWriter writer = new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN);
-        StreamHandler handler = new StreamHandler(parser, validator, source, writer);
+        StreamHandler handler = new StreamHandler(new FileKeyResolver(parser, validator), source, writer);
 
         stubHead(source, scenario);
         stubStreamBody(source, scenario);

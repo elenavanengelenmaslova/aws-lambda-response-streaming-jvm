@@ -1,0 +1,576 @@
+{
+  "pbtResults": {
+    "1.4 Write property test — Function URL path extraction parity": {
+      "status": "passed",
+      "lastRunTimestamp": 1792214440559
+    }
+  },
+  "executionHistory": {
+    "1.1 Implement `FunctionUrlResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214155975
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214164471
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214267832
+      }
+    ],
+    "1.2 Implement `S3FunctionUrlHandler` entry point": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156127
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214272147
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214343430
+      }
+    ],
+    "1.3 Write unit tests for `FunctionUrlResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156175
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214348039
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215907246
+      }
+    ],
+    "1.4 Write property test — Function URL path extraction parity": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156226
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214349548
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215908208
+      }
+    ],
+    "1.5 Write property test — Function URL resolver rejection and no-S3 guarantee": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156273
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214350355
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215909562
+      }
+    ],
+    "1.6 Checkpoint - run `./gradlew :streaming-s3-example:clean :streaming-s3-example:test`. Ensure all tests pass, ask the user if questions arise.": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156330
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215915828
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216031707
+      }
+    ],
+    "2.1 Add sub-6 MB Function URL integration test": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156382
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216038684
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223294581
+      }
+    ],
+    "2.2 Add ≥15 MB Function URL integration test": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156430
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216037752
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223295463
+      }
+    ],
+    "2.3 Checkpoint - run `./gradlew :streaming-s3-example:clean :streaming-s3-example:test`. Ensure all tests pass, ask the user if questions arise.": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156488
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223300464
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223378659
+      }
+    ],
+    "3.1 Implement `RequestResolver` and `RequestResult`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156553
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214165129
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214268515
+      }
+    ],
+    "3.2 Implement `FileKeyResolver` (API Gateway proxy)": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156591
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214272824
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214344398
+      }
+    ],
+    "3.3 Refactor `StreamHandler.java` onto `FileKeyResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156641
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214351571
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215910676
+      }
+    ],
+    "3.4 Write unit tests for `RequestResolver` abstraction and `FileKeyResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156689
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792215914498
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216032638
+      }
+    ],
+    "3.5 Verify existing Java handler behavior is unchanged": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156733
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216036424
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223296523
+      }
+    ],
+    "3.6 Checkpoint - run `./gradlew :streaming-s3-example-java:clean :streaming-s3-example-java:test`. Ensure all tests pass, ask the user if questions arise.": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156800
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223301732
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223380063
+      }
+    ],
+    "4.1 Implement Java `FunctionUrlResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156858
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223383703
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223458378
+      }
+    ],
+    "4.2 Implement Java `S3FunctionUrlHandler` entry point": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156938
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223461287
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223520911
+      }
+    ],
+    "4.3 Write unit tests for Java `FunctionUrlResolver`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214156989
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223525689
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223695282
+      }
+    ],
+    "4.4 Add Java Function URL integration tests (Floci)": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157053
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223524842
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223695871
+      }
+    ],
+    "4.5 Checkpoint - run `./gradlew :streaming-s3-example-java:clean :streaming-s3-example-java:test`. Ensure all tests pass, ask the user if questions arise.": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157097
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223699150
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223753415
+      }
+    ],
+    "5.1 Add `FunctionUrlFunction` to the Kotlin template": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157141
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223758873
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223830828
+      }
+    ],
+    "5.2 Add `FunctionUrlFunction` to the Java template": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157182
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223757998
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223830103
+      }
+    ],
+    "5.3 Grant `lambda:InvokeFunctionUrl` to the OIDC deploy role": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157230
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223833889
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223891606
+      }
+    ],
+    "5.4 Validate both templates": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157274
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223894816
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223931908
+      }
+    ],
+    "6.1 Add SigV4-signed Function URL checks to `post-deploy-test.sh`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157323
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223935527
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792224125077
+      }
+    ],
+    "6.2 Wire the Function URL output through the workflows": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157382
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792224128094
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225047232
+      }
+    ],
+    "6.3 Checkpoint - run the script locally against a deployed stack if credentials are available, else confirm shell syntax (`bash -n scripts/post-deploy-test.sh`). Ask the user before any real invocation.": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157483
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225051433
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225063459
+      }
+    ],
+    "7.1 Update the README": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157521
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225068416
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225178094
+      }
+    ],
+    "7.2 Record gotchas in `docs/log.md`": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157564
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225067572
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225179216
+      }
+    ],
+    "8.1 Full build and coverage gate": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792214157604
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225182634
+      },
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225211116
+      }
+    ],
+    "1. Kotlin example: Function URL resolver and handler": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792216031752
+      }
+    ],
+    "2. Kotlin example: Function URL handler integration tests (Floci)": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223378712
+      }
+    ],
+    "3. Java example: introduce the request-resolution abstraction": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223380184
+      }
+    ],
+    "4. Java example: Function URL resolver and handler": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223753520
+      }
+    ],
+    "5. SAM templates: Function URL Lambda for both examples": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792223931968
+      }
+    ],
+    "6. Post-deploy script and pipeline: signed Function URL verification": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225063623
+      }
+    ],
+    "7. Documentation and knowledge capture": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225179267
+      }
+    ],
+    "8. Final verification": [
+      {
+        "executionId": "3b8c817c-827b-4b74-a8b7-fea921ea171e",
+        "chatSessionId": "sess_f82533e4-5c32-4769-aaab-33b52f37caa2",
+        "timestamp": 1792225211170
+      }
+    ]
+  }
+}

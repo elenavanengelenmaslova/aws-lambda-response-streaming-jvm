@@ -15,6 +15,13 @@
 #   9.5  An unreachable or non-success endpoint => non-zero exit, never "success".
 #   9.6  A payload size/content mismatch => non-zero exit, never "success".
 #
+# In addition to the API Gateway endpoint, the deployed Lambda Function URL
+# (AuthType: AWS_IAM, InvokeMode: RESPONSE_STREAM) is verified on every run
+# (function-url-streaming Req 7.4, 9.1-9.7). Because the Function URL requires
+# IAM auth, every request to it is SigV4-signed with the deploy credentials;
+# an unsigned request would be rejected with HTTP 403. The signed checks run
+# IN ADDITION to the API Gateway checks (Req 9.7); both run every deploy.
+#
 # Configuration is taken from environment variables (no secrets are embedded).
 # When an env var is not set, the value is resolved from the deployed
 # CloudFormation stack outputs (see deployment/aws/sam/template.yaml).
@@ -24,6 +31,7 @@
 #   ENDPOINT_URL     Base HTTPS URL, trailing slash   (default: stack output StreamingEndpointUrl)
 #   BUCKET_NAME      Source S3 bucket                 (default: stack output SourceBucketName)
 #   FUNCTION_NAME    Lambda function name             (default: stack output FunctionName)
+#   FUNCTION_URL     Base HTTPS Function URL, signed   (default: stack output FunctionUrl)
 #   API_KEY          API key value for x-api-key hdr   (default: resolved from stack output ApiKeyId)
 #   LARGE_FILE       >= 15 MB test object key         (default: test-object-15mb.bin)
 #   SMALL_FILE       ~6 MB baseline object key        (default: test-object-6mb.bin)
@@ -79,6 +87,13 @@ fi
 # (Auth ApiKeyRequired). Populated in resolve_config; the key is a runtime
 # secret — it is never printed and is masked in CI logs.
 auth_header_args=()
+
+# curl args that SigV4-sign a request to the Function URL (AuthType: AWS_IAM).
+# Populated in resolve_config from the deploy credentials present in the job
+# environment. These values are runtime secrets: they are never printed, and
+# the secret ones are masked in CI logs. The Function URL path ALWAYS signs —
+# it never falls back to an unsigned request (function-url-streaming Req 7.4).
+sigv4_args=()
 
 # Scratch directory for downloaded bodies and reference copies; always cleaned up.
 WORK_DIR="$(mktemp -d)"
@@ -163,8 +178,76 @@ resolve_config() {
     info "no API key resolved; issuing unauthenticated requests"
   fi
 
+  resolve_function_url_config
+
   LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
   info "resolved configuration for stack '$STACK_NAME' (endpoint, bucket, function)"
+}
+
+# ---------------------------------------------------------------------------
+# Resolve the Function URL and build the SigV4 signing args (Req 7.4, 9.2).
+#
+# The Function URL enforces AuthType: AWS_IAM, so every request MUST be signed
+# with SigV4 for the `lambda` service in the deploy region. The credentials
+# come from the pipeline's assumed-role environment (OIDC). This function:
+#   - resolves FUNCTION_URL from the stack output when unset,
+#   - derives the region (needed for the SigV4 scope) when AWS_REGION is unset,
+#   - requires access-key/secret-key creds (hard fail otherwise — we never
+#     fall back to an unsigned request),
+#   - adds the session-token header only when AWS_SESSION_TOKEN is present.
+# Secret values are masked in CI; identifiers (URL, region) are non-secret.
+# ---------------------------------------------------------------------------
+resolve_function_url_config() {
+  FUNCTION_URL="${FUNCTION_URL:-$(stack_output FunctionUrl)}"
+
+  [[ -n "${FUNCTION_URL:-}" && "$FUNCTION_URL" != "None" ]] \
+    || fail "could not determine FUNCTION_URL (set FUNCTION_URL or deploy stack '$STACK_NAME')"
+
+  # The Function URL serves over TLS only; reject anything that is not HTTPS.
+  [[ "$FUNCTION_URL" == https://* ]] || fail "FUNCTION_URL must be HTTPS: $FUNCTION_URL"
+
+  # SigV4 needs the region. Prefer AWS_REGION; otherwise derive it from the
+  # Function URL host (<id>.lambda-url.<region>.on.aws) and finally fall back
+  # to the configured CLI default.
+  local sign_region="$AWS_REGION"
+  if [[ -z "$sign_region" ]]; then
+    sign_region="$(sed -n 's#^https://[^.]*\.lambda-url\.\([^.]*\)\.on\.aws.*#\1#p' <<<"$FUNCTION_URL")"
+  fi
+  if [[ -z "$sign_region" ]]; then
+    sign_region="$(aws configure get region 2>/dev/null || true)"
+  fi
+  [[ -n "$sign_region" ]] \
+    || fail "could not determine region for SigV4 signing (set AWS_REGION)"
+
+  # Deploy credentials are required to sign; we never issue an unsigned request.
+  [[ -n "${AWS_ACCESS_KEY_ID:-}" ]] \
+    || fail "AWS_ACCESS_KEY_ID is required to SigV4-sign Function URL requests"
+  [[ -n "${AWS_SECRET_ACCESS_KEY:-}" ]] \
+    || fail "AWS_SECRET_ACCESS_KEY is required to SigV4-sign Function URL requests"
+
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "::add-mask::${AWS_ACCESS_KEY_ID}"
+    echo "::add-mask::${AWS_SECRET_ACCESS_KEY}"
+    [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "::add-mask::${AWS_SESSION_TOKEN}"
+  fi
+
+  sigv4_args=(
+    --aws-sigv4 "aws:amz:${sign_region}:lambda"
+    --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"
+  )
+  # Temporary (assumed-role / OIDC) credentials require the security-token
+  # header; add it only when a session token is present.
+  if [[ -n "${AWS_SESSION_TOKEN:-}" ]]; then
+    sigv4_args+=(--header "x-amz-security-token: ${AWS_SESSION_TOKEN}")
+  fi
+
+  info "resolved Function URL and SigV4 signing for region '$sign_region' (credentials masked)"
+}
+
+# build_function_url <file-name> — join the Function URL base and the object
+# key. The Function URL output already ends with '/', but tolerate both.
+build_function_url() {
+  printf '%s/%s' "${FUNCTION_URL%/}" "$1"
 }
 
 # build_url <file-name> — join the base endpoint and the requested object key.
@@ -288,13 +371,21 @@ teardown_stack() {
 # Performs a GET, saving the body to <body_file>. Echoes a single line:
 #   "<http_code> <time_starttransfer> <time_total> <size_download>"
 # A connection-level failure (unreachable) is a hard error (Req 9.5).
+#
+# The 4th+ arguments are extra per-request curl args. The API Gateway path
+# passes the x-api-key header (global auth_header_args) as it always has; the
+# Function URL path passes its SigV4 signing args instead. In both cases a
+# non-2xx response is a hard failure — including a 403 from an unsigned or
+# badly-signed Function URL request (Req 9.5).
 # ---------------------------------------------------------------------------
 http_get_timed() {
   local url="$1" body_file="$2" label="$3"
+  shift 3
+  local curl_args=("$@")
   local metrics rc=0
 
   metrics="$(curl -sS --http1.1 \
-      "${auth_header_args[@]}" \
+      "${curl_args[@]}" \
       -o "$body_file" \
       -w '%{http_code} %{time_starttransfer} %{time_total} %{size_download}' \
       "$url")" || rc=$?
@@ -362,7 +453,7 @@ measure_request() {
   url="$(build_url "$file")"
   start_ms="$(now_ms)"
   info "requesting $label"
-  metrics="$(http_get_timed "$url" "$body_file" "$label")"
+  metrics="$(http_get_timed "$url" "$body_file" "$label" "${auth_header_args[@]}")"
 
   M_TTFB="$(awk '{print $2}' <<<"$metrics")"
   M_TOTAL="$(awk '{print $3}' <<<"$metrics")"
@@ -431,6 +522,57 @@ verify_memory_bounded() {
 }
 
 # ---------------------------------------------------------------------------
+# Function URL verification (function-url-streaming Req 7.4, 9.1-9.7)
+#
+# Mirrors the API Gateway flow but drives the deployed Lambda Function URL with
+# SigV4-signed requests (AuthType: AWS_IAM). Every request is signed; the path
+# never falls back to unsigned. A 403 (unsigned/badly-signed), an unreachable
+# endpoint, or any other non-2xx is a hard non-zero exit (via http_get_timed,
+# Req 9.5); a size/content mismatch is likewise fatal (via
+# verify_full_and_identical, Req 9.6).
+#
+# Steps:
+#   - warmup: one signed request, discarded from all timings (Req 9.4).
+#   - one measured signed request for the large (>= 15 MB) Test_Object.
+#   - full-and-byte-identical check against the S3 source (Req 9.3, reusing
+#     verify_full_and_identical).
+#   - a single post-warmup first-byte-within-50%-of-total check (Req 9.4,
+#     reusing verify_first_byte_timing).
+#
+# The memory check is intentionally omitted here: the Function URL Lambda has
+# the same shape and bounded-buffer behavior as the API Gateway Lambda, which
+# is already memory-verified above (per design). The Function URL path never
+# depends on the x-api-key auth.
+# ---------------------------------------------------------------------------
+verify_function_url() {
+  local url large_body metrics ttfb total
+
+  info "verifying the Lambda Function URL (SigV4-signed, AuthType: AWS_IAM)"
+
+  # --- Warmup: one signed request, result discarded (Req 9.4).
+  url="$(build_function_url "$LARGE_FILE")"
+  info "Function URL warmup request (discarded from all timings)"
+  http_get_timed "$url" "$WORK_DIR/furl_warmup.bin" "function-url warmup" \
+    "${sigv4_args[@]}" >/dev/null
+  ok "Function URL warmup completed and discarded"
+
+  # --- One measured signed request for the large (>= 15 MB) payload.
+  large_body="$WORK_DIR/furl_large.bin"
+  info "requesting Function URL large payload (>= 15 MB), signed"
+  metrics="$(http_get_timed "$url" "$large_body" "function-url large payload (>= 15 MB)" \
+    "${sigv4_args[@]}")"
+  ttfb="$(awk '{print $2}' <<<"$metrics")"
+  total="$(awk '{print $3}' <<<"$metrics")"
+  info "function-url large payload: ttfb=${ttfb}s total=${total}s bytes=$(awk '{print $4}' <<<"$metrics")"
+
+  # --- Checks (reused from the API Gateway path).
+  verify_full_and_identical "$LARGE_FILE" "$large_body"   # Req 9.3, 9.6
+  verify_first_byte_timing "$ttfb" "$total"               # Req 9.4
+
+  ok "Function URL streaming checks passed (signed, >= 15 MB, progressive)"
+}
+
+# ---------------------------------------------------------------------------
 # Main verification flow
 #
 # Test_Object seeding (task 12.2 / Req 11.7) runs immediately after
@@ -453,7 +595,7 @@ run_verification() {
 
   # --- Warmup: issued first, result discarded, excluded from all timings (Req 9.2).
   info "warmup request (discarded from all timings)"
-  http_get_timed "$(build_url "$LARGE_FILE")" "$WORK_DIR/warmup.bin" "warmup" >/dev/null
+  http_get_timed "$(build_url "$LARGE_FILE")" "$WORK_DIR/warmup.bin" "warmup" "${auth_header_args[@]}" >/dev/null
   ok "warmup completed and discarded"
 
   # --- Measured large (>= 15 MB) payload.
@@ -470,6 +612,10 @@ run_verification() {
   verify_full_and_identical "$LARGE_FILE" "$large_body"   # Req 9.1, 9.6
   verify_first_byte_timing "$large_ttfb" "$large_total"   # Req 9.3
   verify_memory_bounded "$large_mem" "$small_mem"         # Req 9.4
+
+  # --- Function URL checks run IN ADDITION to the API Gateway checks (Req 9.7);
+  #     both invocation paths are proven on every deploy.
+  verify_function_url
 
   info "all post-deploy streaming checks passed"
 

@@ -18,6 +18,11 @@ on:
         type: string
         default: 's3-file-streaming-endpoint'
         description: 'CloudFormation stack name whose outputs the streaming test resolves'
+      function-url:
+        required: false
+        type: string
+        default: ''
+        description: 'Deployed Lambda Function URL (from the deploy job output); when empty the Function URL check resolves it from the stack output'
       test-script:
         required: false
         type: string
@@ -56,3 +61,18 @@ jobs:
           TEST_OBJECT_KEY: ${{ inputs.test-object-key || 'streaming-test-12mb.bin' }}
           TEST_SCRIPT: ${{ inputs.test-script || 'scripts/pipeline-streaming-test.sh' }}
         run: ./"$TEST_SCRIPT"
+
+      # Run the signed Function URL verification (AuthType: AWS_IAM) IN ADDITION
+      # to the API Gateway checks above (function-url-streaming Req 9.1, 9.7).
+      # post-deploy-test.sh resolves the Function URL from the stack output when
+      # FUNCTION_URL is empty, so the correct per-stack Function URL is always
+      # used across the matrix. The OIDC credentials exported by
+      # configure-aws-credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+      # AWS_SESSION_TOKEN) are present in the job env for SigV4 signing — the
+      # Function URL path always signs and never falls back to unsigned.
+      - name: Verify Function URL streaming (signed)
+        env:
+          STACK_NAME: ${{ inputs.stack-name || 's3-file-streaming-endpoint' }}
+          AWS_REGION: ${{ inputs.aws-region }}
+          FUNCTION_URL: ${{ inputs.function-url }}
+        run: ./scripts/post-deploy-test.sh

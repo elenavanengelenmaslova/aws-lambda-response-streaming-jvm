@@ -102,7 +102,8 @@ class FileNameValidationNoS3PropertyTest {
             // A safe name must be allowed through to S3; stub head to NotFound so nothing streams.
             when(source.head(any(FileRequest.class))).thenReturn(new HeadResult.NotFound());
         }
-        StreamHandler handler = new StreamHandler(new RequestParser(), validator, source, new ResponseWriter());
+        StreamHandler handler =
+                new StreamHandler(new FileKeyResolver(new RequestParser(), validator), source, new ResponseWriter());
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         handler.handleRequest(proxyEvent(candidate), out, null);

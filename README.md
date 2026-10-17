@@ -27,6 +27,8 @@ The library handles:
 - **Protocol encoding** — serializes the metadata JSON (`statusCode`, `headers`) and writes the 8-byte delimiter before any body bytes (`ResponseWriter`)
 - **Memory-bounded streaming** — copies the body through a fixed 1 MB buffer with per-chunk flush, keeping memory flat regardless of payload size (`copy()`)
 
+Both **API Gateway** and **Lambda Function URLs** are supported — each delivers a streamed response through this `[metadata JSON] [8 null bytes] [body…]` protocol. The library never touches the invocation layer, so it works unchanged behind either. The only difference is the incoming event shape your `resolveSource` parses: an API Gateway proxy event versus a Function URL event. Both example modules expose both paths behind a `RequestResolver` (a path-based resolver for the API Gateway proxy event and a Function URL resolver for the payload-2.0 event), so the same handler can serve either source. The Function URL path is proven end to end by the pipeline — a signed, large-payload streaming check runs on every deploy for both the Kotlin and Java examples.
+
 ## Dependency
 
 ```kotlin
@@ -151,7 +153,26 @@ These are platform limits of Lambda response streaming itself — they apply to 
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
-Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer.
+Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer. Each example deploys two Lambdas — one behind an API Gateway REST endpoint and one behind a Lambda Function URL — so both invocation paths are configured and tested independently.
+
+### Invoking the Function URL
+
+The Function URL is configured with `AuthType: AWS_IAM`, so it is **not public** — every caller must sign the request with SigV4 for the `lambda` service. An unsigned request is rejected with HTTP 403. Sign it directly with `curl --aws-sigv4`:
+
+```bash
+curl --aws-sigv4 "aws:amz:<region>:lambda" \
+  --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+  -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
+  "<FunctionUrl><file>"
+```
+
+Replace `<region>` with your deploy region (for example `eu-west-1`), `<FunctionUrl>` with the `FunctionUrl` stack output, and `<file>` with the object name. The `x-amz-security-token` header is only needed when your credentials are temporary (an assumed role or session). As an alternative, [`awscurl`](https://github.com/okigan/awscurl) signs for you from your configured AWS profile:
+
+```bash
+awscurl --service lambda --region <region> "<FunctionUrl><file>"
+```
+
+The pipeline's post-deploy check signs its requests the same way, using the deploy role's credentials.
 
 ## Contributing and security
 
