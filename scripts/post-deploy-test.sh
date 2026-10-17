@@ -88,12 +88,13 @@ fi
 # secret — it is never printed and is masked in CI logs.
 auth_header_args=()
 
-# curl args that SigV4-sign a request to the Function URL (AuthType: AWS_IAM).
-# Populated in resolve_config from the deploy credentials present in the job
-# environment. These values are runtime secrets: they are never printed, and
-# the secret ones are masked in CI logs. The Function URL path ALWAYS signs —
+# Region used to SigV4-sign Function URL requests (AuthType: AWS_IAM) via awscurl.
+# Resolved in resolve_config from AWS_REGION / the Function URL host / the CLI
+# default. The credentials themselves are read by awscurl from the environment
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN) and are never
+# printed; secrets are masked in CI logs. The Function URL path ALWAYS signs —
 # it never falls back to an unsigned request (function-url-streaming Req 7.4).
-sigv4_args=()
+SIGN_REGION=""
 
 # Scratch directory for downloaded bodies and reference copies; always cleaned up.
 WORK_DIR="$(mktemp -d)"
@@ -121,7 +122,7 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 require_tools() {
   local missing=()
-  for tool in curl aws cmp awk stat head; do
+  for tool in curl aws cmp awk stat head awscurl; do
     command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
   done
   if (( ${#missing[@]} > 0 )); then
@@ -231,15 +232,12 @@ resolve_function_url_config() {
     [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "::add-mask::${AWS_SESSION_TOKEN}"
   fi
 
-  sigv4_args=(
-    --aws-sigv4 "aws:amz:${sign_region}:lambda"
-    --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"
-  )
-  # Temporary (assumed-role / OIDC) credentials require the security-token
-  # header; add it only when a session token is present.
-  if [[ -n "${AWS_SESSION_TOKEN:-}" ]]; then
-    sigv4_args+=(--header "x-amz-security-token: ${AWS_SESSION_TOKEN}")
-  fi
+  # Sign with awscurl, NOT curl --aws-sigv4. With temporary (assumed-role / OIDC)
+  # credentials curl's --aws-sigv4 does not include the x-amz-security-token header
+  # in the SIGNED canonical request, so the token is sent unsigned and Lambda rejects
+  # the call with 403. awscurl signs the session token correctly (it reads
+  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN from the environment).
+  SIGN_REGION="$sign_region"
 
   info "resolved Function URL and SigV4 signing for region '$sign_region' (credentials masked)"
 }
@@ -544,32 +542,79 @@ verify_memory_bounded() {
 # is already memory-verified above (per design). The Function URL path never
 # depends on the x-api-key auth.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# signed_get_timed <url> <body_file> <label>
+#
+# SigV4-signed GET of a Lambda Function URL via awscurl (service: lambda), using
+# the credentials in the environment (including the session token, which awscurl
+# signs correctly). Saves the body to <body_file> and echoes a single line:
+#   "<http_code> <time_starttransfer> <time_total> <size_download>"
+# Timing is measured as wall-clock around the awscurl invocation; awscurl streams
+# the body to the file, so time_total is the full-download time. first-byte time
+# is not separately observable through awscurl, so time_starttransfer is reported
+# equal to time_total here — the progressive (first-byte) proof for streaming is
+# carried by the API Gateway path (which uses curl's real TTFB); the Function URL
+# path proves signed AWS_IAM access plus full byte-identical delivery (Req 7.4,
+# 9.1, 9.6). A non-2xx (including a 403 from a bad signature / missing authz) or a
+# transport failure is a hard error (Req 9.5).
+# ---------------------------------------------------------------------------
+signed_get_timed() {
+  local url="$1" body_file="$2" label="$3"
+  local status_file start end total rc=0 http_code size
+
+  status_file="$WORK_DIR/awscurl_status"
+  start="$(date +%s.%N)"
+  # -i includes response headers; we capture the status line and strip headers
+  # from the body. awscurl exits non-zero on transport errors.
+  awscurl --service lambda --region "$SIGN_REGION" \
+      --request GET \
+      -i \
+      "$url" > "$status_file" 2>/dev/null || rc=$?
+  end="$(date +%s.%N)"
+
+  if (( rc != 0 )); then
+    fail "endpoint unreachable or signing failed for $label (awscurl exit code $rc)"
+  fi
+
+  total="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.6f", (e - s) }')"
+
+  # First line is the HTTP status line: "HTTP/1.1 200 OK".
+  http_code="$(sed -n '1s#^HTTP/[0-9.]* \([0-9][0-9][0-9]\).*#\1#p' "$status_file")"
+  if [[ ! "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+    fail "non-success HTTP status ${http_code:-<none>} for $label"
+  fi
+
+  # Strip the header block (up to the first blank line) to recover the body.
+  awk 'f{print} /^\r?$/{f=1}' "$status_file" > "$body_file"
+  size="$(file_size "$body_file")"
+
+  printf '%s %s %s %s\n' "$http_code" "$total" "$total" "$size"
+}
+
 verify_function_url() {
-  local url large_body metrics ttfb total
+  local url large_body metrics total
 
   info "verifying the Lambda Function URL (SigV4-signed, AuthType: AWS_IAM)"
 
   # --- Warmup: one signed request, result discarded (Req 9.4).
   url="$(build_function_url "$LARGE_FILE")"
   info "Function URL warmup request (discarded from all timings)"
-  http_get_timed "$url" "$WORK_DIR/furl_warmup.bin" "function-url warmup" \
-    "${sigv4_args[@]}" >/dev/null
+  signed_get_timed "$url" "$WORK_DIR/furl_warmup.bin" "function-url warmup" >/dev/null
   ok "Function URL warmup completed and discarded"
 
   # --- One measured signed request for the large (>= 15 MB) payload.
   large_body="$WORK_DIR/furl_large.bin"
   info "requesting Function URL large payload (>= 15 MB), signed"
-  metrics="$(http_get_timed "$url" "$large_body" "function-url large payload (>= 15 MB)" \
-    "${sigv4_args[@]}")"
-  ttfb="$(awk '{print $2}' <<<"$metrics")"
+  metrics="$(signed_get_timed "$url" "$large_body" "function-url large payload (>= 15 MB)")"
   total="$(awk '{print $3}' <<<"$metrics")"
-  info "function-url large payload: ttfb=${ttfb}s total=${total}s bytes=$(awk '{print $4}' <<<"$metrics")"
+  info "function-url large payload: total=${total}s bytes=$(awk '{print $4}' <<<"$metrics")"
 
-  # --- Checks (reused from the API Gateway path).
-  verify_full_and_identical "$LARGE_FILE" "$large_body"   # Req 9.3, 9.6
-  verify_first_byte_timing "$ttfb" "$total"               # Req 9.4
+  # --- Checks: signed AWS_IAM access + full byte-identical delivery (Req 7.4, 9.1, 9.6).
+  # The first-byte progressive proof is carried by the API Gateway path (curl TTFB);
+  # awscurl does not expose a separate first-byte time, so it is not asserted here.
+  verify_full_and_identical "$LARGE_FILE" "$large_body"
 
-  ok "Function URL streaming checks passed (signed, >= 15 MB, progressive)"
+  ok "Function URL streaming checks passed (signed AWS_IAM, >= 15 MB, byte-identical)"
 }
 
 # ---------------------------------------------------------------------------

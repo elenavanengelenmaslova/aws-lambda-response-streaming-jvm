@@ -1876,3 +1876,36 @@ That framing is what makes it likely to become the article people find when they
     secret. `--aws-sigv4` handles the key pair and the signature, but you must hand the
     service the session token yourself via `x-amz-security-token`, or every signed request
     from an assumed role 403s with a message that looks like a signing failure.
+
+---
+
+## `curl --aws-sigv4` does not sign the session token for temporary credentials — use `awscurl`
+
+- **Symptom / trigger:** The post-deploy signed Function URL check (`AuthType: AWS_IAM`)
+  failed against the deployed endpoint with `HTTP status 403` on the very first
+  (warmup) request, even though: the Function URL existed and was reachable, the
+  deploy role's `lambda:InvokeFunctionUrl` grant covered the function (both the
+  unqualified and the `:live` qualified ARN), and the request was being signed with
+  `curl --aws-sigv4 "aws:amz:<region>:lambda"` plus `-H "x-amz-security-token: ..."`.
+  The API Gateway checks on the same run passed. The pipeline runs under an assumed
+  role (OIDC), so the credentials are **temporary** and carry a session token.
+
+- **Root cause:** `curl --aws-sigv4` computes the signature over the headers it
+  manages, and it does **not** fold an externally supplied `x-amz-security-token`
+  header into the **signed** canonical request. With temporary credentials the token
+  is therefore sent but unsigned, and Lambda rejects the request with 403
+  (effectively "the security token included in the request is invalid" /
+  SignatureDoesNotMatch) before IAM authorization is even considered — so no IAM
+  policy change can fix it. This is a known limitation of curl's SigV4 support with
+  STS credentials. (Content was rephrased for compliance with licensing restrictions.)
+
+- **Resolution / status:** **Resolved.** The Function URL path in
+  `scripts/post-deploy-test.sh` now signs with **`awscurl --service lambda --region
+  <region>`** instead of `curl --aws-sigv4`. `awscurl` reads the credentials from the
+  environment (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`) and
+  signs the session token into the canonical request correctly. The workflow installs
+  it (`pipx install awscurl`) before the signed check. The API Gateway path still uses
+  plain `curl` (API-key auth, no SigV4). One trade-off: `awscurl` does not expose a
+  separate time-to-first-byte, so the progressive (first-byte-within-50%) assertion is
+  proven on the API Gateway path (real curl TTFB); the Function URL path asserts signed
+  AWS_IAM access plus full byte-identical delivery of the >= 15 MB object.

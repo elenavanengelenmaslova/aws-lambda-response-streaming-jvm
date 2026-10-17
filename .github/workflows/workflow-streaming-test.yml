@@ -70,6 +70,11 @@ jobs:
       # configure-aws-credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
       # AWS_SESSION_TOKEN) are present in the job env for SigV4 signing — the
       # Function URL path always signs and never falls back to unsigned.
+      # awscurl SigV4-signs Function URL requests including the STS session token,
+      # which curl --aws-sigv4 does not do for temporary (OIDC) credentials.
+      - name: Install awscurl
+        run: pipx install awscurl
+
       - name: Verify Function URL streaming (signed)
         env:
           STACK_NAME: ${{ inputs.stack-name || 's3-file-streaming-endpoint' }}
