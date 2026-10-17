@@ -277,6 +277,10 @@ Resources:
                   - lambda:DeleteFunctionUrlConfig
                 Resource:
                   - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+                  # function:* matches only the unqualified function name; the
+                  # Function URL is created against the SnapStart 'live' alias, so the
+                  # qualified ARN (function:<name>:live) must be covered too.
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*:*'
 
               # API Gateway permissions
               - Effect: Allow
