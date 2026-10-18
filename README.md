@@ -29,7 +29,7 @@ The library handles:
 
 This library targets **API Gateway** response streaming (`ResponseTransferMode: RESPONSE_STREAM`): API Gateway invokes the function with the streaming API and re-streams this `[metadata JSON] [8 null bytes] [body…]` payload to the client. The library never touches the invocation layer — it only writes the wire format.
 
-A Lambda **Function URL** (`InvokeMode: RESPONSE_STREAM`) is **not supported on the managed JVM runtime** — see [Limitations](#limitations-aws-lambda-response-streaming) below. It requires a *response-streaming-enabled* function, which the managed `java21`/`java25` runtime's `RequestStreamHandler` does not provide; a Function URL needs a custom runtime.
+Lambda Function URLs are not supported on the managed JVM runtime — see [Limitations](#limitations).
 
 ## Dependency
 
@@ -140,15 +140,14 @@ val writer = ResponseWriter(maxPreludeLen = OBSERVED_MAX_PRELUDE_LEN)
 
 An oversized prelude then raises `MetadataTooLargeException` **before anything is written**, so the stream is untouched and the status is still uncommitted — you can write a different response instead. Note that `OBSERVED_MAX_PRELUDE_LEN` (16376) is not an AWS-documented limit; it is the commonly cited 16 KiB budget less the delimiter. A negative `maxPreludeLen` is rejected by the constructor with `IllegalArgumentException`, since no prelude could ever satisfy it.
 
-## Limitations (AWS Lambda response streaming)
+## Limitations
 
-Most of these are platform limits of Lambda response streaming itself — they apply to **any** streaming Lambda (Node.js, JVM, or other), not to this library specifically. See [Response streaming for Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html) (the "Bandwidth limits for response streaming" section covers the rate cap). Two entries below (the HTTP/1.1 client note and the Function URL note) are JVM/managed-runtime specifics learned while building the examples.
+The standard lambda response streaming limitations still apply; additionally, the streaming method that library uses only works with API gateway and not function URLs:
 
-- **Bandwidth cap after the first 6 MB.** The first 6 MB of the response is streamed uncapped; beyond that, Lambda caps the rate at ~2 MB/s. Large responses are delivered more slowly past the initial burst — a throughput limit, independent of your function's memory or buffer size.
-- **Max payload size 200 MB.** A streamed response can be up to 200 MB (versus 6 MB for a buffered response). This is a size limit, separate from the bandwidth cap above.
-- **Billed for the full duration, even on client disconnect.** A streamed response is not stopped when the client connection breaks; the function keeps running until it returns or times out, and you are billed for the whole duration. Keep function timeouts tight for large or long-running streams.
-- **Clients must use HTTP/1.1.** API Gateway streams the response with chunked transfer encoding. Some clients (e.g. newer `curl`, which defaults to HTTP/2) fail the transfer with `curl: (92) HTTP/2 stream … was not closed cleanly: INTERNAL_ERROR` even though the body transferred, because the HTTP/2 stream is not closed cleanly after the function finishes. Force HTTP/1.1 — `curl --http1.1` — for a clean close. HTTP/1.1 chunked transfer terminates with a zero-length chunk and works reliably.
-- **Lambda Function URLs are not supported on the managed JVM runtime — use API Gateway, or a custom runtime for a Function URL.** A Function URL in `InvokeMode: RESPONSE_STREAM` invokes the function directly (no integration layer) and expects a *response-streaming-enabled* function. Node opts in with the `awslambda.streamifyResponse()` decorator; the **managed `java21`/`java25` runtime has no equivalent** — a plain `RequestStreamHandler` (from `aws-lambda-java-core`) is handed an in-memory `OutputStream` and is never marked as streaming, so the Function URL front door rejects the hand-written prelude bytes with `HTTP 502 Internal Server Error` (the function itself runs cleanly — the logs show no exception). API Gateway works because its *integration layer* performs the streaming and parses the prelude on the function's behalf. To serve a **Function URL** with streaming on the JVM you must use a **custom runtime** (`provided.al2023` plus the Lambda Runtime Interface Client, or a GraalVM native image) where your code owns the response-stream wiring. Per [AWS](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html), JVM response streaming is done "using custom runtimes". This repository's examples therefore expose streaming through **API Gateway only**.
+- **200 MB payload limit.** Streaming increases Lambda's response limit from 6 MB to 200 MB. For larger payloads, use pagination or pre-signed S3 URLs.
+- **2 MB/s throughput after 6 MB.** The first 6 MB is uncapped; subsequent data is throttled to 2 MB/s, regardless of Lambda memory or buffer size.
+- **Billing after client disconnect.** Lambda continues running and billing until the invocation finishes or times out, even if the client disconnects.
+- **API Gateway only.** This library supports response streaming through API Gateway REST APIs, not Lambda Function URLs. For Function URLs, AWS recommends using a custom runtime or Lambda Web Adapter.
 
 ## Example modules
 
