@@ -1747,3 +1747,29 @@ That framing is what makes it likely to become the article people find when they
   landed on `main`, Dependabot immediately opened PR #18 — the first real version-update PR.
   Also created the missing `gradle` and `github-actions` repo labels (Dependabot silently
   drops labels it can't find, leaving PRs unlabelled).
+
+---
+
+## `InvokeMode` (Function URL) vs `ResponseTransferMode` (API Gateway) — same value, different knob
+
+- **Symptom / trigger:** `RESPONSE_STREAM` appears in two unrelated places and it is tempting to treat them as the same switch. API Gateway's SAM `Api` event uses `ResponseTransferMode: RESPONSE_STREAM`; a Lambda **Function URL** uses `FunctionUrlConfig.InvokeMode: RESPONSE_STREAM`. They configure different layers and are not interchangeable.
+- **Resolution / status:** Noted. For this project only the API Gateway knob matters — the Function URL path is not used on the managed JVM runtime (see the next entry).
+
+---
+
+## The managed JVM runtime does not stream over a Lambda Function URL — use API Gateway, or a custom runtime
+
+- **Symptom / trigger:** Exposing the same `RequestStreamHandler` through a Lambda Function URL (`InvokeMode: RESPONSE_STREAM`, `AuthType: AWS_IAM`) returned a 21-byte `Internal Server Error` (HTTP 502) to a correctly SigV4-signed request, while the **same handler and jar** streamed a 15 MB object perfectly over API Gateway. The function logs showed no exception — it resolved the request, read S3, and returned cleanly.
+- **Investigation:** A one-shot diagnostic logging the handler's `OutputStream` type on the deployed Function URL showed `outputClass=java.io.ByteArrayOutputStream` (ancestry `ByteArrayOutputStream -> OutputStream -> Object`, no `setContentType`). The shaded jar contained only `aws-lambda-java-core` — no `HttpResponseStream` / runtime-interface-client streaming class. AWS documents managed response streaming for Node.js only (opt in with `awslambda.streamifyResponse()`); for the JVM it directs you to a **custom runtime** (Runtime API or the Lambda Web Adapter).
+- **Why API Gateway works anyway:** API Gateway's integration layer performs the streaming — it invokes the function with `InvokeWithResponseStream`, parses the hand-written `metadata JSON + 8 NUL + body` prelude, and re-streams the body to the client. The function does not need to be "response-streaming-enabled" for that path. A Function URL has **no integration layer**: it invokes the function directly and expects a streaming-enabled function, which the managed JVM runtime's plain `RequestStreamHandler` is not — so the prelude bytes are rejected with a 502.
+- **Attempts that did NOT fix it (dead ends, recorded so they are not retried):** setting the `application/vnd.awslambda.http-integration-response` content type reflectively on the output stream (the stream is a `ByteArrayOutputStream` with no such method); forcing HTTP/1.1; widening IAM scope. None addressed the real cause.
+- **Side gotchas found on the way (relevant only if you DO pursue a Function URL via a custom runtime):** (a) `curl --aws-sigv4` does not fold `x-amz-security-token` into the SIGNED canonical request, so temporary/OIDC credentials get a 403 — use `awscurl` (or a signer that signs the session token); (b) CloudFormation needs `lambda:Create/Get/Update/DeleteFunctionUrlConfig` on the deploy role to create the `AWS::Lambda::Url` resource, and `lambda:InvokeFunctionUrl` must cover the qualified `function:<name>:<alias>` ARN since the URL attaches to the SnapStart `live` alias.
+- **Resolution / status:** **Resolved by scoping.** The Function URL variant was removed; the examples stream through **API Gateway only**. The library's `ResponseWriter` is unchanged — the limitation is in the managed JVM runtime, not the wire-format code. Documented in the README Limitations section.
+
+---
+
+## API Gateway streaming works over HTTP/2 — the `curl: (92)` error is client/environment-specific
+
+- **Symptom / trigger:** An earlier note recorded `curl: (92) HTTP/2 stream not closed cleanly: INTERNAL_ERROR` against the streaming endpoint, and the pipeline/scripts force `--http1.1`. This could read as "the endpoint only works over HTTP/1.1".
+- **Investigation:** Re-tested the deployed API Gateway endpoint against the 15 MB object with curl 8.7.1 (nghttp2 1.64.0): over HTTP/2 (both ALPN-negotiated and `--http2-prior-knowledge`) the request returned HTTP 200, full 15,728,640 bytes, byte-identical to the HTTP/1.1 download, with no error 92.
+- **Resolution / status:** **Clarified.** HTTP/2 is not categorically broken; the `(92)` failure is specific to certain client/curl builds (e.g. the CI runner's version) and is a stream-termination quirk somewhere along the path, not a fault in the response bytes or the library. `--http1.1` remains a reliable workaround for clients that hit it. The post-deploy script now verifies BOTH HTTP/1.1 and HTTP/2 return a complete, byte-identical body so any regression is caught.

@@ -27,6 +27,10 @@ The library handles:
 - **Protocol encoding** — serializes the metadata JSON (`statusCode`, `headers`) and writes the 8-byte delimiter before any body bytes (`ResponseWriter`)
 - **Memory-bounded streaming** — copies the body through a fixed 1 MB buffer with per-chunk flush, keeping memory flat regardless of payload size (`copy()`)
 
+This library targets **API Gateway** response streaming (`ResponseTransferMode: RESPONSE_STREAM`): API Gateway invokes the function with the streaming API and re-streams this `[metadata JSON] [8 null bytes] [body…]` payload to the client. The library never touches the invocation layer — it only writes the wire format.
+
+Lambda Function URLs are not supported on the managed JVM runtime — see [Limitations](#limitations).
+
 ## Dependency
 
 ```kotlin
@@ -136,13 +140,14 @@ val writer = ResponseWriter(maxPreludeLen = OBSERVED_MAX_PRELUDE_LEN)
 
 An oversized prelude then raises `MetadataTooLargeException` **before anything is written**, so the stream is untouched and the status is still uncommitted — you can write a different response instead. Note that `OBSERVED_MAX_PRELUDE_LEN` (16376) is not an AWS-documented limit; it is the commonly cited 16 KiB budget less the delimiter. A negative `maxPreludeLen` is rejected by the constructor with `IllegalArgumentException`, since no prelude could ever satisfy it.
 
-## Limitations (AWS Lambda response streaming)
+## Limitations
 
-These are platform limits of Lambda response streaming itself — they apply to **any** streaming Lambda (Node.js, JVM, or other), not to this library specifically. See [Response streaming for Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html) (the "Bandwidth limits for response streaming" section covers the rate cap).
+The standard lambda response streaming limitations still apply; additionally, the streaming method that library uses only works with API gateway and not function URLs:
 
-- **Bandwidth cap after the first 6 MB.** The first 6 MB of the response is streamed uncapped; beyond that, Lambda caps the rate at ~2 MB/s. Large responses are delivered more slowly past the initial burst — a throughput limit, independent of your function's memory or buffer size.
-- **Max payload size 200 MB.** A streamed response can be up to 200 MB (versus 6 MB for a buffered response). This is a size limit, separate from the bandwidth cap above.
-- **Billed for the full duration, even on client disconnect.** A streamed response is not stopped when the client connection breaks; the function keeps running until it returns or times out, and you are billed for the whole duration. Keep function timeouts tight for large or long-running streams.
+- **200 MB payload limit.** Streaming increases Lambda's response limit from 6 MB to 200 MB. For larger payloads, use pagination or pre-signed S3 URLs.
+- **2 MB/s throughput after 6 MB.** The first 6 MB is uncapped; subsequent data is throttled to 2 MB/s, regardless of Lambda memory or buffer size.
+- **Billing after client disconnect.** Lambda continues running and billing until the invocation finishes or times out, even if the client disconnects.
+- **API Gateway only.** This library supports response streaming through API Gateway REST APIs, not Lambda Function URLs. For Function URLs, AWS recommends using a custom runtime or Lambda Web Adapter.
 
 ## Example modules
 
@@ -151,7 +156,7 @@ These are platform limits of Lambda response streaming itself — they apply to 
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
-Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer.
+Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer. Each example deploys a single Lambda behind an **API Gateway** REST endpoint (response streaming via `ResponseTransferMode: RESPONSE_STREAM`). A Lambda Function URL is intentionally not included — see [Limitations](#limitations-aws-lambda-response-streaming) for why the managed JVM runtime cannot serve one.
 
 ## Contributing and security
 

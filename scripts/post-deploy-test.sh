@@ -438,6 +438,45 @@ verify_memory_bounded() {
 # (Req 11.7) is the final, opt-in step (TEARDOWN=true), kept out of the default
 # path so a normal verification run never destroys the deployment.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# HTTP protocol verification (API Gateway streaming over HTTP/1.1 and HTTP/2)
+#
+# API Gateway streams the response with chunked transfer encoding. The scripts
+# force HTTP/1.1 elsewhere because some client/curl builds hit
+# `curl: (92) HTTP/2 stream not closed cleanly` even though the body transferred.
+# This check proves the DEPLOYED endpoint actually serves a complete, byte-
+# identical response over BOTH HTTP/1.1 and HTTP/2, so the HTTP/2 path is
+# verified rather than assumed. The HTTP/1.1 leg is mandatory; the HTTP/2 leg is
+# skipped (with a warning, not a failure) only when the local curl lacks HTTP/2
+# support, since that is a client limitation, not an endpoint one.
+# ---------------------------------------------------------------------------
+verify_http_protocols() {
+  local url ref_file h1 h2 code
+  url="$(build_url "$LARGE_FILE")"
+
+  # Reference bytes: the source object straight from S3.
+  ref_file="$WORK_DIR/proto_ref.bin"
+  aws s3api get-object     --bucket "$BUCKET_NAME" --key "$LARGE_FILE" "${region_args[@]}"     "$ref_file" >/dev/null 2>&1     || fail "could not fetch source object for protocol comparison"
+
+  # --- HTTP/1.1 (mandatory) ---
+  h1="$WORK_DIR/proto_h1.bin"
+  code="$(curl -sS --http1.1 "${auth_header_args[@]}" -o "$h1"       -w '%{http_code}' "$url")"     || fail "endpoint unreachable over HTTP/1.1"
+  [[ "$code" =~ ^2[0-9][0-9]$ ]] || fail "HTTP/1.1 returned non-success status $code"
+  cmp -s "$ref_file" "$h1"     || fail "HTTP/1.1 body is not byte-identical to the source object"
+  ok "HTTP/1.1: status $code, $(file_size "$h1") bytes, byte-identical to source"
+
+  # --- HTTP/2 (verified when the client supports it) ---
+  if curl --version | head -1 | grep -qiE "nghttp2|HTTP2"; then
+    h2="$WORK_DIR/proto_h2.bin"
+    code="$(curl -sS --http2 "${auth_header_args[@]}" -o "$h2"         -w '%{http_code}' "$url")"       || fail "endpoint unreachable over HTTP/2 (curl exit $?) — some HTTP/2 clients hit curl (92); if this is a client-specific stream-close issue, retry with --http1.1"
+    [[ "$code" =~ ^2[0-9][0-9]$ ]] || fail "HTTP/2 returned non-success status $code"
+    cmp -s "$ref_file" "$h2"       || fail "HTTP/2 body is not byte-identical to the source object"
+    ok "HTTP/2: status $code, $(file_size "$h2") bytes, byte-identical to source"
+  else
+    info "HTTP/2 check skipped: local curl reports no HTTP/2 support (client limitation, not an endpoint one)"
+  fi
+}
+
 run_verification() {
   require_tools
   resolve_config
@@ -470,6 +509,10 @@ run_verification() {
   verify_full_and_identical "$LARGE_FILE" "$large_body"   # Req 9.1, 9.6
   verify_first_byte_timing "$large_ttfb" "$large_total"   # Req 9.3
   verify_memory_bounded "$large_mem" "$small_mem"         # Req 9.4
+
+  # --- Protocol check: the endpoint delivers a complete, byte-identical body over
+  #     both HTTP/1.1 and HTTP/2 (the HTTP/2 leg is verified, not assumed).
+  verify_http_protocols
 
   info "all post-deploy streaming checks passed"
 

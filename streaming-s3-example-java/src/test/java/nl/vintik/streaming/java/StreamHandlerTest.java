@@ -79,8 +79,7 @@ class StreamHandlerTest {
         // test drives the true parse/validate path and the true wire format.
         source = mock(S3Source.class);
         handler = new StreamHandler(
-                new RequestParser(),
-                new FileNameValidator(),
+                new FileKeyResolver(),
                 source,
                 new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN));
     }

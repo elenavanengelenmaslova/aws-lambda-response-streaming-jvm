@@ -128,16 +128,16 @@ abstract class FlociS3IntegrationTestBase {
     }
 
     /**
-     * Builds the production {@link StreamHandler} wired to the emulated S3. Real
-     * {@link RequestParser}, {@link FileNameValidator}, and library {@link ResponseWriter}
-     * collaborators are injected via the package-private constructor; only the {@link S3Source}
-     * is pointed at the container (its client + bucket), so the full parse &rarr; validate
-     * &rarr; head &rarr; stream pipeline runs against real S3.
+     * Builds the production {@link StreamHandler} wired to the emulated S3. The default
+     * {@link FileKeyResolver} (wrapping the real {@link RequestParser} and
+     * {@link FileNameValidator}) and the library {@link ResponseWriter} are injected via the
+     * package-private constructor; only the {@link S3Source} is pointed at the container (its
+     * client + bucket), so the full resolve &rarr; head &rarr; stream pipeline runs against
+     * real S3.
      */
     protected StreamHandler handlerForBucket() {
         return new StreamHandler(
-                new RequestParser(),
-                new FileNameValidator(),
+                new FileKeyResolver(),
                 new S3Source(s3, BUCKET),
                 new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN));
     }
