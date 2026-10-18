@@ -20,12 +20,11 @@ import org.slf4j.LoggerFactory;
  * prelude and stream the body. Owns the top-level mapping of every outcome to an HTTP status
  * code (400/404/502/200) and the status-committed-early ordering rule.
  *
- * <p>Request parsing and file-name validation live behind the {@link RequestResolver}
- * abstraction (default {@link FileKeyResolver} for the API Gateway proxy event): a resolver
- * returns either a {@link RequestResult.Resolved} carrying the {@link FileRequest} or a
- * {@link RequestResult.Error} carrying the HTTP status and message to write. This keeps the
- * handler agnostic of the event shape and lets the Function URL path reuse the same handler
- * with a different resolver.
+ * <p>This handler serves API Gateway proxy events. Request parsing and file-name validation
+ * live behind the {@link RequestResolver} abstraction (default {@link FileKeyResolver}, which
+ * parses the API Gateway proxy event): a resolver returns either a
+ * {@link RequestResult.Resolved} carrying the {@link FileRequest} or a
+ * {@link RequestResult.Error} carrying the HTTP status and message to write.
  *
  * <p>Java counterpart of the Kotlin example's {@code StreamHandler}. It is synchronous
  * straight-line code (no coroutines): the AWS SDK for Java v2 calls in {@link S3Source}
@@ -36,10 +35,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Ordering guarantees:
  * <ul>
- *   <li>No body bytes are written on any pre-commit error path &mdash; a resolver error
+ *   <li>No object body bytes are written on any pre-commit error path &mdash; a resolver error
  *       (parse failure or validation rejection), a not-found, or a head failure/timeout all
- *       produce a metadata-only error response via {@link ResponseWriter#writeError} (Req 1.2,
- *       2.2, 2.3, 2.4, 3.7, 4.2, 4.4, 5.4).</li>
+ *       produce an error response (status + a JSON error body, no object body bytes) via
+ *       {@link ResponseWriter#writeError} (Req 1.2, 2.2, 2.3, 2.4, 3.7, 4.2, 4.4, 5.4).</li>
  *   <li>Existence/size is confirmed before any metadata is written (head-before-commit,
  *       Req 4.1, 4.3).</li>
  *   <li>Once the metadata JSON and the 8 null-byte delimiter are written the status is
