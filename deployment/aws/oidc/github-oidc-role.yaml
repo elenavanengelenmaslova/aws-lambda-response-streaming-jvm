@@ -199,27 +199,6 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:apigateway:${AWS::Region}::/apikeys/*'
 
-              # Invoke the AWS_IAM Function URLs during the post-deploy streaming test.
-              # The post-deploy script issues SigV4-signed GETs to each example's Function URL
-              # from this role (assumed via OIDC in CI). Scoped to the two SPECIFIC
-              # Function URL functions (Kotlin: s3-file-streaming-function-url, Java:
-              # java-s3-file-streaming-function-url) — never a wildcard function resource.
-              # The FunctionUrlAuthType=AWS_IAM condition ensures this grant only applies to
-              # IAM-authenticated URLs, matching the templates' AuthType: AWS_IAM.
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunctionUrl
-                Resource:
-                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:s3-file-streaming-function-url'
-                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:java-s3-file-streaming-function-url'
-                  # The URL is published on the SnapStart 'live' alias, so the invoke
-                  # target is the qualified ARN (function:<name>:<qualifier>).
-                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:s3-file-streaming-function-url:*'
-                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:java-s3-file-streaming-function-url:*'
-                Condition:
-                  StringEquals:
-                    'lambda:FunctionUrlAuthType': 'AWS_IAM'
-
       Tags:
         - Key: Application
           Value: streaming-example
@@ -268,23 +247,8 @@ Resources:
                   - lambda:TagResource
                   - lambda:UntagResource
                   - lambda:ListTags
-                  # Function URL config lifecycle — CloudFormation needs these to
-                  # create/update/delete the AWS::Lambda::Url resource that SAM's
-                  # FunctionUrlConfig generates. Without them the Function URL stack update
-                  # fails at the AWS::Lambda::Url step. Same function:* scope as the block
-                  # above. No lambda:AddPermission is needed for the URL: AWS_IAM auth is
-                  # enforced via caller IAM (the InvokeFunctionUrl grant above), so no public
-                  # resource-based permission statement is created.
-                  - lambda:CreateFunctionUrlConfig
-                  - lambda:GetFunctionUrlConfig
-                  - lambda:UpdateFunctionUrlConfig
-                  - lambda:DeleteFunctionUrlConfig
                 Resource:
                   - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
-                  # function:* matches only the unqualified function name; the
-                  # Function URL is created against the SnapStart 'live' alias, so the
-                  # qualified ARN (function:<name>:live) must be covered too.
-                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*:*'
 
               # API Gateway permissions
               - Effect: Allow

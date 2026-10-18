@@ -142,64 +142,6 @@ abstract class FlociS3IntegrationTestBase {
                 new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN));
     }
 
-    /**
-     * Builds the production {@link StreamHandler} wired for the <b>Function URL</b> path against
-     * the emulated S3. Identical collaborators to {@link S3FunctionUrlHandler} &mdash; a
-     * {@link FunctionUrlResolver} (payload-2.0 event) and the library {@link ResponseWriter}
-     * &mdash; except the {@link S3Source} is pointed at the container (its client + bucket), since
-     * {@code S3FunctionUrlHandler}'s default {@link S3Source} resolves credentials/region but not
-     * an emulator endpoint and so cannot be redirected without changing production code. Driving
-     * this runs the full parse-2.0-event &rarr; validate &rarr; head &rarr; stream pipeline against
-     * real S3.
-     */
-    protected StreamHandler functionUrlHandlerForBucket() {
-        return new StreamHandler(
-                new FunctionUrlResolver(),
-                new S3Source(s3, BUCKET),
-                new ResponseWriter(Json.Default, ResponseWriterKt.OBSERVED_MAX_PRELUDE_LEN));
-    }
-
-    /**
-     * Builds a representative Lambda payload format 2.0 Function URL event for {@code fileName},
-     * including an {@code AWS_IAM}-shaped {@code requestContext.authorizer.iam} section (Req 5.3)
-     * that the resolver must tolerate and ignore. Both {@code rawPath} and
-     * {@code requestContext.http.path} are set, so the handler is driven by the same event shape
-     * an IAM-authenticated Function URL produces. The literal values are illustrative placeholders,
-     * not real credentials.
-     */
-    protected static InputStream functionUrlEvent(String fileName) {
-        String path = "/" + fileName;
-        String json = "{"
-                + "\"version\":\"2.0\","
-                + "\"routeKey\":\"$default\","
-                + "\"rawPath\":\"" + path + "\","
-                + "\"rawQueryString\":\"\","
-                + "\"headers\":{"
-                + "\"host\":\"abc123.lambda-url.eu-west-1.on.aws\","
-                + "\"x-forwarded-proto\":\"https\"},"
-                + "\"requestContext\":{"
-                + "\"accountId\":\"123456789012\","
-                + "\"apiId\":\"abc123\","
-                + "\"domainName\":\"abc123.lambda-url.eu-west-1.on.aws\","
-                + "\"http\":{"
-                + "\"method\":\"GET\","
-                + "\"path\":\"" + path + "\","
-                + "\"protocol\":\"HTTP/1.1\","
-                + "\"sourceIp\":\"203.0.113.1\"},"
-                + "\"authorizer\":{\"iam\":{"
-                + "\"accessKey\":\"AKIAEXAMPLE\","
-                + "\"accountId\":\"123456789012\","
-                + "\"callerId\":\"AROAEXAMPLE:session\","
-                + "\"userArn\":\"arn:aws:sts::123456789012:assumed-role/example/session\"}},"
-                + "\"requestId\":\"id\","
-                + "\"routeKey\":\"$default\","
-                + "\"stage\":\"$default\","
-                + "\"time\":\"01/Jan/2025:00:00:00 +0000\","
-                + "\"timeEpoch\":1735689600000},"
-                + "\"isBase64Encoded\":false}";
-        return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    }
-
     /** A minimal API Gateway {@code /{proxy+}} event carrying the requested file name. */
     protected static InputStream proxyEvent(String fileName) {
         String json = "{\"pathParameters\":{\"proxy\":\"" + fileName + "\"}}";

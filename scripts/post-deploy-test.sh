@@ -15,13 +15,6 @@
 #   9.5  An unreachable or non-success endpoint => non-zero exit, never "success".
 #   9.6  A payload size/content mismatch => non-zero exit, never "success".
 #
-# In addition to the API Gateway endpoint, the deployed Lambda Function URL
-# (AuthType: AWS_IAM, InvokeMode: RESPONSE_STREAM) is verified on every run
-# (function-url-streaming Req 7.4, 9.1-9.7). Because the Function URL requires
-# IAM auth, every request to it is SigV4-signed with the deploy credentials;
-# an unsigned request would be rejected with HTTP 403. The signed checks run
-# IN ADDITION to the API Gateway checks (Req 9.7); both run every deploy.
-#
 # Configuration is taken from environment variables (no secrets are embedded).
 # When an env var is not set, the value is resolved from the deployed
 # CloudFormation stack outputs (see deployment/aws/sam/template.yaml).
@@ -31,7 +24,6 @@
 #   ENDPOINT_URL     Base HTTPS URL, trailing slash   (default: stack output StreamingEndpointUrl)
 #   BUCKET_NAME      Source S3 bucket                 (default: stack output SourceBucketName)
 #   FUNCTION_NAME    Lambda function name             (default: stack output FunctionName)
-#   FUNCTION_URL     Base HTTPS Function URL, signed   (default: stack output FunctionUrl)
 #   API_KEY          API key value for x-api-key hdr   (default: resolved from stack output ApiKeyId)
 #   LARGE_FILE       >= 15 MB test object key         (default: test-object-15mb.bin)
 #   SMALL_FILE       ~6 MB baseline object key        (default: test-object-6mb.bin)
@@ -88,14 +80,6 @@ fi
 # secret — it is never printed and is masked in CI logs.
 auth_header_args=()
 
-# Region used to SigV4-sign Function URL requests (AuthType: AWS_IAM) via awscurl.
-# Resolved in resolve_config from AWS_REGION / the Function URL host / the CLI
-# default. The credentials themselves are read by awscurl from the environment
-# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN) and are never
-# printed; secrets are masked in CI logs. The Function URL path ALWAYS signs —
-# it never falls back to an unsigned request (function-url-streaming Req 7.4).
-SIGN_REGION=""
-
 # Scratch directory for downloaded bodies and reference copies; always cleaned up.
 WORK_DIR="$(mktemp -d)"
 
@@ -122,7 +106,7 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 require_tools() {
   local missing=()
-  for tool in curl aws cmp awk stat head awscurl; do
+  for tool in curl aws cmp awk stat head; do
     command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
   done
   if (( ${#missing[@]} > 0 )); then
@@ -179,73 +163,8 @@ resolve_config() {
     info "no API key resolved; issuing unauthenticated requests"
   fi
 
-  resolve_function_url_config
-
   LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
   info "resolved configuration for stack '$STACK_NAME' (endpoint, bucket, function)"
-}
-
-# ---------------------------------------------------------------------------
-# Resolve the Function URL and build the SigV4 signing args (Req 7.4, 9.2).
-#
-# The Function URL enforces AuthType: AWS_IAM, so every request MUST be signed
-# with SigV4 for the `lambda` service in the deploy region. The credentials
-# come from the pipeline's assumed-role environment (OIDC). This function:
-#   - resolves FUNCTION_URL from the stack output when unset,
-#   - derives the region (needed for the SigV4 scope) when AWS_REGION is unset,
-#   - requires access-key/secret-key creds (hard fail otherwise — we never
-#     fall back to an unsigned request),
-#   - adds the session-token header only when AWS_SESSION_TOKEN is present.
-# Secret values are masked in CI; identifiers (URL, region) are non-secret.
-# ---------------------------------------------------------------------------
-resolve_function_url_config() {
-  FUNCTION_URL="${FUNCTION_URL:-$(stack_output FunctionUrl)}"
-
-  [[ -n "${FUNCTION_URL:-}" && "$FUNCTION_URL" != "None" ]] \
-    || fail "could not determine FUNCTION_URL (set FUNCTION_URL or deploy stack '$STACK_NAME')"
-
-  # The Function URL serves over TLS only; reject anything that is not HTTPS.
-  [[ "$FUNCTION_URL" == https://* ]] || fail "FUNCTION_URL must be HTTPS: $FUNCTION_URL"
-
-  # SigV4 needs the region. Prefer AWS_REGION; otherwise derive it from the
-  # Function URL host (<id>.lambda-url.<region>.on.aws) and finally fall back
-  # to the configured CLI default.
-  local sign_region="$AWS_REGION"
-  if [[ -z "$sign_region" ]]; then
-    sign_region="$(sed -n 's#^https://[^.]*\.lambda-url\.\([^.]*\)\.on\.aws.*#\1#p' <<<"$FUNCTION_URL")"
-  fi
-  if [[ -z "$sign_region" ]]; then
-    sign_region="$(aws configure get region 2>/dev/null || true)"
-  fi
-  [[ -n "$sign_region" ]] \
-    || fail "could not determine region for SigV4 signing (set AWS_REGION)"
-
-  # Deploy credentials are required to sign; we never issue an unsigned request.
-  [[ -n "${AWS_ACCESS_KEY_ID:-}" ]] \
-    || fail "AWS_ACCESS_KEY_ID is required to SigV4-sign Function URL requests"
-  [[ -n "${AWS_SECRET_ACCESS_KEY:-}" ]] \
-    || fail "AWS_SECRET_ACCESS_KEY is required to SigV4-sign Function URL requests"
-
-  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    echo "::add-mask::${AWS_ACCESS_KEY_ID}"
-    echo "::add-mask::${AWS_SECRET_ACCESS_KEY}"
-    [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "::add-mask::${AWS_SESSION_TOKEN}"
-  fi
-
-  # Sign with awscurl, NOT curl --aws-sigv4. With temporary (assumed-role / OIDC)
-  # credentials curl's --aws-sigv4 does not include the x-amz-security-token header
-  # in the SIGNED canonical request, so the token is sent unsigned and Lambda rejects
-  # the call with 403. awscurl signs the session token correctly (it reads
-  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN from the environment).
-  SIGN_REGION="$sign_region"
-
-  info "resolved Function URL and SigV4 signing for region '$sign_region' (credentials masked)"
-}
-
-# build_function_url <file-name> — join the Function URL base and the object
-# key. The Function URL output already ends with '/', but tolerate both.
-build_function_url() {
-  printf '%s/%s' "${FUNCTION_URL%/}" "$1"
 }
 
 # build_url <file-name> — join the base endpoint and the requested object key.
@@ -369,21 +288,13 @@ teardown_stack() {
 # Performs a GET, saving the body to <body_file>. Echoes a single line:
 #   "<http_code> <time_starttransfer> <time_total> <size_download>"
 # A connection-level failure (unreachable) is a hard error (Req 9.5).
-#
-# The 4th+ arguments are extra per-request curl args. The API Gateway path
-# passes the x-api-key header (global auth_header_args) as it always has; the
-# Function URL path passes its SigV4 signing args instead. In both cases a
-# non-2xx response is a hard failure — including a 403 from an unsigned or
-# badly-signed Function URL request (Req 9.5).
 # ---------------------------------------------------------------------------
 http_get_timed() {
   local url="$1" body_file="$2" label="$3"
-  shift 3
-  local curl_args=("$@")
   local metrics rc=0
 
   metrics="$(curl -sS --http1.1 \
-      "${curl_args[@]}" \
+      "${auth_header_args[@]}" \
       -o "$body_file" \
       -w '%{http_code} %{time_starttransfer} %{time_total} %{size_download}' \
       "$url")" || rc=$?
@@ -451,7 +362,7 @@ measure_request() {
   url="$(build_url "$file")"
   start_ms="$(now_ms)"
   info "requesting $label"
-  metrics="$(http_get_timed "$url" "$body_file" "$label" "${auth_header_args[@]}")"
+  metrics="$(http_get_timed "$url" "$body_file" "$label")"
 
   M_TTFB="$(awk '{print $2}' <<<"$metrics")"
   M_TOTAL="$(awk '{print $3}' <<<"$metrics")"
@@ -520,104 +431,6 @@ verify_memory_bounded() {
 }
 
 # ---------------------------------------------------------------------------
-# Function URL verification (function-url-streaming Req 7.4, 9.1-9.7)
-#
-# Mirrors the API Gateway flow but drives the deployed Lambda Function URL with
-# SigV4-signed requests (AuthType: AWS_IAM). Every request is signed; the path
-# never falls back to unsigned. A 403 (unsigned/badly-signed), an unreachable
-# endpoint, or any other non-2xx is a hard non-zero exit (via http_get_timed,
-# Req 9.5); a size/content mismatch is likewise fatal (via
-# verify_full_and_identical, Req 9.6).
-#
-# Steps:
-#   - warmup: one signed request, discarded from all timings (Req 9.4).
-#   - one measured signed request for the large (>= 15 MB) Test_Object.
-#   - full-and-byte-identical check against the S3 source (Req 9.3, reusing
-#     verify_full_and_identical).
-#   - a single post-warmup first-byte-within-50%-of-total check (Req 9.4,
-#     reusing verify_first_byte_timing).
-#
-# The memory check is intentionally omitted here: the Function URL Lambda has
-# the same shape and bounded-buffer behavior as the API Gateway Lambda, which
-# is already memory-verified above (per design). The Function URL path never
-# depends on the x-api-key auth.
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# signed_get_timed <url> <body_file> <label>
-#
-# SigV4-signed GET of a Lambda Function URL via awscurl (service: lambda), using
-# the credentials in the environment (including the session token, which awscurl
-# signs correctly). Saves the body to <body_file> and echoes a single line:
-#   "<http_code> <time_starttransfer> <time_total> <size_download>"
-# Timing is measured as wall-clock around the awscurl invocation; awscurl streams
-# the body to the file, so time_total is the full-download time. first-byte time
-# is not separately observable through awscurl, so time_starttransfer is reported
-# equal to time_total here — the progressive (first-byte) proof for streaming is
-# carried by the API Gateway path (which uses curl's real TTFB); the Function URL
-# path proves signed AWS_IAM access plus full byte-identical delivery (Req 7.4,
-# 9.1, 9.6). A non-2xx (including a 403 from a bad signature / missing authz) or a
-# transport failure is a hard error (Req 9.5).
-# ---------------------------------------------------------------------------
-signed_get_timed() {
-  local url="$1" body_file="$2" label="$3"
-  local status_file start end total rc=0 http_code size
-
-  status_file="$WORK_DIR/awscurl_status"
-  start="$(date +%s.%N)"
-  # -i includes response headers; we capture the status line and strip headers
-  # from the body. awscurl exits non-zero on transport errors.
-  awscurl --service lambda --region "$SIGN_REGION" \
-      --request GET \
-      -i \
-      "$url" > "$status_file" 2>/dev/null || rc=$?
-  end="$(date +%s.%N)"
-
-  if (( rc != 0 )); then
-    fail "endpoint unreachable or signing failed for $label (awscurl exit code $rc)"
-  fi
-
-  total="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.6f", (e - s) }')"
-
-  # First line is the HTTP status line: "HTTP/1.1 200 OK".
-  http_code="$(sed -n '1s#^HTTP/[0-9.]* \([0-9][0-9][0-9]\).*#\1#p' "$status_file")"
-  if [[ ! "$http_code" =~ ^2[0-9][0-9]$ ]]; then
-    fail "non-success HTTP status ${http_code:-<none>} for $label"
-  fi
-
-  # Strip the header block (up to the first blank line) to recover the body.
-  awk 'f{print} /^\r?$/{f=1}' "$status_file" > "$body_file"
-  size="$(file_size "$body_file")"
-
-  printf '%s %s %s %s\n' "$http_code" "$total" "$total" "$size"
-}
-
-verify_function_url() {
-  local url large_body metrics total
-
-  info "verifying the Lambda Function URL (SigV4-signed, AuthType: AWS_IAM)"
-
-  # --- Warmup: one signed request, result discarded (Req 9.4).
-  url="$(build_function_url "$LARGE_FILE")"
-  info "Function URL warmup request (discarded from all timings)"
-  signed_get_timed "$url" "$WORK_DIR/furl_warmup.bin" "function-url warmup" >/dev/null
-  ok "Function URL warmup completed and discarded"
-
-  # --- One measured signed request for the large (>= 15 MB) payload.
-  large_body="$WORK_DIR/furl_large.bin"
-  info "requesting Function URL large payload (>= 15 MB), signed"
-  metrics="$(signed_get_timed "$url" "$large_body" "function-url large payload (>= 15 MB)")"
-  total="$(awk '{print $3}' <<<"$metrics")"
-  info "function-url large payload: total=${total}s bytes=$(awk '{print $4}' <<<"$metrics")"
-
-  # --- Checks: signed AWS_IAM access + full byte-identical delivery (Req 7.4, 9.1, 9.6).
-  # The first-byte progressive proof is carried by the API Gateway path (curl TTFB);
-  # awscurl does not expose a separate first-byte time, so it is not asserted here.
-  verify_full_and_identical "$LARGE_FILE" "$large_body"
-
-  ok "Function URL streaming checks passed (signed AWS_IAM, >= 15 MB, byte-identical)"
-}
-
-# ---------------------------------------------------------------------------
 # Main verification flow
 #
 # Test_Object seeding (task 12.2 / Req 11.7) runs immediately after
@@ -625,6 +438,45 @@ verify_function_url() {
 # (Req 11.7) is the final, opt-in step (TEARDOWN=true), kept out of the default
 # path so a normal verification run never destroys the deployment.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# HTTP protocol verification (API Gateway streaming over HTTP/1.1 and HTTP/2)
+#
+# API Gateway streams the response with chunked transfer encoding. The scripts
+# force HTTP/1.1 elsewhere because some client/curl builds hit
+# `curl: (92) HTTP/2 stream not closed cleanly` even though the body transferred.
+# This check proves the DEPLOYED endpoint actually serves a complete, byte-
+# identical response over BOTH HTTP/1.1 and HTTP/2, so the HTTP/2 path is
+# verified rather than assumed. The HTTP/1.1 leg is mandatory; the HTTP/2 leg is
+# skipped (with a warning, not a failure) only when the local curl lacks HTTP/2
+# support, since that is a client limitation, not an endpoint one.
+# ---------------------------------------------------------------------------
+verify_http_protocols() {
+  local url ref_file h1 h2 code
+  url="$(build_url "$LARGE_FILE")"
+
+  # Reference bytes: the source object straight from S3.
+  ref_file="$WORK_DIR/proto_ref.bin"
+  aws s3api get-object     --bucket "$BUCKET_NAME" --key "$LARGE_FILE" "${region_args[@]}"     "$ref_file" >/dev/null 2>&1     || fail "could not fetch source object for protocol comparison"
+
+  # --- HTTP/1.1 (mandatory) ---
+  h1="$WORK_DIR/proto_h1.bin"
+  code="$(curl -sS --http1.1 "${auth_header_args[@]}" -o "$h1"       -w '%{http_code}' "$url")"     || fail "endpoint unreachable over HTTP/1.1"
+  [[ "$code" =~ ^2[0-9][0-9]$ ]] || fail "HTTP/1.1 returned non-success status $code"
+  cmp -s "$ref_file" "$h1"     || fail "HTTP/1.1 body is not byte-identical to the source object"
+  ok "HTTP/1.1: status $code, $(file_size "$h1") bytes, byte-identical to source"
+
+  # --- HTTP/2 (verified when the client supports it) ---
+  if curl --version | head -1 | grep -qiE "nghttp2|HTTP2"; then
+    h2="$WORK_DIR/proto_h2.bin"
+    code="$(curl -sS --http2 "${auth_header_args[@]}" -o "$h2"         -w '%{http_code}' "$url")"       || fail "endpoint unreachable over HTTP/2 (curl exit $?) — some HTTP/2 clients hit curl (92); if this is a client-specific stream-close issue, retry with --http1.1"
+    [[ "$code" =~ ^2[0-9][0-9]$ ]] || fail "HTTP/2 returned non-success status $code"
+    cmp -s "$ref_file" "$h2"       || fail "HTTP/2 body is not byte-identical to the source object"
+    ok "HTTP/2: status $code, $(file_size "$h2") bytes, byte-identical to source"
+  else
+    info "HTTP/2 check skipped: local curl reports no HTTP/2 support (client limitation, not an endpoint one)"
+  fi
+}
+
 run_verification() {
   require_tools
   resolve_config
@@ -640,7 +492,7 @@ run_verification() {
 
   # --- Warmup: issued first, result discarded, excluded from all timings (Req 9.2).
   info "warmup request (discarded from all timings)"
-  http_get_timed "$(build_url "$LARGE_FILE")" "$WORK_DIR/warmup.bin" "warmup" "${auth_header_args[@]}" >/dev/null
+  http_get_timed "$(build_url "$LARGE_FILE")" "$WORK_DIR/warmup.bin" "warmup" >/dev/null
   ok "warmup completed and discarded"
 
   # --- Measured large (>= 15 MB) payload.
@@ -658,9 +510,9 @@ run_verification() {
   verify_first_byte_timing "$large_ttfb" "$large_total"   # Req 9.3
   verify_memory_bounded "$large_mem" "$small_mem"         # Req 9.4
 
-  # --- Function URL checks run IN ADDITION to the API Gateway checks (Req 9.7);
-  #     both invocation paths are proven on every deploy.
-  verify_function_url
+  # --- Protocol check: the endpoint delivers a complete, byte-identical body over
+  #     both HTTP/1.1 and HTTP/2 (the HTTP/2 leg is verified, not assumed).
+  verify_http_protocols
 
   info "all post-deploy streaming checks passed"
 

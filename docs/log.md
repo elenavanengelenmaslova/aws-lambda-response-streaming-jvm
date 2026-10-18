@@ -1750,199 +1750,26 @@ That framing is what makes it likely to become the article people find when they
 
 ---
 
-## `InvokeMode: RESPONSE_STREAM` (Function URL) vs `ResponseTransferMode: RESPONSE_STREAM` (API Gateway SAM) — two knobs, one value, not interchangeable
+## `InvokeMode` (Function URL) vs `ResponseTransferMode` (API Gateway) — same value, different knob
 
-- **Symptom / trigger:** Adding a Lambda Function URL streaming path alongside the
-  existing API Gateway endpoint surfaces a second "turn on streaming" property whose
-  *value* is identical to the API Gateway one — `RESPONSE_STREAM` — but whose *property
-  name and layer* are different. For API Gateway, SAM enables streaming through the
-  function's `Api` **event** property `ResponseTransferMode: RESPONSE_STREAM` (see the
-  earlier `STREAM` vs `RESPONSE_STREAM` entry). For a Function URL there is no API event
-  at all: streaming is enabled on the function's `FunctionUrlConfig` via
-  `InvokeMode: RESPONSE_STREAM`. The shared `RESPONSE_STREAM` string makes it tempting to
-  reuse the wrong knob — putting `ResponseTransferMode` on the Function URL function
-  (ignored, so the URL stays buffered), or expecting an `Api` event to drive the URL — or
-  to leave `InvokeMode` at its default `BUFFERED`. Any of these silently defeats
-  streaming: the Function URL returns the body buffered (first byte not early, and a
-  payload over the 6 MB buffered limit fails), and because the property is accepted as
-  valid CloudFormation, nothing errors at `sam validate` or deploy — the regression only
-  shows up as a non-streaming response measured against the live URL.
-
-- **Resolution / status:** **Resolved (convention fixed, both templates).** The two knobs
-  are now set explicitly and distinctly, each with an inline comment flagging the trap:
-  - **API Gateway Lambda** — streaming via the `Api` event's
-    `ResponseTransferMode: RESPONSE_STREAM` (unchanged).
-  - **Function URL Lambda** — streaming via `FunctionUrlConfig: { AuthType: AWS_IAM,
-    InvokeMode: RESPONSE_STREAM }`. `InvokeMode` MUST be exactly `RESPONSE_STREAM`; any
-    other value — notably `BUFFERED` — is treated as invalid for this feature and is not
-    committed (Req 6.2, 6.3). The SAM `FunctionUrlConfig` generates the
-    `AWS::Lambda::Url` resource; SAM derives its logical ID by suffixing `Url` onto the
-    function's logical ID (`FunctionUrlFunction` → `FunctionUrlFunctionUrl`), which is
-    what the `FunctionUrl` stack output references. After every template change, run
-    `sam validate --template-file deployment/aws/sam/template.yaml` (and the `sam-java`
-    template) and require exit code 0 before committing (Req 6.5, 6.6). This is deployed
-    in both `deployment/aws/sam/template.yaml` and `deployment/aws/sam-java/template.yaml`.
-  - **Takeaway for the article:** this is the Function URL sibling of the earlier
-    `STREAM` vs `RESPONSE_STREAM` gotcha. The value you need is the same word; the
-    property that carries it is not. `ResponseTransferMode` is an API Gateway concept and
-    lives on the `Api` event; `InvokeMode` is a Function URL concept and lives on
-    `FunctionUrlConfig`. Picking the wrong one, or defaulting `InvokeMode` to `BUFFERED`,
-    is a quiet non-streaming endpoint that passes validation and only fails under a
-    first-byte / large-payload check.
+- **Symptom / trigger:** `RESPONSE_STREAM` appears in two unrelated places and it is tempting to treat them as the same switch. API Gateway's SAM `Api` event uses `ResponseTransferMode: RESPONSE_STREAM`; a Lambda **Function URL** uses `FunctionUrlConfig.InvokeMode: RESPONSE_STREAM`. They configure different layers and are not interchangeable.
+- **Resolution / status:** Noted. For this project only the API Gateway knob matters — the Function URL path is not used on the managed JVM runtime (see the next entry).
 
 ---
 
-## An `AuthType: AWS_IAM` Function URL returns 403 to unsigned requests — provable only against real AWS
+## The managed JVM runtime does not stream over a Lambda Function URL — use API Gateway, or a custom runtime
 
-- **Symptom / trigger:** The Function URL uses `AuthType: AWS_IAM` (it is not public), so
-  every caller must sign the request with SigV4 for the `lambda` service and hold
-  `lambda:InvokeFunctionUrl`. An unsigned GET to the URL — the obvious first smoke test —
-  returns **HTTP 403** and serves no object content. The confusing part for the test
-  strategy is that this gate cannot be exercised locally: no local emulator (Floci /
-  LocalStack) implements the Function URL streaming invocation path *or* its SigV4 request
-  signing, so there is nothing to sign against and no 403 to observe before deploy. Trying
-  to prove IAM auth in a unit or integration test is a dead end.
-
-- **Resolution / status:** **Resolved — the IAM gate lives in the post-deploy script, not
-  in tests.** The Floci integration tests invoke the handler **directly** with an
-  `AWS_IAM`-shaped payload-2.0 event (including a `requestContext.authorizer.iam` section),
-  which proves the handler parses the right event shape and streams byte-identically — but
-  deliberately does **not** attempt real signing (Req 5.5). Proof that the IAM gate
-  actually rejects unsigned callers and admits signed ones is deferred to the signed
-  `scripts/post-deploy-test.sh` run against the deployed URL (Req 7.4, 7.5, 9.2): it signs
-  every request and treats a 403 / unreachable / non-2xx as a hard non-zero exit, never
-  falling back to an unsigned request. This mirrors the earlier platform-behaviour lesson
-  (API-key `ApiKeyRequired` → 403): authentication that the platform enforces is proven
-  against the platform, not mocked in a test.
-  - **Takeaway for the article:** IAM auth on a Function URL is a platform behaviour, not
-    handler code. The handler never sees a signature; AWS accepts or rejects the request
-    before the function runs. So the only honest proof is a signed request to the real
-    URL — the test suite proves the handler, the post-deploy script proves the gate.
+- **Symptom / trigger:** Exposing the same `RequestStreamHandler` through a Lambda Function URL (`InvokeMode: RESPONSE_STREAM`, `AuthType: AWS_IAM`) returned a 21-byte `Internal Server Error` (HTTP 502) to a correctly SigV4-signed request, while the **same handler and jar** streamed a 15 MB object perfectly over API Gateway. The function logs showed no exception — it resolved the request, read S3, and returned cleanly.
+- **Investigation:** A one-shot diagnostic logging the handler's `OutputStream` type on the deployed Function URL showed `outputClass=java.io.ByteArrayOutputStream` (ancestry `ByteArrayOutputStream -> OutputStream -> Object`, no `setContentType`). The shaded jar contained only `aws-lambda-java-core` — no `HttpResponseStream` / runtime-interface-client streaming class. AWS documents managed response streaming for Node.js only (opt in with `awslambda.streamifyResponse()`); for the JVM it directs you to a **custom runtime** (Runtime API or the Lambda Web Adapter).
+- **Why API Gateway works anyway:** API Gateway's integration layer performs the streaming — it invokes the function with `InvokeWithResponseStream`, parses the hand-written `metadata JSON + 8 NUL + body` prelude, and re-streams the body to the client. The function does not need to be "response-streaming-enabled" for that path. A Function URL has **no integration layer**: it invokes the function directly and expects a streaming-enabled function, which the managed JVM runtime's plain `RequestStreamHandler` is not — so the prelude bytes are rejected with a 502.
+- **Attempts that did NOT fix it (dead ends, recorded so they are not retried):** setting the `application/vnd.awslambda.http-integration-response` content type reflectively on the output stream (the stream is a `ByteArrayOutputStream` with no such method); forcing HTTP/1.1; widening IAM scope. None addressed the real cause.
+- **Side gotchas found on the way (relevant only if you DO pursue a Function URL via a custom runtime):** (a) `curl --aws-sigv4` does not fold `x-amz-security-token` into the SIGNED canonical request, so temporary/OIDC credentials get a 403 — use `awscurl` (or a signer that signs the session token); (b) CloudFormation needs `lambda:Create/Get/Update/DeleteFunctionUrlConfig` on the deploy role to create the `AWS::Lambda::Url` resource, and `lambda:InvokeFunctionUrl` must cover the qualified `function:<name>:<alias>` ARN since the URL attaches to the SnapStart `live` alias.
+- **Resolution / status:** **Resolved by scoping.** The Function URL variant was removed; the examples stream through **API Gateway only**. The library's `ResponseWriter` is unchanged — the limitation is in the managed JVM runtime, not the wire-format code. Documented in the README Limitations section.
 
 ---
 
-## Deploying an `AWS::Lambda::Url` needs `FunctionUrlConfig` IAM actions on the deploy role — the stack fails at the `AWS::Lambda::Url` step without them
+## API Gateway streaming works over HTTP/2 — the `curl: (92)` error is client/environment-specific
 
-- **Symptom / trigger:** SAM turns `FunctionUrlConfig` into an `AWS::Lambda::Url`
-  resource at deploy time. CloudFormation (acting as the deploy role) then calls the
-  Lambda control-plane APIs that create and manage that resource. If the deploy role lacks
-  them, the stack update fails specifically at the `AWS::Lambda::Url` step with an access
-  denial — after the function itself has been created — leaving a half-applied stack. The
-  function deploys fine; only the URL resource trips, so the failure points at the new
-  resource rather than at anything obviously IAM-shaped.
-
-- **Resolution / status:** **Resolved.** The OIDC deploy role
-  (`deployment/aws/oidc/github-oidc-role.yaml`) grants
-  `lambda:CreateFunctionUrlConfig`, `lambda:GetFunctionUrlConfig`,
-  `lambda:UpdateFunctionUrlConfig`, and `lambda:DeleteFunctionUrlConfig`, scoped to the
-  same `function:*` resource scope used by the existing function-management statement — no
-  wildcard function resource. No `lambda:AddPermission` is needed for the URL: with
-  `AuthType: AWS_IAM`, access is enforced through the caller's IAM
-  (`lambda:InvokeFunctionUrl`, granted separately and scoped to the specific Function URL
-  function ARNs with the `lambda:FunctionUrlAuthType = AWS_IAM` condition — Req 7.3), so no
-  public resource-based permission statement is created. Run `sam validate` (exit 0) on
-  both templates after the change before committing.
-  - **Takeaway for the article:** a `FunctionUrlConfig` one-liner in SAM expands into a
-    separate CloudFormation resource with its own control-plane API surface. Grant the
-    deploy role the four `*FunctionUrlConfig` actions up front, or the stack dies at the
-    URL step with the function already created.
-
----
-
-## `curl --aws-sigv4` needs `x-amz-security-token` for temporary (assumed-role / OIDC) credentials
-
-- **Symptom / trigger:** The pipeline assumes an OIDC role, so its AWS credentials are
-  **temporary** — an access key, a secret key, **and** a session token. Signing a Function
-  URL request with `curl --aws-sigv4 "aws:amz:<region>:lambda" --user
-  "<AWS_ACCESS_KEY_ID>:<AWS_SECRET_ACCESS_KEY>"` but omitting the session token produces a
-  signature AWS rejects with 403, even though the key pair is valid and the SigV4 math is
-  correct. The missing piece is that temporary credentials require the session token to be
-  presented to the service as the `x-amz-security-token` header; `curl --aws-sigv4` signs
-  the request but does not add that header on its own. The failure looks identical to a
-  bad signature or a missing-permission denial, so it reads as a signing bug rather than a
-  missing header.
-
-- **Resolution / status:** **Resolved — the token header is added when present.**
-  `scripts/post-deploy-test.sh` builds its SigV4 curl args as
-  `--aws-sigv4 "aws:amz:${sign_region}:lambda" --user
-  "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}"` and, **only when
-  `AWS_SESSION_TOKEN` is set**, appends `--header "x-amz-security-token:
-  ${AWS_SESSION_TOKEN}"`. That keeps the same script working with both long-lived
-  credentials (no session token, header omitted) and the pipeline's temporary OIDC
-  credentials (session token present, header added). The session token is a **runtime
-  secret**: it is referenced by name only, never echoed, and masked in CI logs — this log
-  records no token value (Req 7.3, 11.4).
-  - **Takeaway for the article:** SigV4 with temporary credentials is a three-part
-    secret. `--aws-sigv4` handles the key pair and the signature, but you must hand the
-    service the session token yourself via `x-amz-security-token`, or every signed request
-    from an assumed role 403s with a message that looks like a signing failure.
-
----
-
-## `curl --aws-sigv4` does not sign the session token for temporary credentials — use `awscurl`
-
-- **Symptom / trigger:** The post-deploy signed Function URL check (`AuthType: AWS_IAM`)
-  failed against the deployed endpoint with `HTTP status 403` on the very first
-  (warmup) request, even though: the Function URL existed and was reachable, the
-  deploy role's `lambda:InvokeFunctionUrl` grant covered the function (both the
-  unqualified and the `:live` qualified ARN), and the request was being signed with
-  `curl --aws-sigv4 "aws:amz:<region>:lambda"` plus `-H "x-amz-security-token: ..."`.
-  The API Gateway checks on the same run passed. The pipeline runs under an assumed
-  role (OIDC), so the credentials are **temporary** and carry a session token.
-
-- **Root cause:** `curl --aws-sigv4` computes the signature over the headers it
-  manages, and it does **not** fold an externally supplied `x-amz-security-token`
-  header into the **signed** canonical request. With temporary credentials the token
-  is therefore sent but unsigned, and Lambda rejects the request with 403
-  (effectively "the security token included in the request is invalid" /
-  SignatureDoesNotMatch) before IAM authorization is even considered — so no IAM
-  policy change can fix it. This is a known limitation of curl's SigV4 support with
-  STS credentials. (Content was rephrased for compliance with licensing restrictions.)
-
-- **Resolution / status:** **Resolved.** The Function URL path in
-  `scripts/post-deploy-test.sh` now signs with **`awscurl --service lambda --region
-  <region>`** instead of `curl --aws-sigv4`. `awscurl` reads the credentials from the
-  environment (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`) and
-  signs the session token into the canonical request correctly. The workflow installs
-  it (`pipx install awscurl`) before the signed check. The API Gateway path still uses
-  plain `curl` (API-key auth, no SigV4). One trade-off: `awscurl` does not expose a
-  separate time-to-first-byte, so the progressive (first-byte-within-50%) assertion is
-  proven on the API Gateway path (real curl TTFB); the Function URL path asserts signed
-  AWS_IAM access plus full byte-identical delivery of the >= 15 MB object.
-
----
-
-## Lambda Function URL streaming needs the `http-integration-response` content-type marker — API Gateway does not
-
-- **Symptom / trigger:** With the Function URL deployed (`InvokeMode: RESPONSE_STREAM`,
-  `AuthType: AWS_IAM`) and the request correctly SigV4-signed, a signed GET returned a
-  21-byte `{"message":"Internal Server Error"}` with `Content-Type: application/json` —
-  **but the Lambda logs showed no exception**: the handler resolved the request, did the
-  S3 `GetObject`, ran to `END`/`REPORT` with normal duration and ~215 MB memory, and
-  returned cleanly. The identical handler and identical bytes stream perfectly over the
-  **API Gateway** path (`ResponseTransferMode: RESPONSE_STREAM`) — only the Function URL
-  path produced the 500.
-
-- **Root cause:** The handler writes the streaming prelude bytes (`metadata JSON` -> 8 NUL
-  -> body), which is correct, but the **Lambda Function URL** streaming runtime only treats
-  those bytes as a prelude-framed HTTP response if the response stream is tagged with the
-  content type `application/vnd.awslambda.http-integration-response`. On Node this tag is
-  applied by `awslambda.HttpResponseStream.from()`; on the managed Java runtime the
-  streaming `OutputStream` handed to the handler is AWS's `HttpResponseStream`, which exposes
-  `setContentType(String)`. Our writer never set it, so the Function URL runtime did not
-  recognise the stream, discarded the handler output, and substituted its own 500 — which is
-  why the function logs are clean. **API Gateway does not need the marker** (it infers the
-  protocol from the integration config), which is why that path worked and masked the gap.
-  This corrects the earlier `ResponseWriter` note that claimed writing the bytes in order was
-  "necessary and sufficient on the JVM" — it is sufficient for API Gateway, NOT for a
-  Function URL.
-
-- **Resolution / status:** **Resolved.** `ResponseWriter.writeMetadata` now sets the
-  content-type marker on the output stream (reflectively calling `setContentType(String)` if
-  the stream exposes it) BEFORE writing the first byte. One shared code path serves both
-  invocation types with no branching and no new dependency: the call is a no-op where the
-  method is absent (API Gateway's stream and plain `OutputStream`s in unit tests), and the
-  required tag on the Function URL path. The emitted bytes are unchanged, so the API Gateway
-  path and all existing tests are unaffected (a unit test asserts a tagged stream and a plain
-  stream produce byte-identical output). The marker must be set before any byte is written —
-  the content type cannot change once the response stream has started.
+- **Symptom / trigger:** An earlier note recorded `curl: (92) HTTP/2 stream not closed cleanly: INTERNAL_ERROR` against the streaming endpoint, and the pipeline/scripts force `--http1.1`. This could read as "the endpoint only works over HTTP/1.1".
+- **Investigation:** Re-tested the deployed API Gateway endpoint against the 15 MB object with curl 8.7.1 (nghttp2 1.64.0): over HTTP/2 (both ALPN-negotiated and `--http2-prior-knowledge`) the request returned HTTP 200, full 15,728,640 bytes, byte-identical to the HTTP/1.1 download, with no error 92.
+- **Resolution / status:** **Clarified.** HTTP/2 is not categorically broken; the `(92)` failure is specific to certain client/curl builds (e.g. the CI runner's version) and is a stream-termination quirk somewhere along the path, not a fault in the response bytes or the library. `--http1.1` remains a reliable workaround for clients that hit it. The post-deploy script now verifies BOTH HTTP/1.1 and HTTP/2 return a complete, byte-identical body so any regression is caught.

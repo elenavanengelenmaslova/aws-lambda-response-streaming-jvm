@@ -27,7 +27,9 @@ The library handles:
 - **Protocol encoding** — serializes the metadata JSON (`statusCode`, `headers`) and writes the 8-byte delimiter before any body bytes (`ResponseWriter`)
 - **Memory-bounded streaming** — copies the body through a fixed 1 MB buffer with per-chunk flush, keeping memory flat regardless of payload size (`copy()`)
 
-Both **API Gateway** and **Lambda Function URLs** are supported — each delivers a streamed response through this `[metadata JSON] [8 null bytes] [body…]` protocol. The library never touches the invocation layer, so it works unchanged behind either. The only difference is the incoming event shape your `resolveSource` parses: an API Gateway proxy event versus a Function URL event. Both example modules expose both paths behind a `RequestResolver` (a path-based resolver for the API Gateway proxy event and a Function URL resolver for the payload-2.0 event), so the same handler can serve either source. The Function URL path is proven end to end by the pipeline — a signed, large-payload streaming check runs on every deploy for both the Kotlin and Java examples.
+This library targets **API Gateway** response streaming (`ResponseTransferMode: RESPONSE_STREAM`): API Gateway invokes the function with the streaming API and re-streams this `[metadata JSON] [8 null bytes] [body…]` payload to the client. The library never touches the invocation layer — it only writes the wire format.
+
+A Lambda **Function URL** (`InvokeMode: RESPONSE_STREAM`) is **not supported on the managed JVM runtime** — see [Limitations](#limitations-aws-lambda-response-streaming) below. It requires a *response-streaming-enabled* function, which the managed `java21`/`java25` runtime's `RequestStreamHandler` does not provide; a Function URL needs a custom runtime.
 
 ## Dependency
 
@@ -140,11 +142,13 @@ An oversized prelude then raises `MetadataTooLargeException` **before anything i
 
 ## Limitations (AWS Lambda response streaming)
 
-These are platform limits of Lambda response streaming itself — they apply to **any** streaming Lambda (Node.js, JVM, or other), not to this library specifically. See [Response streaming for Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html) (the "Bandwidth limits for response streaming" section covers the rate cap).
+Most of these are platform limits of Lambda response streaming itself — they apply to **any** streaming Lambda (Node.js, JVM, or other), not to this library specifically. See [Response streaming for Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html) (the "Bandwidth limits for response streaming" section covers the rate cap). Two entries below (the HTTP/1.1 client note and the Function URL note) are JVM/managed-runtime specifics learned while building the examples.
 
 - **Bandwidth cap after the first 6 MB.** The first 6 MB of the response is streamed uncapped; beyond that, Lambda caps the rate at ~2 MB/s. Large responses are delivered more slowly past the initial burst — a throughput limit, independent of your function's memory or buffer size.
 - **Max payload size 200 MB.** A streamed response can be up to 200 MB (versus 6 MB for a buffered response). This is a size limit, separate from the bandwidth cap above.
 - **Billed for the full duration, even on client disconnect.** A streamed response is not stopped when the client connection breaks; the function keeps running until it returns or times out, and you are billed for the whole duration. Keep function timeouts tight for large or long-running streams.
+- **Clients must use HTTP/1.1.** API Gateway streams the response with chunked transfer encoding. Some clients (e.g. newer `curl`, which defaults to HTTP/2) fail the transfer with `curl: (92) HTTP/2 stream … was not closed cleanly: INTERNAL_ERROR` even though the body transferred, because the HTTP/2 stream is not closed cleanly after the function finishes. Force HTTP/1.1 — `curl --http1.1` — for a clean close. HTTP/1.1 chunked transfer terminates with a zero-length chunk and works reliably.
+- **Lambda Function URLs are not supported on the managed JVM runtime — use API Gateway, or a custom runtime for a Function URL.** A Function URL in `InvokeMode: RESPONSE_STREAM` invokes the function directly (no integration layer) and expects a *response-streaming-enabled* function. Node opts in with the `awslambda.streamifyResponse()` decorator; the **managed `java21`/`java25` runtime has no equivalent** — a plain `RequestStreamHandler` (from `aws-lambda-java-core`) is handed an in-memory `OutputStream` and is never marked as streaming, so the Function URL front door rejects the hand-written prelude bytes with `HTTP 502 Internal Server Error` (the function itself runs cleanly — the logs show no exception). API Gateway works because its *integration layer* performs the streaming and parses the prelude on the function's behalf. To serve a **Function URL** with streaming on the JVM you must use a **custom runtime** (`provided.al2023` plus the Lambda Runtime Interface Client, or a GraalVM native image) where your code owns the response-stream wiring. Per [AWS](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html), JVM response streaming is done "using custom runtimes". This repository's examples therefore expose streaming through **API Gateway only**.
 
 ## Example modules
 
@@ -153,26 +157,7 @@ These are platform limits of Lambda response streaming itself — they apply to 
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
-Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer. Each example deploys two Lambdas — one behind an API Gateway REST endpoint and one behind a Lambda Function URL — so both invocation paths are configured and tested independently.
-
-### Invoking the Function URL
-
-The Function URL is configured with `AuthType: AWS_IAM`, so it is **not public** — every caller must sign the request with SigV4 for the `lambda` service. An unsigned request is rejected with HTTP 403. Sign it directly with `curl --aws-sigv4`:
-
-```bash
-curl --aws-sigv4 "aws:amz:<region>:lambda" \
-  --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
-  -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
-  "<FunctionUrl><file>"
-```
-
-Replace `<region>` with your deploy region (for example `eu-west-1`), `<FunctionUrl>` with the `FunctionUrl` stack output, and `<file>` with the object name. The `x-amz-security-token` header is only needed when your credentials are temporary (an assumed role or session). As an alternative, [`awscurl`](https://github.com/okigan/awscurl) signs for you from your configured AWS profile:
-
-```bash
-awscurl --service lambda --region <region> "<FunctionUrl><file>"
-```
-
-The pipeline's post-deploy check signs its requests the same way, using the deploy role's credentials.
+Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer. Each example deploys a single Lambda behind an **API Gateway** REST endpoint (response streaming via `ResponseTransferMode: RESPONSE_STREAM`). A Lambda Function URL is intentionally not included — see [Limitations](#limitations-aws-lambda-response-streaming) for why the managed JVM runtime cannot serve one.
 
 ## Contributing and security
 

@@ -7,23 +7,14 @@ import java.io.OutputStream
 public const val DELIMITER_LEN: Int = 8
 
 /**
- * Content-type marker that tags a response stream as carrying the metadata-prelude protocol
- * (`metadata JSON` -> 8 NUL bytes -> body). AWS's Node.js `awslambda.HttpResponseStream.from()`
- * helper applies this same marker.
+ * Content-type marker that AWS's Node.js `awslambda.HttpResponseStream.from()` helper applies to
+ * tag a stream as carrying the metadata-prelude protocol.
  *
- * This marker is REQUIRED on the Lambda Function URL streaming path (`InvokeMode: RESPONSE_STREAM`):
- * without it the Function URL runtime does not recognise the bytes as a prelude-framed HTTP
- * response and returns its own `Internal Server Error`, even though the handler ran cleanly. It is
- * NOT required on the API Gateway path (`ResponseTransferMode: RESPONSE_STREAM`), which infers the
- * protocol from the integration configuration — but setting it there is harmless (ignored).
- *
- * The managed Java runtime hands a streaming handler an `OutputStream` that is really AWS's
- * `HttpResponseStream`, which exposes `setContentType(String)`. [writeMetadata] sets this marker
- * reflectively before writing the prelude, so the single shared writer serves BOTH invocation
- * paths with no branching: the call is a no-op where the method is absent (API Gateway's stream,
- * and plain `OutputStream`s in tests). This supersedes the earlier (incorrect) assumption that
- * writing the bytes in order was sufficient on the JVM — it is for API Gateway, but not for a
- * Function URL. See docs/log.md.
+ * Exposed for reference only. The Node helper sets it by calling `setContentType` on the
+ * underlying stream; the JVM `RequestStreamHandler` signature offers no equivalent hook, since the
+ * `OutputStream` handed to a handler carries no content-type channel. Writing the prelude, the
+ * delimiter and the body in the documented byte order is therefore both necessary and sufficient
+ * on the JVM.
  */
 public const val METADATA_PRELUDE_CONTENT_TYPE: String =
     "application/vnd.awslambda.http-integration-response"
@@ -86,9 +77,6 @@ public class ResponseWriter(
      */
     public fun writeMetadata(output: OutputStream, metadata: ResponseMetadata) {
         val prelude = encodePrelude(metadata)
-        // Tag the stream as prelude-framed BEFORE the first byte is written. Required by the
-        // Lambda Function URL streaming path; a harmless no-op on API Gateway and in tests.
-        tagAsPreludeStream(output)
         output.write(prelude)
         output.write(ByteArray(DELIMITER_LEN))
     }
@@ -145,27 +133,5 @@ public class ResponseWriter(
             )
         }
         return prelude
-    }
-
-    /**
-     * Best-effort: tag [output] with [METADATA_PRELUDE_CONTENT_TYPE] so the Lambda Function URL
-     * streaming runtime recognises the prelude-framed protocol (see that constant's docs).
-     *
-     * The managed Java runtime's streaming `OutputStream` is AWS's `HttpResponseStream`, which
-     * exposes `setContentType(String)`. We invoke it reflectively so the shared writer needs no
-     * compile-time dependency on the runtime interface client and so the call simply does nothing
-     * when the method is absent — the API Gateway path and plain `OutputStream`s in tests are
-     * unaffected. Must be called before any byte is written, since the content type cannot change
-     * once the response stream has started.
-     */
-    private fun tagAsPreludeStream(output: OutputStream) {
-        runCatching {
-            val setContentType = output.javaClass.methods.firstOrNull { method ->
-                method.name == "setContentType" &&
-                    method.parameterCount == 1 &&
-                    method.parameterTypes[0] == String::class.java
-            }
-            setContentType?.invoke(output, METADATA_PRELUDE_CONTENT_TYPE)
-        }
     }
 }
