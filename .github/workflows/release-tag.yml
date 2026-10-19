@@ -27,7 +27,7 @@ jobs:
     steps:
       # fetch-depth: 0 so all tags and full history are present; without it
       # `git tag --list` and `latest..HEAD` are unreliable.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -67,7 +67,7 @@ jobs:
           fi
 
       # fetch-depth: 0 so all tags/history are present for the guard.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
@@ -148,7 +148,7 @@ jobs:
     steps:
       # fetch-depth: 0 for full history; token so the branch push is authenticated with
       # RELEASE_PAT, consistent with the tag job.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
