@@ -14,6 +14,8 @@ A JVM library that implements the **AWS Lambda / API Gateway HTTP response strea
 
 AWS provides Node.js helpers (`HttpResponseStream.from()`) that hide the wire format. On the JVM there is no equivalent — you write the protocol by hand or use this library.
 
+For the background and a walkthrough of the library, read the article [AWS Lambda Response Streaming for Kotlin and Java](https://medium.com/aws-in-plain-english/aws-lambda-response-streaming-for-kotlin-and-java-646d8c51f7a0) on Medium.
+
 ## What the library does
 
 When a Lambda is configured for response streaming, API Gateway expects a specific binary format on the output stream:

@@ -1,7 +1,7 @@
 # Development Log
 
 A running log of hiccups, bugs, gotchas, and fixes encountered while building the
-S3 file-streaming endpoint. Each entry feeds the final guide in `docs/article.md`.
+S3 file-streaming endpoint.
 
 > **No runtime secrets.** This log never contains credentials, access tokens,
 > authorization header values, or resource identifiers used as secrets. Where a
