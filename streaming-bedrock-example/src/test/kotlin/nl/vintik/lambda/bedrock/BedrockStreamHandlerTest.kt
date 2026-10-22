@@ -83,6 +83,48 @@ class BedrockStreamHandlerTest {
     }
 
     @Test
+    fun `Given the source fails before any delta When handled Then a 502 error is written and no 200 metadata`() {
+        // Given — a source that throws before emitting any delta.
+        val handler = BedrockStreamHandler(
+            requestResolver = { PromptResolver() },
+            source = { TokenStreamSource { _, _ -> error("bedrock unavailable") } },
+        )
+        val out = RecordingOutputStream()
+
+        // When
+        handler.handleRequest(ByteArrayInputStream("{}".toByteArray()), out, context)
+
+        // Then — a 502 error JSON body is written, not a 200 SSE stream.
+        val produced = out.bytes.toByteArray().decodeToString()
+        assertTrue(produced.contains("\"statusCode\":502"), "status 502 must be committed, got: ${produced.take(120)}")
+        assertTrue(produced.contains("\"message\""), "error body must carry a message")
+        assertTrue(!produced.contains("\"statusCode\":200"), "200 metadata must NOT have been committed")
+        assertTrue(!produced.contains("event: end"), "no SSE terminal event on a pre-first-delta failure")
+        assertTrue(out.closed, "output stream must be closed")
+    }
+
+    @Test
+    fun `Given a successful generation with zero deltas When handled Then 200 metadata and a terminal event are still written`() {
+        // Given — a source that completes successfully without emitting any delta.
+        val handler = BedrockStreamHandler(
+            requestResolver = { PromptResolver() },
+            source = { TokenStreamSource { _, _ -> /* no deltas */ } },
+        )
+        val out = RecordingOutputStream()
+
+        // When
+        handler.handleRequest(ByteArrayInputStream("{}".toByteArray()), out, context)
+
+        // Then — 200 committed and the terminal [DONE] event present.
+        val produced = out.bytes.toByteArray()
+        assertTrue(indexOfDelimiter(produced) >= 0, "200 metadata delimiter must be present")
+        val text = produced.decodeToString()
+        assertTrue(text.contains("\"statusCode\":200"), "200 metadata must be committed for a successful empty generation")
+        assertTrue(text.contains("event: end\ndata: [DONE]\n\n"), "terminal [DONE] event must be present")
+        assertTrue(out.closed, "output stream must be closed")
+    }
+
+    @Test
     fun `Given tiered padding When handled Then head events carry larger padding than tail events`() {
         // Given — 5 deltas, head pad 2000 for first 2, tail pad 100.
         val deltas = List(5) { "tok$it" }

@@ -101,9 +101,13 @@ because a token stream has no up-front size to `head`. Instead it defines its ow
   that emits text deltas as they are generated. There is no `head`/size step. `BedrockSource` implements it
   over Bedrock `InvokeModelWithResponseStream`.
 - `BedrockStreamHandler` — a module-local orchestrator (not the shared S3 `StreamHandler`). It resolves the
-  request, then writes metadata exactly once via `streaming-core`'s `ResponseWriter` with
-  `Content-Type: text/event-stream` and `Transfer-Encoding: chunked` (no `Content-Length`, since the length
-  is unknown), committing the status. It then relays each delta through `PaddedSseWriter`.
+  request, then drives `BedrockSource.stream` but **defers** the 200 metadata until the first delta arrives:
+  only once the model has actually started producing output does it write metadata exactly once via
+  `streaming-core`'s `ResponseWriter` (`Content-Type: text/event-stream`, `Transfer-Encoding: chunked`, no
+  `Content-Length`) and begin relaying deltas through `PaddedSseWriter`. If the source fails before the
+  first delta, the status is not yet committed, so it writes an HTTP 502 error response instead of a 200.
+  A successful generation with zero deltas still returns 200. Once the first delta is written the status is
+  committed and a later failure can only truncate the body.
 - `PaddedSseWriter` — writes each delta as an SSE `data:` event plus tiered SSE-comment padding, flushing
   after each event. This is the piece with the byte-level/property tests.
 
