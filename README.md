@@ -1,5 +1,9 @@
 # aws-lambda-streaming-core
 
+<p align="center">
+  <img src="docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from the deployed Kotlin S3 example" width="760">
+</p>
+
 [![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/releases/latest)
 [![Maven Central](https://img.shields.io/maven-central/v/nl.vintik/aws-lambda-streaming-core)](https://central.sonatype.com/artifact/nl.vintik/aws-lambda-streaming-core)
 [![Build Status](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml/badge.svg?branch=main)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml)
@@ -157,8 +161,17 @@ The standard lambda response streaming limitations still apply; additionally, th
 |--------|----------|-------------|
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
+| [`streaming-bedrock-example`](streaming-bedrock-example/) | Kotlin | Streams Amazon Bedrock (Nova Lite) tokens progressively, with the SSE-comment padding workaround for Lambda's response-streaming buffer |
 
-Both are complete Lambda deployments with SAM templates, SnapStart + CRaC priming, property-based tests, and Floci integration tests. They implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream body through the library's bounded buffer. Each example deploys a single Lambda behind an **API Gateway** REST endpoint (response streaming via `ResponseTransferMode: RESPONSE_STREAM`). A Lambda Function URL is intentionally not included — see [Limitations](#limitations-aws-lambda-response-streaming) for why the managed JVM runtime cannot serve one.
+Each example is a complete Lambda deployment with a SAM template, SnapStart + CRaC priming, and tests. The two S3 examples implement the `resolveSource` pattern shown above: parse → validate → head (confirm existence + get size) → stream the body through the library's bounded buffer. Every example deploys a single Lambda behind an **API Gateway** REST endpoint (response streaming via `ResponseTransferMode: RESPONSE_STREAM`). A Lambda Function URL is intentionally not included — see [Limitations](#limitations-aws-lambda-response-streaming) for why the managed JVM runtime cannot serve one.
+
+### Streaming small chunks (Bedrock tokens): the runtime buffer
+
+The S3 examples stream progressively with no tricks because each write is large (~1 MB). An LLM token relay writes only a few bytes per token, and here you hit a property of the **Lambda response-streaming runtime**: it holds small writes in an internal buffer and only forwards them when the buffer fills (**~100 KB**) or the stream ends. There is no `flush()` that overrides it, and it is not specific to the JVM, this library, or API Gateway. A naive token relay therefore arrives as a single terminal burst.
+
+The [`streaming-bedrock-example`](streaming-bedrock-example/) shows the workaround: pad each Server-Sent Event past the buffer threshold with an SSE comment line (`:` … — silently ignored by clients), tiered as ~100 KB on the first few events then ~10 KB after, so tokens are delivered as they are generated. The trade-off is bandwidth (the padding inflates the response); the module README has the measured numbers and cites the AWS Builder Center write-up of the same behaviour.
+
+![Bedrock Nova Lite streaming demo](docs/bedrock-streaming-demo.gif)
 
 ## Contributing and security
 

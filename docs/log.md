@@ -1773,3 +1773,137 @@ That framing is what makes it likely to become the article people find when they
 - **Symptom / trigger:** An earlier note recorded `curl: (92) HTTP/2 stream not closed cleanly: INTERNAL_ERROR` against the streaming endpoint, and the pipeline/scripts force `--http1.1`. This could read as "the endpoint only works over HTTP/1.1".
 - **Investigation:** Re-tested the deployed API Gateway endpoint against the 15 MB object with curl 8.7.1 (nghttp2 1.64.0): over HTTP/2 (both ALPN-negotiated and `--http2-prior-knowledge`) the request returned HTTP 200, full 15,728,640 bytes, byte-identical to the HTTP/1.1 download, with no error 92.
 - **Resolution / status:** **Clarified.** HTTP/2 is not categorically broken; the `(92)` failure is specific to certain client/curl builds (e.g. the CI runner's version) and is a stream-termination quirk somewhere along the path, not a fault in the response bytes or the library. `--http1.1` remains a reliable workaround for clients that hit it. The post-deploy script now verifies BOTH HTTP/1.1 and HTTP/2 return a complete, byte-identical body so any regression is caught.
+
+## Bedrock (Nova Lite) token streaming through API Gateway REST — terminal burst, not progressive
+
+- **Symptom / trigger:** Open question — when a Lambda relays Bedrock
+  `InvokeModelWithResponseStream` (Nova Lite) token deltas to its streaming
+  `OutputStream` with a per-token `flush()`, behind API Gateway REST
+  (`RESPONSE_STREAM`), does the client see tokens arrive progressively over time, or
+  in a single terminal burst? Measured with a throwaway stack (`bedrock-stream-exp`,
+  route `POST /exp/bedrock-stream`), warmup + 3 measured runs piped to a per-chunk
+  elapsed-ms reader.
+
+- **Resolution / status:** **Resolved (measured) — terminal burst at the client.**
+  Two measurements were taken:
+  - **Through API Gateway (client view):** all 3 runs received the full ~800-byte
+    body as a single chunk in one 100 ms window; warmup showed
+    `ttfb == total == 5.79s` (first byte and last byte at the same instant). One
+    arrival bucket — a single terminal burst.
+  - **Directly from Bedrock (no API Gateway, boto3 probe):** Nova Lite emitted
+    **71 text deltas spread over ~607 ms across 6 distinct 100 ms buckets** —
+    genuinely progressive, bursty-but-continuous.
+
+  So Bedrock itself streams progressively, but its output at Nova Lite's natural
+  cadence is **low-volume** (~800 bytes total), and the managed Java streaming
+  runtime behind API Gateway REST buffers small, sub-threshold writes and releases
+  them at invocation completion — regardless of the per-token `flush()`. This
+  matches the established runtime fact for this repo: API Gateway forwards flushed
+  bytes based on **write volume + invocation completion**, not on `flush()` while
+  the handler is idle between small writes. The per-token flush does not help when
+  each token is a handful of bytes.
+
+  **Root cause (confirmed by an independent report):** the buffering lives in the
+  **Lambda Response Streaming runtime itself**, below the language layer — NOT in the
+  JVM, NOT in this library, NOT in API Gateway. The AWS Builder article
+  ["The Curious Case of SSE Streaming Agent Responses on AWS Lambda"](https://builder.aws.com/content/39iqpehwjnn2TuNmGnHAnsMcHmP/the-curious-case-of-sse-streaming-agent-responses-on-aws-lambda)
+  documents the same behaviour from a Python/FastAPI + Lambda Web Adapter stack: small
+  chunks are held in an internal buffer and not flushed until the buffer fills
+  (**~100 KB in their testing**) or the stream ends, and there is **no `flush()` API**
+  that overrides it. They confirm it reproduces even with Function URLs (no API Gateway),
+  proving it is the runtime, not the front door. Content was rephrased for compliance.
+
+  Why the S3 example streams but the Bedrock relay bursts: S3 writes ~1 MB per
+  `write()` (via `copy()`), overflowing the ~100 KB runtime buffer repeatedly →
+  progressive. The Bedrock relay writes ~4–32 bytes per token and the whole response is
+  tiny, so the buffer never fills → terminal burst. It is purely **per-flush byte volume
+  vs the ~100 KB threshold**, which is language-agnostic.
+
+  **The fix (measured here, tiered SSE-comment padding):** append an SSE comment line
+  (`: <spaces>\n\n`, which compliant clients and `sed -n 's/^data: //p'` ignore) to each
+  event, large enough to cross the ~100 KB buffer. Tiered per the article: ~100 KB on the
+  first 3 events to break the initial buffer, ~10 KB on the rest to keep it flowing.
+  Measured on THIS Kotlin/JVM + REST API Gateway stack (throwaway `bedrock-stream-exp`):
+
+  | Run | Padding | Generation | Arrival spread | Buckets | Verdict |
+  |---|---|---|---|---|---|
+  | Control | none | fast | 1 ms | 1 | terminal burst |
+  | Padded | 100 KB×3 + 10 KB | fast | 305 ms | 4×100 ms | progressive (brief) |
+  | Padded | 100 KB×3 + 10 KB | long (5000 tok) | 2684 ms | 6×500 ms | **clearly progressive** |
+
+  Two independent factors govern what the client sees: (1) padding past ~100 KB defeats
+  the buffer; (2) the generation must take long enough in wall-clock for the trickle to
+  be visible (Nova Lite is fast, so a short answer still lands in <1 s even when padded).
+  Cost of the workaround: a ~15 KB essay became ~5 MB on the wire (~500× inflation) —
+  acceptable for responsiveness, wasteful for bandwidth. **Verdict: the workaround is
+  real and reproducible, so a `streaming-bedrock-example` module IS warranted, provided it
+  documents the padding trade-off honestly and cites the runtime-buffer cause.**
+
+  No secrets recorded.
+
+## Bedrock streaming: the padding workaround works — `streaming-bedrock-example` shipped
+
+- **Symptom / trigger:** Follow-up to the terminal-burst finding above. Question: can the
+  ~100 KB Lambda-runtime buffer be defeated so Bedrock token streaming arrives
+  progressively through API Gateway REST on this Kotlin/JVM stack?
+
+- **Resolution / status:** **Resolved — tiered SSE-comment padding works, measured and
+  shipped as a production example.** Each model delta is written as an SSE `data:` event
+  followed by an SSE comment line (`: <spaces>`, ignored by clients) sized to cross the
+  buffer: ~100 KB on the first 3 events, ~10 KB on every event afterwards. Measured on the
+  deployed `bedrock-streaming-endpoint` stack (eu-west-1) via the opt-in
+  `scripts/bedrock-streaming-test.sh`:
+  - No padding: single terminal burst (1 time bucket).
+  - Tiered padding: TTFB ~0 ms, tokens across **9 distinct 500 ms buckets** over ~4.4 s,
+    `[DONE]` sentinel received — progressive.
+
+  The throwaway POC was promoted to `streaming-bedrock-example`, mirroring
+  `streaming-s3-example`'s structure: `PromptResolver` (RequestResolver) → `BedrockStreamHandler`
+  (StreamHandler) → `BedrockSource` (a `TokenStreamSource`, the token-stream analogue of
+  `StreamSource`) + `PaddedSseWriter` (the buffer workaround, with a property test) + CRaC
+  `Priming`. Kover 83% (gate 80%). SAM template under `deployment/aws/sam-bedrock/` with the
+  full Lambda standards (RESPONSE_STREAM, SnapStart, priming, arm64, java25, tiered compilation),
+  scoped `bedrock:InvokeModelWithResponseStream` IAM, API-key auth. The post-deploy test is
+  opt-in behind `BEDROCK_TEST_ENABLED=true` to guard the Bedrock cost.
+
+  **Trade-off recorded for the article:** padding inflates the response (~15 KB answer →
+  several MB on the wire). Worth it for time-to-first-token in a chat UX; wasteful for bulk
+  output. The client strips the padding with a plain `sed -n 's/^data: //p' | awk '{printf...}'`
+  pipeline — no custom tooling.
+
+---
+
+## Recording streaming demos: `asciinema rec` v3 coalesced the pipe timing; render from the real stream
+
+- **Symptom / trigger:** Recording the Bedrock demo GIF with
+  `asciinema rec --command '<curl | sed | awk>'` produced a cast where the whole response
+  appeared in one burst at the end, even though the identical pipeline measured smooth,
+  progressive arrival when piped directly (ttf ~0, spread 8–23 s). A `sleep`-paced control
+  command recorded correct inter-event timing, so the tool works in general — but under the
+  long single pipeline the PTY capture coalesced output timing. (Also note: asciicast **v3**
+  timestamps are per-event deltas, not absolute — summing them wrong looks like "all at t=0".)
+
+- **Resolution / status:** **Resolved — record the real stream's true arrival times into an
+  asciicast directly.** A tiny recorder reads the live `curl` SSE stream, applies the exact same
+  client filter the on-screen command shows (`data:` lines, strip prefix, drop `:` padding),
+  and stamps each token at its real wall-clock arrival into an asciicast-v2 file, then `agg`
+  renders it (`--speed`, `--idle-time-limit` to keep the GIF watchable). The bytes and timings
+  are exactly what the client received — faithful, not synthesized. Gotchas for `agg`: it rejects
+  an asciicast-v2 header carrying an empty `"theme": {}` (omit it); use `--idle-time-limit` to
+  collapse long inter-token gaps. Secret hygiene unchanged: `$URL`/`$KEY` exported off-camera,
+  `.cast` grepped for zero occurrences of the real key value and execute-api host before render.
+
+---
+
+## SAM: a prebuilt-jar `CodeUri` is deployed directly, not via `sam build`
+
+- **Symptom / trigger:** `sam build` against a template whose `CodeUri` points straight at a
+  prebuilt fat jar failed with `Unable to find a supported build workflow for runtime 'java25'`
+  — SAM looked for a Gradle/Maven manifest next to the jar.
+
+- **Resolution / status:** **Resolved (convention).** When `CodeUri` is the already-built shadow
+  jar (as in all example stacks here), skip `sam build` and run `sam deploy` directly; SAM
+  packages the referenced jar as-is. Build the jar first with
+  `./gradlew :<module>:shadowJar` (or the module's `build.sh`), then deploy. Confirm the
+  deployed Lambda `CodeSha256` matches the local jar before trusting results, since SnapStart
+  publishes a new version on each deploy.

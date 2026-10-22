@@ -28,6 +28,16 @@ on:
         type: string
         default: 'streaming-test-12mb.bin'
         description: 'S3 object key the streaming test seeds and streams'
+      bedrock-test-enabled:
+        required: false
+        type: string
+        default: 'false'
+        description: 'Set "true" to run the Bedrock streaming test, which invokes paid Amazon Bedrock. Ignored by the S3 tests.'
+      max-tokens:
+        required: false
+        type: string
+        default: '2000'
+        description: 'Bedrock generation length (maxTokens) for the Bedrock streaming test'
     secrets:
       AWS_ACCOUNT_ID:
         required: true
@@ -55,4 +65,8 @@ jobs:
           AWS_REGION: ${{ inputs.aws-region }}
           TEST_OBJECT_KEY: ${{ inputs.test-object-key || 'streaming-test-12mb.bin' }}
           TEST_SCRIPT: ${{ inputs.test-script || 'scripts/pipeline-streaming-test.sh' }}
+          # Bedrock test cost guard: the Bedrock script is a no-op unless this is "true".
+          # Ignored by the S3 scripts.
+          BEDROCK_TEST_ENABLED: ${{ inputs.bedrock-test-enabled || 'false' }}
+          MAX_TOKENS: ${{ inputs.max-tokens || '2000' }}
         run: ./"$TEST_SCRIPT"

@@ -1,0 +1,26 @@
+# AWS SAM CLI configuration for the Bedrock streaming endpoint.
+# Run from deployment/aws/sam-bedrock/ (or pass --config-file to point here).
+version = 0.1
+
+[default.global.parameters]
+stack_name = "bedrock-streaming-endpoint"
+
+[default.build.parameters]
+template_file = "template.yaml"
+cached = true
+parallel = true
+
+[default.validate.parameters]
+template_file = "template.yaml"
+lint = false
+
+[default.deploy.parameters]
+stack_name = "bedrock-streaming-endpoint"
+capabilities = "CAPABILITY_IAM"
+region = "eu-west-1"
+confirm_changeset = true
+resolve_s3 = true
+disable_rollback = false
+
+[default.sync.parameters]
+watch = false
