@@ -84,7 +84,7 @@ mavenPublishing {
     pom {
         name = "AWS Lambda Streaming Core"
         description = "JVM implementation of the AWS Lambda / API Gateway streaming response protocol (metadata JSON + 8-byte delimiter + body). ResponseWriter encodes the wire format; copy() streams large payloads with bounded memory. Depends only on kotlinx-serialization — no AWS artifacts, no logging framework."
-        url = "https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime"
+        url = "https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm"
         licenses {
             // MIT, matching the repository LICENSE file — the authoritative source for the
             // licence value. The identifier here, LICENSE's first line and the README licence
@@ -102,9 +102,9 @@ mavenPublishing {
             }
         }
         scm {
-            url = "https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime"
-            connection = "scm:git:git://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime.git"
-            developerConnection = "scm:git:ssh://git@github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime.git"
+            url = "https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm"
+            connection = "scm:git:git://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm.git"
+            developerConnection = "scm:git:ssh://git@github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm.git"
         }
     }
 }
