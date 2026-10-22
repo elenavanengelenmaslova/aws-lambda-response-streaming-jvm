@@ -12,6 +12,7 @@ Closes #
 - [ ] `streaming-core`
 - [ ] `streaming-s3-example`
 - [ ] `streaming-s3-example-java`
+- [ ] `streaming-bedrock-example`
 - [ ] Build, deployment or scripts (not a module)
 
 ## Checks run locally
