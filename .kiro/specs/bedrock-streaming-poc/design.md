@@ -84,14 +84,31 @@ Either way the deployed example is untouched, and the throwaway is deleted after
 ```mermaid
 flowchart LR
     event["API GW event (prompt)"] --> resolver["PromptResolver : RequestResolver<PromptRequest>"]
-    resolver --> handler["StreamHandler<PromptRequest> (shared, unchanged)"]
-    handler --> source["BedrockSource : StreamSource<PromptRequest>"]
-    source -->|head: unknown size -> chunked| handler
-    source -->|streamBody: relay deltas, flush per chunk| out["Lambda OutputStream"]
+    resolver --> handler["BedrockStreamHandler (module-local orchestrator)"]
+    handler -->|writeMetadata: Transfer-Encoding chunked, no Content-Length| rw["ResponseWriter (streaming-core, reused)"]
+    handler --> source["BedrockSource : TokenStreamSource<PromptRequest>"]
+    source -->|stream: emit text deltas| handler
+    handler --> sse["PaddedSseWriter: SSE event + tiered padding, flush per event"]
+    sse --> out["Lambda OutputStream"]
     priming["Priming (CRaC)"] -.warms.-> source
 ```
 
-`BedrockSource` adapts the `StreamSource` contract to a token stream: `head` returns an "exists, unknown size" result so `StreamHandler` writes metadata with `Transfer-Encoding: chunked` (rather than a `Content-Length`), and `streamBody` relays Bedrock deltas through the same per-chunk-flush path the S3 example uses. This lets the existing `StreamHandler` orchestration and `ResponseWriter` be reused without modification.
+The Bedrock module mirrors the *shape* of `streaming-s3-example` (resolver → handler → source →
+priming) but does NOT reuse the S3 example's `StreamHandler`/`StreamSource`/`HeadResult` types,
+because a token stream has no up-front size to `head`. Instead it defines its own small contracts:
+
+- `TokenStreamSource<R>` — the token-stream analogue of `StreamSource`: a single `stream(request, onDelta)`
+  that emits text deltas as they are generated. There is no `head`/size step. `BedrockSource` implements it
+  over Bedrock `InvokeModelWithResponseStream`.
+- `BedrockStreamHandler` — a module-local orchestrator (not the shared S3 `StreamHandler`). It resolves the
+  request, then writes metadata exactly once via `streaming-core`'s `ResponseWriter` with
+  `Content-Type: text/event-stream` and `Transfer-Encoding: chunked` (no `Content-Length`, since the length
+  is unknown), committing the status. It then relays each delta through `PaddedSseWriter`.
+- `PaddedSseWriter` — writes each delta as an SSE `data:` event plus tiered SSE-comment padding, flushing
+  after each event. This is the piece with the byte-level/property tests.
+
+Only `streaming-core` (`ResponseWriter`, `ResponseMetadata`) is reused unchanged; the orchestration and
+source contracts are new in this module rather than borrowed from the S3 example.
 
 ## Components and Interfaces
 
@@ -102,14 +119,21 @@ flowchart LR
 - Python per-chunk reader + measurement scratch under `/tmp`.
 
 ### Conditional, production-grade (only on progressive verdict + greenlight)
-- `streaming-bedrock-example` module: `PromptRequest`, `PromptResolver`, `BedrockSource`, `BedrockStreamingHandler`, `Priming`.
+- `streaming-bedrock-example` module: `PromptRequest`, `RequestResolver`/`RequestResult` (module-local),
+  `PromptResolver`, `TokenStreamSource`, `BedrockSource`, `PaddedSseWriter`, `BedrockStreamHandler`
+  (orchestrator), `BedrockStreamingHandler` (no-arg Lambda entrypoint), `Priming`.
 - `aws-sdk-kotlin-bedrockruntime` added to `gradle/libs.versions.toml`.
-- `deployment/aws/sam-bedrock/` template + `build.sh`/`deploy.sh` mirroring the S3 example.
-- `scripts/` opt-in, cost-guarded progressive-arrival post-deploy test.
+- `deployment/aws/sam-bedrock/` template + `build.sh`/`deploy.sh` mirroring the S3 example (deploy packages the prebuilt jar; no `sam build`).
+- `scripts/bedrock-streaming-test.sh` — opt-in, cost-guarded progressive-arrival post-deploy test.
 
 ### Reused unchanged
-- `streaming-core`: `ResponseWriter`, `ResponseMetadata`, `copy()`, delimiter constants.
-- `streaming-s3-example`: `StreamHandler`, `RequestResolver`, `StreamSource`, `Priming` as the structural template.
+- `streaming-core`: `ResponseWriter`, `ResponseMetadata`, delimiter constants.
+
+### Mirrored in shape, re-implemented (not shared code)
+- `streaming-s3-example`'s `RequestResolver`/`StreamHandler`/`StreamSource`/`Priming` structure is used
+  as a *template*. The Bedrock module defines its own `RequestResolver`, `TokenStreamSource`, and
+  `BedrockStreamHandler` rather than importing the S3 example's types, because a token stream has no
+  up-front size (no `head`/`HeadResult`/`Content-Length`).
 
 ## Error Handling
 

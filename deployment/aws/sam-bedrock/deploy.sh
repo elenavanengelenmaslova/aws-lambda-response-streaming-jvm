@@ -4,8 +4,12 @@
 #
 # Steps:
 #   1. Build the shadow fat jar (delegates to build.sh).
-#   2. sam build  - assemble the deployment artifact from template.yaml.
-#   3. sam deploy - create/update the CloudFormation stack.
+#   2. sam deploy - package the prebuilt jar and create/update the CloudFormation stack.
+#
+# The template's CodeUri points straight at the prebuilt shadow fat jar, so `sam build`
+# is intentionally NOT run: it looks for a Gradle/Maven manifest next to the jar and fails
+# with "Unable to find a supported build workflow for runtime 'java25'". `sam deploy`
+# packages the referenced jar directly. See docs/log.md.
 #
 # Configuration (stack name, region, capabilities) comes from samconfig.toml in this
 # directory. Extra args are forwarded to `sam deploy`, e.g.:
@@ -20,8 +24,5 @@ echo "==> Building the Lambda fat jar"
 
 cd "${SCRIPT_DIR}"
 
-echo "==> sam build"
-sam build --template-file template.yaml
-
-echo "==> sam deploy"
+echo "==> sam deploy (packages the prebuilt jar; no sam build)"
 sam deploy --config-file samconfig.toml "$@"

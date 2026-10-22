@@ -20,7 +20,7 @@ This is a property of the Lambda streaming runtime itself — not the JVM, not t
 
 ### The workaround: tiered SSE-comment padding
 
-SSE comment lines start with `:` and are silently ignored by compliant clients. `PaddedSseWriter` appends a comment-line padding block to each event, large enough to cross the ~100 KB buffer so the runtime flushes immediately:
+SSE comment lines start with `:` and are silently ignored by compliant clients. `PaddedSseWriter` appends a comment-line padding block to each event. The first events carry enough padding to cross the ~100 KB buffer and break it open; later events carry much less (see the tiers below), so they are not individually large enough to force a flush on their own — instead they ride the stream that the head padding has already got flowing:
 
 ```
 data: <token text>\n\n
