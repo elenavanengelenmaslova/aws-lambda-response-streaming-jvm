@@ -1,10 +1,5 @@
 # aws-lambda-streaming-core
 
-<p align="center">
-  <img src="docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from the deployed Kotlin S3 example" width="760">
-</p>
-
-[![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/releases/latest)
 [![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-response-streaming-jvm)](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/releases/latest)
 [![Maven Central](https://img.shields.io/maven-central/v/nl.vintik/aws-lambda-streaming-core)](https://central.sonatype.com/artifact/nl.vintik/aws-lambda-streaming-core)
 [![Build Status](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/actions/workflows/ci-main-build.yml/badge.svg?branch=main)](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/actions/workflows/ci-main-build.yml)

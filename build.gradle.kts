@@ -106,26 +106,29 @@ subprojects {
 // run, otherwise Codecov has nothing to upload.
 //
 // The Kotlin modules report through Kover, `:streaming-s3-example-java` through JaCoCo (Kover does
-// not instrument a pure-Java module — see docs/log.md), so the third path has a different shape.
-// All three are Gradle defaults and identical run to run, which is what lets the Codecov step in
+// not instrument a pure-Java module — see docs/log.md), so that one path has a different shape.
+// All are Gradle defaults and identical run to run, which is what lets the Codecov step in
 // workflow-build.yml name them as a fixed list.
 //
 // This task changes no coverage gate: 90% on :streaming-core, 80% on :streaming-s3-example, 80% on
-// :streaming-s3-example-java through its existing koverVerify alias.
+// :streaming-s3-example-java, and 80% on :streaming-bedrock-example through their existing
+// koverVerify aliases.
 val coverageReports = mapOf(
     ":streaming-core" to "streaming-core/build/reports/kover/report.xml",
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
+    ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
 )
 
 tasks.register("verifyCoverageReports") {
     group = "verification"
-    description = "Produces the Kover/JaCoCo XML coverage reports of all three modules and asserts each one exists, parses, and reports covered lines."
+    description = "Produces the Kover/JaCoCo XML coverage reports of all modules and asserts each one exists, parses, and reports covered lines."
 
     dependsOn(
         ":streaming-core:koverXmlReport",
         ":streaming-s3-example:koverXmlReport",
         ":streaming-s3-example-java:jacocoTestReport",
+        ":streaming-bedrock-example:koverXmlReport",
     )
 
     // Captured at configuration time so the task action touches no Project state (configuration

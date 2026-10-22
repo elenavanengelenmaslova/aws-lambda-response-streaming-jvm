@@ -53,7 +53,8 @@ jobs:
           missing=0
           for f in streaming-core/build/reports/kover/report.xml \
                    streaming-s3-example/build/reports/kover/report.xml \
-                   streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml; do
+                   streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml \
+                   streaming-bedrock-example/build/reports/kover/report.xml; do
             [ -s "$f" ] || { echo "::error::coverage report missing or empty: $f"; missing=1; }
           done
           if [ -z "${CODECOV_TOKEN:-}" ]; then
@@ -76,7 +77,8 @@ jobs:
           files: >-
             streaming-core/build/reports/kover/report.xml,
             streaming-s3-example/build/reports/kover/report.xml,
-            streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml
+            streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml,
+            streaming-bedrock-example/build/reports/kover/report.xml
           fail_ci_if_error: true
 
       - name: Upload coverage reports
