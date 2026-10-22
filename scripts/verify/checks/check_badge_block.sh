@@ -50,11 +50,11 @@ check_badge_block() {
     while IFS= read -r line; do
         expected+=("$line")
     done <<'EXPECTED_BLOCK'
-[![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/elenavanengelenmaslova/aws-lambda-response-streaming-jvm)](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/releases/latest)
 [![Maven Central](https://img.shields.io/maven-central/v/nl.vintik/aws-lambda-streaming-core)](https://central.sonatype.com/artifact/nl.vintik/aws-lambda-streaming-core)
-[![Build Status](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml/badge.svg?branch=main)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/ci-main-build.yml)
-[![codecov](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/graph/badge.svg)](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime)
-[![CodeQL](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/actions/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime/security/code-scanning)
+[![Build Status](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/actions/workflows/ci-main-build.yml/badge.svg?branch=main)](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/actions/workflows/ci-main-build.yml)
+[![codecov](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/graph/badge.svg)](https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-response-streaming-jvm)
+[![CodeQL](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/actions/workflows/codeql.yml/badge.svg?branch=main&event=push)](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/security/code-scanning)
 
 [![Kotlin](https://img.shields.io/badge/kotlin-2.3.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![JVM](https://img.shields.io/badge/JVM-21-orange.svg)](https://openjdk.org)

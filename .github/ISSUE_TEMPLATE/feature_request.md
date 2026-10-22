@@ -34,4 +34,4 @@ This repository is a minimal, runnable example of API Gateway response streaming
 
 ## Additional context
 
-Links to AWS documentation, the relevant part of `docs/article.md`, or a prior issue.
+Links to AWS documentation or a prior issue.

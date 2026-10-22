@@ -40,6 +40,8 @@ aws-lambda-events      = { module = "com.amazonaws:aws-lambda-java-events", vers
 aws-sdk-kotlin-s3         = { module = "aws.sdk.kotlin:s3", version.ref = "awsSdkKotlin" }
 aws-sdk-kotlin-lambda     = { module = "aws.sdk.kotlin:lambda", version.ref = "awsSdkKotlin" }
 aws-sdk-kotlin-apigateway = { module = "aws.sdk.kotlin:apigateway", version.ref = "awsSdkKotlin" }
+# Bedrock Runtime — used by streaming-bedrock-example for InvokeModelWithResponseStream (Nova Lite).
+aws-sdk-kotlin-bedrockruntime = { module = "aws.sdk.kotlin:bedrockruntime", version.ref = "awsSdkKotlin" }
 # The Java example uses the AWS SDK for Java v2 (not the Kotlin SDK), Jackson for request parsing,
 # and Mockito for mocking — none of which the Kotlin modules need.
 aws-sdk-java-bom       = { module = "software.amazon.awssdk:bom", version.ref = "awsSdkJava" }

@@ -2,6 +2,12 @@
 
 A complete AWS Lambda deployment that streams files from S3 using the [`aws-lambda-streaming-core`](../README.md) library.
 
+<p align="center">
+  <img src="../docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from this deployed Kotlin S3 example" width="760">
+</p>
+
+<p align="center"><em>This example, deployed behind API Gateway, streaming a 20 MB object — the first byte arrives early and the progress bar fills steadily, proving progressive (non-buffered) delivery.</em></p>
+
 ## What It Does
 
 1. Accepts a GET request naming a file (from the API Gateway `/{proxy+}` path parameter)
