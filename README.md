@@ -17,6 +17,8 @@
 
 A JVM library that implements the **AWS Lambda / API Gateway HTTP response streaming protocol** for Kotlin and Java.
 
+![Solution design: the client sends an HTTP request to API Gateway, which invokes the Lambda; the Lambda requests data from a source such as S3 or Bedrock and streams it back through API Gateway to the client](docs/SolutionDesign.png)
+
 AWS provides Node.js helpers (`HttpResponseStream.from()`) that hide the wire format. On the JVM there is no equivalent — you write the protocol by hand or use this library.
 
 For the background and a walkthrough of the library, read the article [AWS Lambda Response Streaming for Kotlin and Java](https://medium.com/aws-in-plain-english/aws-lambda-response-streaming-for-kotlin-and-java-646d8c51f7a0) on Medium.
