@@ -43,7 +43,7 @@ Lambda Function URLs are not supported on the managed JVM runtime — see [Limit
 ## Dependency
 
 ```kotlin
-implementation("nl.vintik:aws-lambda-streaming-core:2.2.0")
+implementation("nl.vintik:aws-lambda-streaming-core:2.3.0")
 ```
 
 **One dependency:** `kotlinx-serialization-json`, for metadata encoding. No AWS artifacts — this module implements the wire protocol and never touches the Lambda or S3 APIs, so you bring your own `aws-lambda-java-core` for the `RequestStreamHandler` interface. No logging framework either: every failure propagates to your code, which has the request context needed to log it usefully.
