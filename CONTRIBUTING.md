@@ -167,11 +167,11 @@ These thirteen actions cannot be performed by a contributor, an agent, or a work
 
 Status markers: `[ ] open` means not yet done, `[x] done` means confirmed.
 
-### 1. Create a Codecov account covering `elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime`  `[ ] open`
+### 1. Create a Codecov account covering `elenavanengelenmaslova/aws-lambda-response-streaming-jvm`  `[ ] open`
 - **Owner:** repository owner, as the Codecov account holder — sign in to codecov.io with GitHub and add the repository.
 - **Unblocks:** the Codecov badge, and the upload target for the coverage step in `workflow-build.yml`.
 - **If skipped:** the badge renders "unknown" and the upload step has nothing to upload to.
-- **Confirm by:** `https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-streaming-jvm-runtime` loading as a project page rather than a 404.
+- **Confirm by:** `https://codecov.io/gh/elenavanengelenmaslova/aws-lambda-response-streaming-jvm` loading as a project page rather than a 404.
 
 ### 2. Store the Codecov upload token as the repository secret `CODECOV_TOKEN`  `[ ] open`
 - **Owner:** repository owner — copy the upload token from the Codecov project settings into Settings → Secrets and variables → Actions. Requires item 1.

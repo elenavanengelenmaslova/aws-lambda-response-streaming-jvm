@@ -13,6 +13,11 @@ on:
         required: false
         default: ''
         type: string
+      run-bedrock-test:
+        description: 'Run the Bedrock streaming test after deploy (invokes paid Amazon Bedrock)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -38,6 +43,10 @@ jobs:
             stack-name: java-s3-file-streaming-endpoint
             build-task: ':streaming-s3-example-java:build'
             jar-name: streaming-endpoint-java.jar
+          - sam-dir: deployment/aws/sam-bedrock
+            stack-name: bedrock-streaming-endpoint
+            build-task: ':streaming-bedrock-example:build'
+            jar-name: bedrock-streaming-endpoint.jar
     uses: ./.github/workflows/workflow-deploy-aws.yml
     with:
       environment: default
@@ -62,6 +71,9 @@ jobs:
           - stack-name: java-s3-file-streaming-endpoint
             test-script: scripts/pipeline-streaming-test.sh
             test-object-key: streaming-test-12mb-java.bin
+          - stack-name: bedrock-streaming-endpoint
+            test-script: scripts/bedrock-streaming-test.sh
+            test-object-key: ''
     uses: ./.github/workflows/workflow-streaming-test.yml
     with:
       aws-region: ${{ inputs.aws-region }}
@@ -69,5 +81,7 @@ jobs:
       stack-name: ${{ matrix.stack-name }}
       test-script: ${{ matrix.test-script }}
       test-object-key: ${{ matrix.test-object-key }}
+      # Bedrock test is opt-in (paid). Only the bedrock stack honours this; S3 scripts ignore it.
+      bedrock-test-enabled: ${{ matrix.stack-name == 'bedrock-streaming-endpoint' && inputs.run-bedrock-test && 'true' || 'false' }}
     secrets:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

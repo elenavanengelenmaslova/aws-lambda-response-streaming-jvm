@@ -29,6 +29,10 @@ jobs:
             stack-name: java-s3-file-streaming-endpoint
             build-task: ':streaming-s3-example-java:build'
             jar-name: streaming-endpoint-java.jar
+          - sam-dir: deployment/aws/sam-bedrock
+            stack-name: bedrock-streaming-endpoint
+            build-task: ':streaming-bedrock-example:build'
+            jar-name: bedrock-streaming-endpoint.jar
     uses: ./.github/workflows/workflow-deploy-aws.yml
     with:
       environment: default
@@ -53,6 +57,13 @@ jobs:
           - stack-name: java-s3-file-streaming-endpoint
             test-script: scripts/pipeline-streaming-test.sh
             test-object-key: streaming-test-12mb-java.bin
+          # The Bedrock example's test invokes paid Bedrock, so it stays DISABLED on every
+          # feature push (the script exits 0 cleanly when BEDROCK_TEST_ENABLED is not "true").
+          # This proves the deploy + test wiring without incurring model cost on each branch;
+          # run the paid test on demand via "CD - Deploy On Demand" with run-bedrock-test=true.
+          - stack-name: bedrock-streaming-endpoint
+            test-script: scripts/bedrock-streaming-test.sh
+            test-object-key: ''
     uses: ./.github/workflows/workflow-streaming-test.yml
     with:
       aws-region: eu-west-1
@@ -60,5 +71,6 @@ jobs:
       stack-name: ${{ matrix.stack-name }}
       test-script: ${{ matrix.test-script }}
       test-object-key: ${{ matrix.test-object-key }}
+      bedrock-test-enabled: 'false'
     secrets:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
