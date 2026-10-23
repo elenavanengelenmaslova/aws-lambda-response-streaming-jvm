@@ -1943,3 +1943,41 @@ That framing is what makes it likely to become the article people find when they
     the upload step is gated to `push` on `refs/heads/main`, so feature branches never upload;
     (2) `CODECOV_TOKEN` must be set in repo secrets, otherwise the workflow deliberately skips the
     upload and logs a notice. Neither is a code change this branch can make.
+
+## Codecov STILL 0% after aggregation — auto-search re-uploaded the broken per-module reports, and a folded-scalar space dropped the Java report
+
+- **Symptom / trigger:** Even after merging the root-aggregation change to `main` (the aggregate
+  `build/reports/kover/report.xml` is generated and listed in the Codecov `files:`), the dashboard
+  stayed at 0.00%. The sibling mocknest-serverless repo — same multi-module Kotlin, same
+  package-relative report paths, no `fixes:` — works. Reading the actual `codecov-action@v5` step
+  log from the main build (`gh run view --log`) revealed two independent bugs, neither visible
+  locally.
+
+- **Root cause 1 — Codecov auto-search ignored our curated list.** The step ran with
+  `CC_DISABLE_SEARCH: false`, so Codecov searched the workspace and found **6** coverage files —
+  the root aggregate AND all four per-module reports AND `coverage-report-paths.txt` — and uploaded
+  them all, not just the two in `files:`. The per-module Kotlin reports carry package-relative
+  paths (`nl/vintik/.../Foo.kt`) that do not resolve against the repo tree, which is exactly what
+  pins coverage at 0%. mocknest works despite search being on only because it produces a SINGLE
+  report on disk, so search finds just the aggregate; our tree has five reports, so search drags
+  the unresolvable per-module ones back in.
+
+- **Root cause 2 — a `>-` folded scalar inserted a space, dropping the Java report.** The log
+  showed `--file  streaming-s3-example-java/...` (double space) and
+  `not_found_files: [" streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml"]`.
+  The YAML folded scalar joined the two comma-separated paths with a space after the comma, so the
+  second path reached the uploader with a leading space and was not found — Java coverage never
+  uploaded at all.
+
+- **Resolution / status:** **Resolved — disable search and fix the files: formatting.** In
+  `workflow-build.yml`'s `codecov/codecov-action@v5` step:
+  - Added `disable_search: true`. Per Codecov docs this skips auto-discovery of common reports but
+    still honours user-specified files, so ONLY the two curated reports (root aggregate + Java
+    JaCoCo) upload — the unresolvable per-module reports are no longer sent.
+  - Changed `files:` from a `>-` folded scalar to a single-line, comma-separated value with NO
+    space after the comma, so neither path arrives with a leading space.
+  - The four-list consistency (`check_coverage_paths`) still passes; the value stays one line so the
+    check's single-step/one-line assumption holds.
+  - Takes effect on the next `main` push with `CODECOV_TOKEN` set (token confirmed present in the
+    run log). Lesson: when Codecov shows 0% with reports that look correct, read the uploader log —
+    `disable_search` and path-trimming bugs are invisible to a local `koverXmlReport`.
