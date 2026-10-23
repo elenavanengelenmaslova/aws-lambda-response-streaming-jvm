@@ -1907,3 +1907,39 @@ That framing is what makes it likely to become the article people find when they
   `./gradlew :<module>:shadowJar` (or the module's `build.sh`), then deploy. Confirm the
   deployed Lambda `CodeSha256` matches the local jar before trusting results, since SnapStart
   publishes a new version on each deploy.
+
+## Codecov showed 0% overall — per-module reports need a single ROOT-aggregated Kover report
+
+- **Symptom / trigger:** The Codecov dashboard reported 0% coverage for the whole project, not
+  just one module. CI uploaded one coverage XML per module
+  (`streaming-core/build/reports/kover/report.xml`, `streaming-s3-example/.../report.xml`, the
+  Java module's JaCoCo XML, and later `streaming-bedrock-example/.../report.xml`). Each report
+  names classes package-relatively (`<package name="nl/vintik/lambda/streaming">` +
+  `sourcefilename="BoundedBuffer.kt"`) with no module source-root prefix. Codecov could not map
+  those paths to the real files (which live under `<module>/src/main/kotlin/...`), so every line
+  counted as uncovered → 0% overall. `codecov.yml` had no `fixes:` section.
+
+- **Resolution / status:** **Resolved — aggregate the Kotlin modules into one root Kover report
+  and upload that (plus the Java JaCoCo report), mirroring the sibling mocknest-serverless repo
+  whose Codecov works.** The working repo is also multi-module with the same package-relative
+  paths and no `fixes:` — the difference is it uploads a SINGLE root-aggregated Kover report, which
+  Codecov resolves by searching the repo tree for the unique `nl/vintik/.../Foo.kt`. Per-module
+  uploads do not resolve. Changes:
+  - Root `build.gradle.kts`: apply the Kover plugin at the root (was `apply false`) and add
+    `kover(project(":streaming-core"))`, `kover(project(":streaming-s3-example"))`,
+    `kover(project(":streaming-bedrock-example"))` so `./gradlew koverXmlReport` emits an
+    aggregated `build/reports/kover/report.xml` spanning all three Kotlin modules.
+  - The pure-Java `streaming-s3-example-java` reports via JaCoCo and cannot be Kover-aggregated,
+    so it is uploaded as a SECOND Codecov file. The Codecov upload set is therefore exactly two
+    files: the root aggregate + the Java JaCoCo XML.
+  - `verifyCoverageReports` still validates EVERY module's own report (the non-empty guard), but
+    now writes the two-file upload set to `coverage-report-paths.txt`. The four lists that must
+    agree (paths file, workflow `files:`, workflow `id: cov` loop, the script's
+    `COVERAGE_REPORTS_FALLBACK`) were all updated to the two-file set; `check_coverage_paths`
+    passes.
+  - No coverage gate changed: 90% on `:streaming-core` and 80% on each example module stay each
+    module's own `koverVerify`. The root `koverVerify` sets no bound (no-op).
+  - **Two independent preconditions for the dashboard to update:** (1) this must land on `main` —
+    the upload step is gated to `push` on `refs/heads/main`, so feature branches never upload;
+    (2) `CODECOV_TOKEN` must be set in repo secrets, otherwise the workflow deliberately skips the
+    upload and logs a notice. Neither is a code change this branch can make.

@@ -122,6 +122,7 @@ echo "  Subject Prefix: $SUBJECT_PREFIX"
 echo "  Trusted sub patterns:"
 echo "    $SUBJECT_PREFIX:ref:refs/heads/main"
 echo "    $SUBJECT_PREFIX:ref:refs/heads/feature/*"
+echo "    $SUBJECT_PREFIX:ref:refs/heads/dependabot/*"
 echo "    $SUBJECT_PREFIX:environment:*"
 if [ -n "$EXISTING_OIDC" ]; then
   echo "  Reusing OIDC Provider: $EXISTING_OIDC"
