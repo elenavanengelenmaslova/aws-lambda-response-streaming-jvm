@@ -131,6 +131,11 @@ val validationReports = mapOf(
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
+    // The root aggregate is the report actually uploaded to Codecov, so it must pass the same
+    // exists/parses/covered-lines checks as the modules — otherwise a silently empty or broken
+    // aggregate would upload and reproduce the 0% dashboard this change set out to fix. The four
+    // module checks above stay separate so a per-module regression is still named individually.
+    ":root (aggregate)" to "build/reports/kover/report.xml",
 )
 
 val uploadReports = listOf(
@@ -140,7 +145,7 @@ val uploadReports = listOf(
 
 tasks.register("verifyCoverageReports") {
     group = "verification"
-    description = "Produces the per-module and root-aggregated coverage reports, asserts each module report is usable, and writes the Codecov upload list."
+    description = "Produces the per-module and root-aggregated coverage reports, asserts each (modules plus the uploaded aggregate) is usable, and writes the Codecov upload list."
 
     dependsOn(
         ":koverXmlReport", // root aggregate (build/reports/kover/report.xml)
