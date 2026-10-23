@@ -17,7 +17,14 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.shadow) apply false
-    alias(libs.plugins.kover) apply false
+    // Kover is applied at the root (not `apply false`) so the root project can aggregate the
+    // Kotlin modules' coverage into a single report/`build/reports/kover/report.xml`. Codecov
+    // resolves package-relative Kotlin paths (e.g. nl/vintik/.../Foo.kt) against the repo tree
+    // when it receives one aggregated report; separate per-module reports left the dashboard at
+    // 0%. The per-module `koverVerify` gates (90%/80%) are unchanged — this only adds a root
+    // aggregate on top. The pure-Java module reports via JaCoCo (Kover cannot instrument it) and
+    // is uploaded to Codecov as a second file. See docs/log.md.
+    alias(libs.plugins.kover)
 }
 
 // ---- resolvedCoordinates: dependency-resolution baseline --------------------------------------
@@ -105,26 +112,38 @@ subprojects {
 // `--continue` matters: a failing coverage gate must not abort the build before the report tasks
 // run, otherwise Codecov has nothing to upload.
 //
-// The Kotlin modules report through Kover, `:streaming-s3-example-java` through JaCoCo (Kover does
-// not instrument a pure-Java module — see docs/log.md), so that one path has a different shape.
-// All are Gradle defaults and identical run to run, which is what lets the Codecov step in
-// workflow-build.yml name them as a fixed list.
+// Two concerns, kept separate:
 //
-// This task changes no coverage gate: 90% on :streaming-core, 80% on :streaming-s3-example, 80% on
-// :streaming-s3-example-java, and 80% on :streaming-bedrock-example through their existing
-// koverVerify aliases.
-val coverageReports = mapOf(
+//  - validationReports: EVERY module's own report. The task asserts each one exists, parses, and
+//    has covered lines, so an emptied/broken module report fails the build. The three Kotlin
+//    modules report through Kover, `:streaming-s3-example-java` through JaCoCo (Kover does not
+//    instrument a pure-Java module — see docs/log.md).
+//  - uploadReports: what Codecov actually ingests — the ROOT AGGREGATED Kover report (the three
+//    Kotlin modules merged into one, which Codecov can resolve against the repo tree) plus the
+//    Java JaCoCo report. Separate per-module Kotlin uploads left the dashboard at 0%; a single
+//    aggregate is the shape that resolves (mirrors mocknest-serverless). This list is written to
+//    coverage-report-paths.txt and is the authoritative list the three other copies must match.
+//
+// This task changes no coverage gate: 90% on :streaming-core and 80% on each example module stay
+// each module's own koverVerify responsibility.
+val validationReports = mapOf(
     ":streaming-core" to "streaming-core/build/reports/kover/report.xml",
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
 )
 
+val uploadReports = listOf(
+    "build/reports/kover/report.xml",
+    "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
+)
+
 tasks.register("verifyCoverageReports") {
     group = "verification"
-    description = "Produces the Kover/JaCoCo XML coverage reports of all modules and asserts each one exists, parses, and reports covered lines."
+    description = "Produces the per-module and root-aggregated coverage reports, asserts each module report is usable, and writes the Codecov upload list."
 
     dependsOn(
+        ":koverXmlReport", // root aggregate (build/reports/kover/report.xml)
         ":streaming-core:koverXmlReport",
         ":streaming-s3-example:koverXmlReport",
         ":streaming-s3-example-java:jacocoTestReport",
@@ -133,8 +152,8 @@ tasks.register("verifyCoverageReports") {
 
     // Captured at configuration time so the task action touches no Project state (configuration
     // cache is enabled repo-wide).
-    val reports = coverageReports.mapValues { (_, path) -> rootDir.resolve(path) }
-    val relativePaths = coverageReports.values.toList()
+    val reports = validationReports.mapValues { (_, path) -> rootDir.resolve(path) }
+    val relativePaths = uploadReports
     val pathsFile = layout.buildDirectory.file("reports/coverage-report-paths.txt")
     outputs.file(pathsFile)
     // Never skip: an up-to-date skip would let a deleted or emptied report pass unnoticed, and the
@@ -204,6 +223,30 @@ tasks.register("verifyCoverageReports") {
 
         if (problems.isNotEmpty()) {
             error(problems.joinToString(prefix = "Unusable coverage report(s):\n  - ", separator = "\n  - "))
+        }
+    }
+}
+
+// ---- Root Kover aggregation: one merged report for Codecov ------------------------------------
+// Aggregates the three Kotlin modules into a single root `build/reports/kover/report.xml`.
+// `streaming-s3-example-java` is pure Java and reports through JaCoCo (Kover does not instrument a
+// Java module — see docs/log.md), so it is NOT aggregated here; its JaCoCo XML is uploaded to
+// Codecov separately. This root aggregate is a reporting artifact only — the authoritative
+// per-module coverage gates remain each module's own `koverVerify` (90% on :streaming-core, 80% on
+// the example modules), which this does not change.
+dependencies {
+    kover(project(":streaming-core"))
+    kover(project(":streaming-s3-example"))
+    kover(project(":streaming-bedrock-example"))
+}
+
+kover {
+    reports {
+        total {
+            xml {
+                // Always produce the aggregated XML on koverXmlReport runs.
+                onCheck = false
+            }
         }
     }
 }

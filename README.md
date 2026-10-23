@@ -10,6 +10,10 @@
 [![JVM](https://img.shields.io/badge/JVM-21-orange.svg)](https://openjdk.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from the deployed Kotlin S3 example" width="760">
+</p>
+
 A JVM library that implements the **AWS Lambda / API Gateway HTTP response streaming protocol** for Kotlin and Java.
 
 ![Solution design: the client sends an HTTP request to API Gateway, which invokes the Lambda; the Lambda requests data from a source such as S3 or Bedrock and streams it back through API Gateway to the client](docs/SolutionDesign.png)

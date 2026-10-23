@@ -126,15 +126,15 @@ CHECK_REGISTRY=(
 # Where per-check implementations live. One file per check, sourced before dispatch.
 CHECKS_DIR="scripts/verify/checks"
 
-# The coverage reports Requirement 16.5 needs on disk. The authoritative list is
-# written by the root `verifyCoverageReports` task; these are the fallback when it has not
-# run yet, and check_coverage_paths (task 15.6) is what proves the two agree.
+# The coverage reports Codecov ingests: the root-aggregated Kover report (the three Kotlin
+# modules merged — the shape Codecov can resolve, versus per-module uploads which left the
+# dashboard at 0%) plus the Java JaCoCo report. The authoritative list is written by the root
+# `verifyCoverageReports` task; these are the fallback when it has not run yet, and
+# check_coverage_paths (task 15.6) is what proves the copies agree.
 COVERAGE_PATHS_FILE="build/reports/coverage-report-paths.txt"
 COVERAGE_REPORTS_FALLBACK=(
-    "streaming-core/build/reports/kover/report.xml"
-    "streaming-s3-example/build/reports/kover/report.xml"
+    "build/reports/kover/report.xml"
     "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml"
-    "streaming-bedrock-example/build/reports/kover/report.xml"
 )
 
 SAM_TEMPLATES=(
