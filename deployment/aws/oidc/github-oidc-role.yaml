@@ -118,6 +118,14 @@ Resources:
                 'token.actions.githubusercontent.com:sub':
                   - !Sub '${SubjectPrefix}:ref:refs/heads/main'
                   - !Sub '${SubjectPrefix}:ref:refs/heads/feature/*'
+                  # Dependabot opens its dependency-bump branches as `dependabot/*`. Allowing them
+                  # here lets "CD - Deploy On Demand" (a manual workflow_dispatch) and the streaming
+                  # tests be run against a Dependabot branch to validate a bump end to end before
+                  # merge. Scope note: the trust policy matches on the branch ref only, so this
+                  # admits any run on a `dependabot/*` branch, not only manually dispatched ones —
+                  # keep the deploy/test workflows that read this role on `workflow_dispatch` (human
+                  # trigger), not on automatic `push`, so an auto-pushed bump cannot self-deploy.
+                  - !Sub '${SubjectPrefix}:ref:refs/heads/dependabot/*'
                   - !Sub '${SubjectPrefix}:environment:*'
       Policies:
         - PolicyName: StreamingDeploymentPolicy
