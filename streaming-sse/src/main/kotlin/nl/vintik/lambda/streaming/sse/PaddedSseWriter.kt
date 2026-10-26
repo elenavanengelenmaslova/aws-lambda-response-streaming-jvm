@@ -1,4 +1,4 @@
-package nl.vintik.lambda.bedrock
+package nl.vintik.lambda.streaming.sse
 
 import java.io.OutputStream
 
@@ -31,7 +31,7 @@ import java.io.OutputStream
  * This writer owns only the SSE + padding encoding; the metadata prelude is written by
  * `streaming-core`'s `ResponseWriter` before the first event.
  */
-class PaddedSseWriter(
+public class PaddedSseWriter(
     private val headPadBytes: Int,
     private val tailPadBytes: Int,
     private val headPadEvents: Int,
@@ -42,6 +42,9 @@ class PaddedSseWriter(
         require(headPadEvents >= 0) { "headPadEvents must be >= 0 but was $headPadEvents" }
     }
 
+    /** Creates a writer applying the module default tiers ([DEFAULT_HEAD_PAD_BYTES], [DEFAULT_TAIL_PAD_BYTES], [DEFAULT_HEAD_PAD_EVENTS]). */
+    public constructor() : this(DEFAULT_HEAD_PAD_BYTES, DEFAULT_TAIL_PAD_BYTES, DEFAULT_HEAD_PAD_EVENTS)
+
     private var eventIndex = 0
 
     /**
@@ -49,7 +52,7 @@ class PaddedSseWriter(
      * flushes [output]. Returns the number of bytes written (including padding), useful for tests
      * and for logging the inflation factor.
      */
-    fun writeEvent(output: OutputStream, text: String): Int {
+    public fun writeEvent(output: OutputStream, text: String): Int {
         val pad = if (eventIndex < headPadEvents) headPadBytes else tailPadBytes
         val sb = StringBuilder(text.length + pad + 16)
         sb.append("data: ").append(text).append("\n\n")
@@ -62,11 +65,25 @@ class PaddedSseWriter(
     }
 
     /** Writes the terminal SSE event signalling end of stream, then flushes. */
-    fun writeEnd(output: OutputStream) {
+    public fun writeEnd(output: OutputStream) {
         output.write("event: end\ndata: [DONE]\n\n".toByteArray(Charsets.UTF_8))
         output.flush()
     }
 
     /** Number of events written so far (for logging/metrics). */
-    fun eventsWritten(): Int = eventIndex
+    public fun eventsWritten(): Int = eventIndex
+
+    /** True when at least one tier carries padding bytes ([headPadBytes] > 0 || [tailPadBytes] > 0). */
+    public fun hasPadding(): Boolean = headPadBytes > 0 || tailPadBytes > 0
+
+    public companion object {
+        /** ~100 KB — breaks the initial Lambda streaming-runtime buffer. */
+        public const val DEFAULT_HEAD_PAD_BYTES: Int = 102_400
+
+        /** ~10 KB — keeps the stream flowing on every subsequent event. */
+        public const val DEFAULT_TAIL_PAD_BYTES: Int = 10_240
+
+        /** Number of leading events that receive head padding. */
+        public const val DEFAULT_HEAD_PAD_EVENTS: Int = 3
+    }
 }
