@@ -1,0 +1,445 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create `streaming-sse/build.gradle.kts` mirroring `streaming-core`": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823120
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908830770
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908898732
+      }
+    ],
+    "1.2 Register the module and wire root aggregation": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823203
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908901533
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908972546
+      }
+    ],
+    "2.1 Create `PaddedSseWriter` in `nl.vintik.lambda.streaming.sse`": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823355
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908975477
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909038730
+      }
+    ],
+    "2.2 Move and extend `PaddedSseWriterTest` into the module": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823409
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909046051
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959835072
+      }
+    ],
+    "2.3 Write property test — payload round-trips through the padded stream (excluding terminal)": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823470
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909047405
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959836584
+      }
+    ],
+    "2.4 Write property test — full-stream round-trip adds exactly the `[DONE]` sentinel": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823530
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909048804
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959837790
+      }
+    ],
+    "2.5 Write property test — padding lives only in comment lines": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823600
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909050288
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959838790
+      }
+    ],
+    "2.6 Write property test — tiered padding crosses the buffer threshold": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823654
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792909051429
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959839909
+      }
+    ],
+    "2.7 Write property test — returned byte count equals bytes written": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823784
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959842914
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959917084
+      }
+    ],
+    "3. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823839
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959927534
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961175664
+      }
+    ],
+    "4.1 Create `PacedSseEmitter` in `nl.vintik.lambda.streaming.sse`": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823921
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961179607
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961235038
+      }
+    ],
+    "4.2 Write unit tests for `PacedSseEmitter` validation and boundaries": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908823968
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961238793
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961332012
+      }
+    ],
+    "4.3 Write property test — pacing sleeps once per inter-event gap, never at boundaries": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824019
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961240094
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961334037
+      }
+    ],
+    "4.4 Write property test — no pacing means no added pause": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824075
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961240863
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961333234
+      }
+    ],
+    "5. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824192
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961337643
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990256922
+      }
+    ],
+    "6.1 Generate and commit the binary-compatibility API dump": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824250
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990261220
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990661914
+      }
+    ],
+    "6.2 Assert no AWS coordinates on the module classpath": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824299
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990263407
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991829523
+      }
+    ],
+    "6.3 Assert `streaming-core` resolves transitively": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824348
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990262683
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792990662627
+      }
+    ],
+    "7.1 Add the dependency and switch imports": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824400
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991832617
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991897782
+      }
+    ],
+    "7.2 Delete the local writer and its test": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824450
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991900701
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991959575
+      }
+    ],
+    "8.1 Write the module README": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824592
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991963705
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792992660589
+      }
+    ],
+    "8.2 Append the build-log entries": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824684
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991964672
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792992659559
+      }
+    ],
+    "9. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824733
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792992664461
+      },
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792995480985
+      }
+    ],
+    "10. Deployed-endpoint streaming proof (manual, real AWS only)": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908824775
+      }
+    ],
+    "1. Scaffold the `streaming-sse` Gradle module": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792908972607
+      }
+    ],
+    "2. Promote `PaddedSseWriter` into the new module": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792959917164
+      }
+    ],
+    "4. Implement `PacedSseEmitter`": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792961334091
+      }
+    ],
+    "6. Lock the public API and coverage gates": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991829641
+      }
+    ],
+    "7. Refactor `streaming-bedrock-example` to consume the module": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792991959623
+      }
+    ],
+    "8. Documentation and knowledge capture": [
+      {
+        "executionId": "28074228-b1a0-4c47-8881-799a0cf266fa",
+        "chatSessionId": "sess_4baaa59f-7105-4c19-9242-35ddcec26091",
+        "timestamp": 1792992660641
+      }
+    ]
+  }
+}
