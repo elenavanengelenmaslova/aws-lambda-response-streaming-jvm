@@ -50,7 +50,7 @@ A pure, deterministic SSE + padding encoder. It owns only the event framing and 
 // Explicit tiers…
 val writer = PaddedSseWriter(headPadBytes = 102_400, tailPadBytes = 10_240, headPadEvents = 3)
 // …or the no-arg convenience constructor applying the DEFAULT_* tiers:
-val writer = PaddedSseWriter()
+val defaultWriter = PaddedSseWriter()
 
 val n = writer.writeEvent(output, "some token")  // data: line + tiered padding comment; flushes; returns bytes written
 writer.writeEnd(output)                          // exact terminal bytes: event: end\ndata: [DONE]\n\n; flushes
