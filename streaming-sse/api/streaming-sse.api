@@ -1,0 +1,31 @@
+public final class nl/vintik/lambda/streaming/sse/PacedSseEmitter {
+	public static final field Companion Lnl/vintik/lambda/streaming/sse/PacedSseEmitter$Companion;
+	public static final field MAX_DELAY_MILLIS I
+	public static final field MIN_DELAY_MILLIS I
+	public static final field NO_DELAY I
+	public fun <init> (Lnl/vintik/lambda/streaming/sse/PaddedSseWriter;ILkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Lnl/vintik/lambda/streaming/sse/PaddedSseWriter;ILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun emit (Ljava/io/OutputStream;Ljava/lang/String;)I
+	public final fun end (Ljava/io/OutputStream;)V
+	public final fun eventsWritten ()I
+}
+
+public final class nl/vintik/lambda/streaming/sse/PacedSseEmitter$Companion {
+}
+
+public final class nl/vintik/lambda/streaming/sse/PaddedSseWriter {
+	public static final field Companion Lnl/vintik/lambda/streaming/sse/PaddedSseWriter$Companion;
+	public static final field DEFAULT_HEAD_PAD_BYTES I
+	public static final field DEFAULT_HEAD_PAD_EVENTS I
+	public static final field DEFAULT_TAIL_PAD_BYTES I
+	public fun <init> ()V
+	public fun <init> (III)V
+	public final fun eventsWritten ()I
+	public final fun hasPadding ()Z
+	public final fun writeEnd (Ljava/io/OutputStream;)V
+	public final fun writeEvent (Ljava/io/OutputStream;Ljava/lang/String;)I
+}
+
+public final class nl/vintik/lambda/streaming/sse/PaddedSseWriter$Companion {
+}
+

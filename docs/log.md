@@ -1981,3 +1981,74 @@ That framing is what makes it likely to become the article people find when they
   - Takes effect on the next `main` push with `CODECOV_TOKEN` set (token confirmed present in the
     run log). Lesson: when Codecov shows 0% with reports that look correct, read the uploader log —
     `disable_search` and path-trimming bugs are invisible to a local `koverXmlReport`.
+
+---
+
+## The Lambda streaming runtime buffers small writes below the language layer — tiered SSE padding is the only lever that forces progressive delivery
+
+- **Symptom / trigger:** Promoting the SSE padding/dribble workaround into the new
+  `streaming-sse` module (package `nl.vintik.lambda.streaming.sse`) meant re-stating,
+  in one place, *why* the padding exists at all. The underlying behaviour is a property
+  of the AWS Lambda **response-streaming runtime**, not of any one example: a handler
+  that relays small writes (a few bytes per LLM token or per SSE event) and flushes
+  after each one still arrives at the client as a **single terminal burst**, not
+  progressively. Flushing at the application layer does not change this — the bytes are
+  being held *below* the language layer.
+
+- **Root cause (7.1):** The Lambda streaming runtime holds small writes in an
+  **internal, runtime-level buffer that sits beneath the JVM/`OutputStream` layer**.
+  No application-level `flush()` overrides it — the handler can flush every event and
+  the bytes still sit in the runtime buffer. The buffered bytes are only released to
+  the client when **the buffer fills (~100 KB observed)** or **the invocation ends**
+  and the stream is closed. So a naive token relay (tiny writes, each well under the
+  threshold) never crosses the buffer mid-invocation; everything coalesces and is
+  delivered at the end. This is the same class of surprise as the earlier
+  *"`OutputStream` must be closed explicitly"* entry, but the opposite failure mode:
+  there the bytes arrived late because the stream was never closed; here they arrive
+  late because each write is too small to breach the runtime buffer.
+
+- **Workaround — tiered SSE-comment padding (7.2):** Appending **tiered padding** to
+  each event, where each padded event is large enough to cross the runtime buffer,
+  makes the client observe **progressive delivery**. The padding is carried as SSE
+  comment lines (`: <spaces>`) so compliant clients and a `sed -n 's/^data: //p'`
+  filter discard it without corrupting the payload. The scheme is two-tier:
+  - **Large head padding** (~100 KB, the module default is `102_400` bytes applied to
+    the first 3 events) to **break the initial buffer** — the first events alone exceed
+    the ~100 KB fill threshold, so the runtime releases them immediately.
+  - **Smaller tail padding** (~10 KB, default `10_240` bytes) on every subsequent event
+    to **keep the stream flowing** once the buffer has been primed.
+
+  `PaddedSseWriter` is the piece that implements this; `PacedSseEmitter` layers the
+  optional pacing on top.
+
+- **Delay-without-padding does NOT work (7.3):** An **inter-chunk delay applied without
+  padding does not cross the runtime buffer.** This is the exact trap the MockNest
+  "dribble" attempt hit: spacing the small writes out in time changes *when* each tiny
+  write happens, but each write is still far below the ~100 KB threshold, so the runtime
+  keeps coalescing them and the client still sees **a single terminal burst** rather
+  than progressive delivery. The delay only *paces* delivery once padding is already
+  forcing each event past the buffer — it is not itself a mechanism for progressive
+  delivery. This is why `PacedSseEmitter` **rejects a configured (non-zero) delay when
+  its writer has no padding** (`hasPadding()` is false): a delay with nothing to pace is
+  a misconfiguration that would look like it should stream but would not, so the module
+  fails fast at construction with an `IllegalArgumentException` instead of shipping a
+  silently non-progressive endpoint.
+
+- **The cost — bandwidth trade-off (7.4):** The padding is not free. It inflates the
+  **on-the-wire response size** relative to the original payload by roughly
+  **100× to 1000×** — a handful of payload bytes per event is carried alongside ~10 KB
+  (tail) to ~100 KB (head) of comment padding. For small-chunk streaming that ratio is
+  the price of progressive delivery through this runtime: the client sees bytes early,
+  but the connection carries far more than the payload itself. Consumers that do not
+  need early first-byte delivery should not pay it; the padding exists specifically to
+  defeat the buffer, so it is only worth enabling when progressive delivery is a goal.
+
+- **Resolution / status:** **Captured — feeds the article; behaviour proven against the
+  Bedrock example and encoded in the module.** The cause (runtime buffer below the
+  language layer, released on fill/end), the tiered-padding workaround (large head to
+  break the buffer, smaller tail to keep it flowing), the delay-alone-is-useless finding
+  (hence the `PacedSseEmitter` guard), and the ~100×–1000× bandwidth cost are now the
+  documented rationale for `streaming-sse`. No local emulator reproduces the runtime's
+  buffering, so the end-to-end progressive-delivery proof is the post-deploy check
+  against the real deployed Bedrock endpoint, not a unit test. No runtime secrets are
+  involved in this finding.

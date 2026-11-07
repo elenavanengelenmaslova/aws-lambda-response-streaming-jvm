@@ -120,6 +120,22 @@ sam deploy --guided        # or ./deployment/aws/sam/deploy.sh
 ./scripts/post-deploy-test.sh
 ```
 
+## Release & Publishing (automatic — no manual tagging)
+
+Publishing to Maven Central is **fully automatic on merge to `main`** — you do not tag by hand. Two chained workflows under `.github/workflows/`:
+
+1. **`release-tag.yml`** (trigger: push to `main`, filtered by `paths`) — computes the next SemVer from Conventional Commits, pushes a `vX.Y.Z` tag (via `RELEASE_PAT`, required so the tag push triggers downstream), creates the GitHub Release, and opens a docs-only README version-bump PR.
+2. **`workflow-publish.yml`** (trigger: push tag `v*`) — the tag from step 1 fires this; it derives the version from the tag and runs `publishAndReleaseToMavenCentral` for **every published library module**.
+
+**Two traps when adding a new published library module (e.g. we hit this adding `streaming-sse`):**
+
+- **The release trigger is path-filtered.** `release-tag.yml`'s `on.push.paths` lists only the published modules' `src/main/**` + `build.gradle.kts` (plus `gradle/libs.versions.toml`). A new module's paths **must be added there**, or merging it never cuts a release. Example/`deployment` paths are deliberately excluded (they are not published).
+- **The publish job enumerates modules explicitly.** `workflow-publish.yml` lists each `:module:publishAndReleaseToMavenCentral` task. A new module **must be added to that Gradle invocation**, or the tag publishes the other modules and silently skips the new one.
+
+**Both library modules release together at one version from one tag** — they share the `releaseVersion` Gradle property (`providers.gradleProperty("releaseVersion")`). There is no independent per-module versioning. When adding a published module, keep this single-version model and update **both** workflows above.
+
+A README-only or `.kiro/`-only merge matches none of the trigger paths, so it never starts a release (structural loop guard).
+
 ## Gradle Cache Policy
 
 Never rely on the Gradle cache to determine what is available. Resolve from declared repositories (Maven Central). To understand a library's API, read its official docs or its GitHub source at the version pinned in `build.gradle.kts` — do not dig into cached/compiled artifacts.

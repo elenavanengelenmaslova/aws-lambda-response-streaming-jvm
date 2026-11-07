@@ -4,6 +4,7 @@ import aws.sdk.kotlin.services.bedrockruntime.BedrockRuntimeClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import nl.vintik.lambda.streaming.ResponseMetadata
 import nl.vintik.lambda.streaming.ResponseWriter
+import nl.vintik.lambda.streaming.sse.PaddedSseWriter
 import org.crac.Core
 import org.crac.Resource
 import java.io.ByteArrayInputStream

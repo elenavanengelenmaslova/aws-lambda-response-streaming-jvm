@@ -9,6 +9,7 @@ plugins {
 
 dependencies {
     implementation(project(":streaming-core"))
+    implementation(project(":streaming-sse"))
 
     // --- AWS Lambda runtime contracts ---
     implementation(libs.aws.lambda.core)
