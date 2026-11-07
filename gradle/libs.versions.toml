@@ -10,15 +10,15 @@ mavenPublish = "0.37.0"
 bcv = "0.18.2"
 jacoco = "0.8.15"
 
-awsLambdaCore = "1.4.0"
+awsLambdaCore = "1.4.1"
 awsLambdaEvents = "3.16.1"
-awsSdkKotlin = "1.9.20"
-awsSdkJava = "2.56.0"
-kotlinxSerialization = "1.11.0"
+awsSdkKotlin = "1.9.24"
+awsSdkJava = "2.57.3"
+kotlinxSerialization = "1.12.0"
 kotlinxCoroutines = "1.11.0"
 kotlinLogging = "8.0.4"
 slf4j = "2.0.20"
-jackson = "2.22.3"
+jackson = "2.22.4"
 crac = "1.5.0"
 
 junit = "6.1.3"
@@ -28,7 +28,7 @@ testcontainers = "1.21.4"
 # Floci — local AWS emulator used by the integration tests. The 1.x line of the Testcontainers
 # module builds against Testcontainers 1.21.4, matching the version above; the 2.x line requires
 # Testcontainers 2.x.
-flociTestcontainers = "2.16.1"
+flociTestcontainers = "2.17.0"
 # Docker image tag for the Floci emulator, not a Maven coordinate — Dependabot cannot bump this.
 # It pins the emulator itself, since the module's no-arg constructor would otherwise track
 # `floci/floci:latest`.
