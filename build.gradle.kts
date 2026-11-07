@@ -128,6 +128,7 @@ subprojects {
 // each module's own koverVerify responsibility.
 val validationReports = mapOf(
     ":streaming-core" to "streaming-core/build/reports/kover/report.xml",
+    ":streaming-sse" to "streaming-sse/build/reports/kover/report.xml",
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
@@ -150,6 +151,7 @@ tasks.register("verifyCoverageReports") {
     dependsOn(
         ":koverXmlReport", // root aggregate (build/reports/kover/report.xml)
         ":streaming-core:koverXmlReport",
+        ":streaming-sse:koverXmlReport",
         ":streaming-s3-example:koverXmlReport",
         ":streaming-s3-example-java:jacocoTestReport",
         ":streaming-bedrock-example:koverXmlReport",
@@ -241,6 +243,7 @@ tasks.register("verifyCoverageReports") {
 // the example modules), which this does not change.
 dependencies {
     kover(project(":streaming-core"))
+    kover(project(":streaming-sse"))
     kover(project(":streaming-s3-example"))
     kover(project(":streaming-bedrock-example"))
 }

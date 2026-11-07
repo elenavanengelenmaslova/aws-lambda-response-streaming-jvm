@@ -6,6 +6,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
 import nl.vintik.lambda.streaming.ResponseMetadata
 import nl.vintik.lambda.streaming.ResponseWriter
+import nl.vintik.lambda.streaming.sse.PaddedSseWriter
 import java.io.InputStream
 import java.io.OutputStream
 

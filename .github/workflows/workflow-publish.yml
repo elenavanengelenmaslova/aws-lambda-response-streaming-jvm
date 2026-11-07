@@ -1,4 +1,4 @@
-name: Publish - streaming-core to Maven Central
+name: Publish - libraries to Maven Central
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Publish streaming-core to Maven Central
+      - name: Publish libraries to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -48,5 +48,8 @@ jobs:
           SIGNING_KEY="$(echo "$GPG_SIGNING_KEY_BASE64" | base64 -d)" \
             || { echo "ERROR: failed to decode GPG_SIGNING_KEY — check the secret format"; exit 1; }
           export ORG_GRADLE_PROJECT_signingInMemoryKey="$SIGNING_KEY"
+          # Both library modules publish together at the one version derived from the tag
+          # (they share the releaseVersion Gradle property). Add any new published module here.
           ./gradlew :streaming-core:publishAndReleaseToMavenCentral \
+                    :streaming-sse:publishAndReleaseToMavenCentral \
             -PreleaseVersion="$RELEASE_VERSION" --no-configuration-cache --stacktrace
