@@ -1,0 +1,243 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Create the article skeleton and series-framing intro": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765628
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769771444
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769841885
+      }
+    ],
+    "2. Embed the demo and architecture visuals": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765733
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769845899
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769884125
+      }
+    ],
+    "3. Write the problem-statement section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765818
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769886987
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769931473
+      }
+    ],
+    "4. Write the architecture walkthrough with named components": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765862
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769934049
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769998274
+      }
+    ],
+    "5. Write the padding-workaround section with attribution": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765910
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770001039
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770067416
+      }
+    ],
+    "6. Write the consuming-the-libraries section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769765968
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770069993
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770145315
+      }
+    ],
+    "7. Write the build/test/validate/deploy/try-it section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766032
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770148178
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770202904
+      }
+    ],
+    "8. Write the verification + measured-results section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766080
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770205497
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770259337
+      }
+    ],
+    "9. Checkpoint - review content so far": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766118
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770262537
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770358609
+      }
+    ],
+    "10. Write the server-side lessons section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766154
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770361198
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770448413
+      }
+    ],
+    "11. Write the client-side lessons section": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766194
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770450959
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770529988
+      }
+    ],
+    "12. Add pinned source links and write the closing": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766228
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770532593
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770653604
+      }
+    ],
+    "13. Final voice/style and honesty pass": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766270
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770657836
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770749190
+      }
+    ],
+    "14. Verification pass against the design's Verification Checklist": [
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794769766312
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770751911
+      },
+      {
+        "executionId": "f7f03c6c-ed69-43d1-b363-e8584e6a5008",
+        "chatSessionId": "sess_d8daa4ab-035a-4a85-bfbc-b7bf387a4dc7",
+        "timestamp": 1794770878526
+      }
+    ]
+  }
+}
