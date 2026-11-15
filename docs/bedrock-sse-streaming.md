@@ -165,8 +165,9 @@ path ahead of time.
 ## The padding workaround
 
 The buffer sits below the language layer, and `flush()` does not move it. The approach follows from the
-mechanism: if the runtime forwards bytes only once its buffer fills, the first writes must be large
-enough to fill it. The SSE format provides a place to put the padding.
+mechanism, and is the one described in the AWS Builder Center article [2]: if the runtime forwards
+bytes only once its buffer fills, the first writes must be large enough to fill it. The SSE format
+provides a place to put the padding.
 
 In Server-Sent Events, any line beginning with a colon (`:`) is a comment, and compliant clients
 ignore it. It never reaches the `onmessage` handler, and a shell filter such as `sed -n 's/^data: //p'`
