@@ -11,7 +11,7 @@ answer arrives as a single terminal burst rather than a progressive trickle. Tha
 writes streaming works, per-token writes do not work out of the box, so I created an additional module to the streaming library - `streaming-sse` library:
 the [`streaming-sse`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/README.md)
 library packages the padding/dribble workaround (`PaddedSseWriter` / `PacedSseEmitter`) on top of
-the existing `streaming-core` module, so other projects do not have to rediscover it. The workaround
+the existing `streaming-core` module, so other projects do not have to implement it again. The workaround
 itself is not ours: the padding approach was described in the AWS Builder Center article "The Curious
 Case of SSE Streaming Agent Responses on AWS Lambda" [2], from a Python/FastAPI stack behind the
 Lambda Web Adapter. We took that article as the inspiration for `streaming-sse`, and the approach it
@@ -22,8 +22,8 @@ increment to reach the client as it is produced rather than buffered to the end 
 Lambda that calls Amazon Bedrock as part of its processing and streams the model's tokens out as
 they arrive. A Lambda that runs an agent or LLM graph in-process and relays each token, or one that
 emits progress events over a longer job, has exactly this shape: many small writes that should
-arrive progressively through API Gateway REST. The large-object case already streams for free; this
-is the case that does not.
+arrive progressively through API Gateway REST. The large-object case already works in a
+straightforward way; this is the case that does not.
 
 Progressive delivery turned out to need fixing on both ends. The server side — the Lambda — needs
 the padding workaround to get past the runtime buffer, but the client side buffers too (`curl`'s own
@@ -56,8 +56,8 @@ is covered in the next section.*
 
 ## The problem
 
-In the S3 example each write was roughly a megabyte and progressive delivery came for free: we
-wrote a chunk, flushed, and the client saw it. A token relay is the opposite shape. Bedrock returns
+In the S3 example each write was roughly a megabyte and progressive delivery worked in a
+straightforward way: we wrote a chunk, flushed, and the client saw it. A token relay is the opposite shape. Bedrock returns
 a few bytes at a time, so each write is tiny, and the AWS Lambda response-streaming runtime holds
 those small writes in an internal buffer. It forwards them to the client only once that buffer
 fills — around 100 KB in what we observed — or when the invocation ends.
@@ -70,8 +70,8 @@ sits below it, inside the Lambda streaming runtime.
 That placement identifies where the behaviour originates. It is not a JVM quirk, not something in
 these libraries, and not API Gateway adding a buffer to the path. It is the Lambda streaming runtime
 itself, and it reproduces across languages and even with Lambda Function URLs — removing API Gateway
-from the path does not remove it. The fix is therefore not on the JVM side; it is in how bytes are
-written, which is the subject of the rest of this article.
+from the path does not remove it. The change is therefore not on the JVM side; it is in how bytes
+are written, which is the subject of the rest of this article.
 
 The workaround is entirely in how bytes are written, not in how the function is packaged or
 provisioned.
@@ -164,7 +164,7 @@ path ahead of time.
 
 ## The padding workaround
 
-The buffer sits below the language layer, and `flush()` does not move it. The fix follows from the
+The buffer sits below the language layer, and `flush()` does not move it. The approach follows from the
 mechanism: if the runtime forwards bytes only once its buffer fills, the first writes must be large
 enough to fill it. The SSE format provides a place to put the padding.
 
@@ -595,7 +595,7 @@ curl --http1.1 -N -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
 
 The AWS docs do not cover this. The API Gateway response-streaming troubleshooting page [5] mentions
 `curl: (18) transfer closed with outstanding read data remaining` (a timeout symptom), but error 92 —
-the HTTP/2 stream-close incompatibility — is not documented. `--http1.1` is the fix.
+the HTTP/2 stream-close incompatibility — is not documented. Forcing `--http1.1` resolves it.
 
 **2. Drop the SSE padding, or read megabytes of comments.**
 *Symptom:* the stream carries all the `:` comment-line padding added server-side to fill the runtime
@@ -659,7 +659,7 @@ The approach works within a few constraints, which it is worth stating plainly b
 
 ## Conclusion
 
-Large-object streaming works on a JVM Lambda without any tricks, but an LLM token relay does not:
+Large-object streaming works on a JVM Lambda in a straightforward way, but an LLM token relay does not:
 the Lambda response-streaming runtime buffers the small per-token writes, so the answer arrives as a
 single burst. `streaming-sse` closes that gap, adding the tiered SSE-comment padding and optional
 pacing on top of `streaming-core` so a Kotlin or Java Lambda can stream Bedrock tokens progressively
