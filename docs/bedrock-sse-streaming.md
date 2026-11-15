@@ -659,19 +659,17 @@ The approach works within a few constraints, which it is worth stating plainly b
 
 ## Conclusion
 
-The S3 example streamed for free because each write was a megabyte; this one required real work because
-Bedrock returns a few bytes at a time and the Lambda streaming runtime buffers small writes below the
-language layer, where no `flush()` reaches. The fix is not runtime machinery — it is padding: SSE
-comment lines, ~100 KB on the first few events and ~10 KB after, that fill the buffer and force the
-tokens out where the client can see them. The cost is bandwidth, hidden in `:` comment lines the client discards, and the trade-off is
-worth it for a chat-style UX and not for bulk output. The remaining care is the set of server- and
-client-side pitfalls that fail silently with clean logs. Wrapping `ResponseWriter` and `PaddedSseWriter`
-/ `PacedSseEmitter` around that approach produces the token-by-token delivery.
+Large-object streaming works on a JVM Lambda without any tricks, but an LLM token relay does not:
+the Lambda response-streaming runtime buffers the small per-token writes, so the answer arrives as a
+single burst. `streaming-sse` closes that gap, adding the tiered SSE-comment padding and optional
+pacing on top of `streaming-core` so a Kotlin or Java Lambda can stream Bedrock tokens progressively
+through API Gateway REST.
 
-For the shared setup — SnapStart with CRaC priming, the SAM `RESPONSE_STREAM` wiring, arm64, tiered
-compilation — see the [S3-streaming example](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-s3-example/README.md),
-the other half of this series [1]. Both libraries — `streaming-core` and `streaming-sse` — are on
-Maven Central. The links below point at the exact code this article describes.
+Both libraries are on Maven Central, and the [`streaming-bedrock-example`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/main/streaming-bedrock-example)
+module is a complete, deployable example. Its [Quick Start](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/main/streaming-bedrock-example#quick-start)
+walks through building, deploying, and calling the endpoint, so you can try it against your own
+account. For the shared cold-start and deployment setup this builds on, see the S3-streaming example,
+the other half of this series [1].
 
 ## Source
 
