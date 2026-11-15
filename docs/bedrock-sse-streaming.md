@@ -2,20 +2,37 @@
 
 ### Progressive token delivery through API Gateway REST, without a custom runtime or Lambda layer
 
-Small-write token relays do not stream progressively on AWS Lambda by default. A large-object
-relay — the subject of the [previous article](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-s3-example/README.md),
-where we streamed an S3 object through a Lambda behind API Gateway REST — writes roughly a
-megabyte per chunk, and progressive delivery follows for free. An LLM token relay has the
-opposite shape: Amazon Bedrock hands back a few bytes at a time, and those small writes are held
-in the Lambda response-streaming runtime's internal buffer until it fills or the invocation ends.
-The result arrives as a single terminal burst rather than a progressive trickle.
+Small-write token relays do not stream progressively on AWS Lambda by default. The large-object
+relay in the [previous article](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-s3-example/README.md) [1],
+where we streamed an S3 object through a Lambda behind API Gateway REST, worked without any tricks:
+it writes roughly a megabyte per chunk, and each write streams through to the client progressively
+for free. An LLM token relay has the opposite shape, and the same straightforward approach does not
+work. Amazon Bedrock hands back a few bytes at a time, and those small writes are held in the Lambda
+response-streaming runtime's internal buffer until it fills or the invocation ends, so the whole
+answer arrives as a single terminal burst rather than a progressive trickle. That gap — megabyte
+writes stream for free, per-token writes do not — is the reason for the new `streaming-sse` library:
+the [`streaming-sse`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/README.md)
+library packages the padding/dribble workaround (`PaddedSseWriter` / `PacedSseEmitter`) on top of
+the existing `streaming-core` layer, so other projects do not have to rediscover it.
+
+Reach for this pattern when a JVM Lambda produces its output incrementally and you want each
+increment to reach the client as it is produced rather than buffered to the end — most commonly a
+Lambda that calls Amazon Bedrock as part of its processing and streams the model's tokens out as
+they arrive. A Lambda that runs an agent or LLM graph in-process and relays each token, or one that
+emits progress events over a longer job, has exactly this shape: many small writes that should
+arrive progressively through API Gateway REST. The large-object case already streams for free; this
+is the case that does not.
+
+Progressive delivery turned out to need fixing on both ends. The server side — the Lambda — needs
+the padding workaround to get past the runtime buffer, but the client side buffers too (`curl`'s own
+output buffering, and HTTP/2 stream handling) and had to be addressed before the tokens were visibly
+progressive; the detail is in the client-side pitfalls section below.
 
 This is a follow-on to that previous piece [1]. We reuse its shared setup — SnapStart with CRaC
 priming, the SAM `RESPONSE_STREAM` wiring, arm64, and tiered compilation — unchanged, so we do not
-repeat it here. What is new is getting token-by-token output to arrive token-by-token, and it
-needs **no custom runtime and no Lambda layer**: the function runs on the managed `java25` runtime.
-The running example is the `streaming-bedrock-example` module, built on this repo's `streaming-core`
-and `streaming-sse` libraries, and every number below was measured against a deployed endpoint.
+repeat it here. What is new is getting token-by-token output to arrive token-by-token. The running
+example is the `streaming-bedrock-example` module, built on this repo's `streaming-core` and
+`streaming-sse` libraries, and every number below was measured against a deployed endpoint.
 
 ## Demo and architecture
 
@@ -54,9 +71,8 @@ itself, and it reproduces across languages and even with Lambda Function URLs �
 from the path does not remove it. The fix is therefore not on the JVM side; it is in how bytes are
 written, which is the subject of the rest of this article.
 
-None of this requires special runtime machinery. There are **no Lambda layers** and **no custom
-runtime** here — the function runs on the managed `java25` runtime. The workaround is entirely in
-how bytes are written, not in how the function is packaged or provisioned.
+The workaround is entirely in how bytes are written, not in how the function is packaged or
+provisioned.
 
 ## Architecture walkthrough
 
@@ -97,8 +113,9 @@ incoming request, write the response metadata, then relay the model's tokens out
 Everything else is a collaborator it calls into.
 
 **[`PromptResolver`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-bedrock-example/src/main/kotlin/nl/vintik/lambda/bedrock/PromptResolver.kt)**
-is the first step. It is a `RequestResolver` that takes the raw API Gateway proxy event, parses the
-JSON body, validates it, and clamps the cost-and-size knobs (the prompt plus values such as
+is the first step. It implements the [`RequestResolver`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-bedrock-example/src/main/kotlin/nl/vintik/lambda/bedrock/RequestResolver.kt)
+contract, taking the raw API Gateway proxy event, parsing the
+JSON body, validating it, and clamping the cost-and-size knobs (the prompt plus values such as
 `maxTokens`) to safe bounds before anything reaches Bedrock. A malformed or oversized request is
 rejected or trimmed here, so the paid model call downstream only sees a bounded request.
 
@@ -145,22 +162,24 @@ path ahead of time.
 
 ## The padding workaround
 
-The buffer is real, it sits below the language layer, and `flush()` does not move it. The fix is
-direct: if the runtime forwards bytes only once its buffer fills, make the first writes large enough
-to fill it. The SSE format provides a place to put the padding.
+The buffer sits below the language layer, and `flush()` does not move it. The fix follows from the
+mechanism: if the runtime forwards bytes only once its buffer fills, the first writes must be large
+enough to fill it. The SSE format provides a place to put the padding.
 
 In Server-Sent Events, any line beginning with a colon (`:`) is a comment, and compliant clients
 ignore it. It never reaches the `onmessage` handler, and a shell filter such as `sed -n 's/^data: //p'`
 drops it as well. Appending a comment line to every event is therefore invisible to the consumer.
+The event framing shown here is produced by the repository's
+[`PaddedSseWriter.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/src/main/kotlin/nl/vintik/lambda/streaming/sse/PaddedSseWriter.kt).
 Each event on the wire looks like this:
 
 ```
 data: <token text>\n\n
-: <padding spaces>\n\n      <- ignored by the client; only there to trip the buffer
+: <padding spaces>\n\n      <- ignored by the client; present only to fill the buffer
 ```
 
-The top line is the real token. The bottom line is ballast — a comment of spaces whose only purpose
-is to help cross the ~100 KB buffer. The client discards it; it costs only wire bytes.
+The top line is the token. The bottom line is a comment of spaces whose only purpose is to help
+cross the ~100 KB buffer. The client discards it; it costs only wire bytes.
 
 ### Tiered padding
 
@@ -169,8 +188,8 @@ be large enough to open the initial buffer, but once the stream is flowing it ta
 it moving. `PaddedSseWriter` therefore pads in two tiers:
 
 - **~100 KB of head padding on the first 3 events** (`DEFAULT_HEAD_PAD_BYTES` = `102400`,
-  `DEFAULT_HEAD_PAD_EVENTS` = `3`) — the heavy hit that breaks the initial buffer so the first
-  tokens appear quickly.
+  `DEFAULT_HEAD_PAD_EVENTS` = `3`) — enough to fill the initial buffer so the first tokens appear
+  quickly.
 - **~10 KB of tail padding on every event afterwards** (`DEFAULT_TAIL_PAD_BYTES` = `10240`) —
   lighter, but required. The runtime re-buffers after the first few events, so without ongoing tail
   padding the stream stalls again. The tail keeps it flowing.
@@ -220,14 +239,18 @@ needed:
 import nl.vintik.lambda.streaming.ResponseWriter
 ```
 
-`ResponseWriter` owns the API Gateway streaming wire format. It writes the **metadata prelude** — the
-status code and headers — before the first SSE event. The prelude lands first and exactly once; the
-status is committed the moment it is written, so the request is resolved and validated before the
-call, then the prelude is written, then tokens are relayed.
+`ResponseWriter` owns the API Gateway streaming wire format (see
+[`ResponseWriter.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-core/src/main/kotlin/nl/vintik/lambda/streaming/ResponseWriter.kt)).
+It writes the **metadata prelude** — the status code and headers — before the first SSE event. The
+prelude lands exactly once; the status is committed the moment it is written. In the Bedrock example
+the write is deferred until the first model delta arrives, so the request is resolved and validated
+first, and the status is committed once on that first delta rather than before any output exists.
 
 The headers shape matters. They are a plain `Map<String, String>` — a single value per header name,
 not a `Map<String, List<String>>`. The multi-value shape is valid JSON but makes API Gateway return a
-502 (covered in the server-side pitfalls). The prelude is:
+502 (covered in the server-side pitfalls). The following excerpt is adapted from the repository's
+[`BedrockStreamHandler.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-bedrock-example/src/main/kotlin/nl/vintik/lambda/bedrock/BedrockStreamHandler.kt),
+which builds this prelude with three headers and commits it once on the first delta:
 
 ```kotlin
 private val responseWriter = ResponseWriter()
@@ -237,8 +260,9 @@ responseWriter.writeMetadata(
     ResponseMetadata(
         statusCode = 200,
         headers = mapOf(
-            "Content-Type" to "text/event-stream",
+            "Content-Type" to "text/event-stream; charset=utf-8",
             "Cache-Control" to "no-cache",
+            "Transfer-Encoding" to "chunked",
         ),
     ),
 )
@@ -259,7 +283,9 @@ transitively — `ResponseWriter` arrives alongside the SSE types.
 
 `PaddedSseWriter` is the encoder: it frames each token as an SSE `data:` event and appends the tiered
 comment padding from the previous section. The no-arg constructor applies the default tiers (~100 KB
-head on the first 3 events, ~10 KB tail after), or the tiers can be set explicitly:
+head on the first 3 events, ~10 KB tail after), or the tiers can be set explicitly. The following
+excerpt is adapted from the repository's
+[`PaddedSseWriter.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/src/main/kotlin/nl/vintik/lambda/streaming/sse/PaddedSseWriter.kt):
 
 ```kotlin
 // Default tiers — the DEFAULT_* constants from the previous section:
@@ -278,7 +304,9 @@ index is below `headPadEvents`, tail afterwards), flushes, and returns the UTF-8
 full surface for a straight, as-fast-as-possible relay.
 
 `PacedSseEmitter` wraps the writer for a deliberately paced, dribbled UX — tokens spaced out over
-time rather than emitted the instant Bedrock produces them:
+time rather than emitted the instant Bedrock produces them. The following excerpt is adapted from the
+repository's
+[`PacedSseEmitter.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/src/main/kotlin/nl/vintik/lambda/streaming/sse/PacedSseEmitter.kt):
 
 ```kotlin
 val emitter = PacedSseEmitter(writer, delayMillis = 100)  // default delayMillis = NO_DELAY
@@ -296,18 +324,26 @@ nothing to push past the buffer has no effect (covered in the pitfalls). Without
 
 ### How the Bedrock example wires them together
 
-The `streaming-bedrock-example` module assembles these pieces in `BedrockStreamHandler`. The sequence
-is the one the types imply:
+The `streaming-bedrock-example` module assembles these pieces in
+[`BedrockStreamHandler.kt`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-bedrock-example/src/main/kotlin/nl/vintik/lambda/bedrock/BedrockStreamHandler.kt).
+The sequence matches that handler:
 
 1. **Resolve** the incoming request with `PromptResolver` — parse, validate, clamp the prompt and
-   `maxTokens` to safe bounds.
-2. **Open the response** by writing the metadata prelude with `ResponseWriter` (status +
-   `text/event-stream` headers), committing the status before any token goes out.
-3. **Pull token deltas** from `BedrockSource`, which drives Bedrock Nova Lite's
+   `maxTokens` to safe bounds. A resolution error writes a metadata-only 400 error response and no
+   body.
+2. **Pull token deltas** from `BedrockSource`, which drives Bedrock Nova Lite's
    `InvokeModelWithResponseStream` and surfaces each text delta as the model generates it.
+3. **Defer the 200 metadata until the first delta.** The prelude is written with `ResponseWriter`
+   only when the first model delta arrives, and the status is committed once at that point. A model
+   failure before the first delta therefore returns a 502 error response, because the status has not
+   yet been committed. A successful generation with no deltas still returns 200.
 4. **Relay each delta** through `PaddedSseWriter.writeEvent`, so every token leaves the function as a
    padded SSE event that crosses the runtime buffer — optionally paced through `PacedSseEmitter` for
-   the dribbled cadence. When the model is done, `writeEnd` closes out the stream.
+   the dribbled cadence. When the model is done, `writeEnd` closes out the stream. If a body read
+   fails after the status is committed, the error propagates and the body may be truncated.
+5. **Flush and close the stream.** The handler wraps the body in `output.use { }` and calls
+   `output.flush()` before the stream closes, so the runtime drains its buffer before it sees the
+   close signal (see the server-side pitfalls).
 
 The two libraries split cleanly: `streaming-core`'s `ResponseWriter` handles everything up to and
 including the prelude, and `streaming-sse`'s `PaddedSseWriter` / `PacedSseEmitter` handle every event
@@ -448,13 +484,14 @@ The findings below are the ways this went wrong before the solution settled. Mos
 silently, with clean logs and a normally reporting function, so there is nothing to grep for. They
 are stated symptom-first, because the symptom is what is in front of you when you hit one.
 
-**1. A naive `flush()` does nothing — the buffer is below the language layer.**
-*Symptom:* tokens are relayed from Bedrock, `flush()` is called after every write, and the stream
-still arrives as one terminal burst at the end. No error, no warning; it is simply not progressive.
-*Fix:* `flush()` cannot help here. The flush happens at the language layer, but the buffer that gates
-delivery lives below it, inside the Lambda streaming runtime, which forwards only once it is filled
-(~100 KB observed) or the invocation ends. The only lever is filling it, which is the padding
-workaround. This reframes every fix that follows.
+**1. Calling `flush()` after each write does not force bytes to the client.**
+*Symptom:* tokens are relayed from Bedrock, `flush()` is called after every write, and the client
+receives the full response in a single burst at the end. No error, no warning; the delivery is not
+progressive.
+*Fix:* `flush()` operates at the language layer, but the buffer that gates delivery sits below it,
+inside the Lambda streaming runtime, which forwards bytes only once that buffer fills (~100 KB
+observed) or the invocation ends. The applicable mechanism is filling the buffer, which is the
+padding workaround. This mechanism underlies every fix that follows.
 
 **2. An inter-chunk delay alone does nothing either.**
 *Symptom:* the next move after the flush fails is to space the writes out with a small `sleep`
@@ -512,17 +549,19 @@ equivalent value is `STREAM`, and that path additionally needs the integration U
 `/response-streaming-invocations` suffix. They are not interchangeable and apply at different layers;
 the wrong one, or the right one at the wrong layer, yields a buffered endpoint. The convention here is
 to use `RESPONSE_STREAM` at the SAM `Api` level and run `sam validate --template-file
-deployment/aws/sam-bedrock/template.yaml` (exit code 0) before committing any template change. This
-is the shared-setup piece from the S3 example, re-flagged because it can consume a whole deploy cycle
-before it is noticed.
+deployment/aws/sam-bedrock/template.yaml` (exit code 0) before committing any template change. The
+`RESPONSE_STREAM` wiring is in the repository's
+[`deployment/aws/sam-bedrock/template.yaml`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/deployment/aws/sam-bedrock/template.yaml).
+This is the shared-setup piece from the S3 example, re-flagged because it can consume a whole deploy
+cycle before it is noticed.
 
 ## Client-side pitfalls
 
 Getting the server to stream progressively is half the work. Even with the padding working and the
-bytes leaving the function in waves, the client can still buffer the response, choke on the protocol,
-or drown in padding. These three occurred on the consuming side, and like the server-side ones they
-tend to fail in ways that look like something else. They are stated symptom-first, with the
-invocation that broke and the one that worked.
+bytes leaving the function in waves, the client can still buffer the response, fail on the protocol,
+or receive the padding as part of the output. These three occurred on the consuming side, and like
+the server-side ones they tend to fail in ways that look like something else. They are stated
+symptom-first, with the invocation that broke and the one that worked.
 
 **1. `curl` over HTTP/2 fails with error 92 — force `--http1.1`.**
 *Symptom:* in CI (GitHub Actions) and on any machine with a newer `curl` that defaults to HTTP/2, a
@@ -558,9 +597,9 @@ The AWS docs do not cover this. The API Gateway response-streaming troubleshooti
 the HTTP/2 stream-close incompatibility — is not documented. `--http1.1` is the fix.
 
 **2. Drop the SSE padding, or read megabytes of comments.**
-*Symptom:* the stream carries all the `:` comment-line padding added server-side to trip the runtime
+*Symptom:* the stream carries all the `:` comment-line padding added server-side to fill the runtime
 buffer. A proper SSE client ignores comment lines, but reading the raw stream from the shell shows the
-padding drowning the actual tokens.
+padding interleaved with the actual tokens.
 *Fix:* keep only the `data:` lines and reassemble them. A `sed`/`awk` pipeline recovers the original
 payload byte-for-byte:
 
@@ -602,14 +641,28 @@ same fix at the `awk` layer — flush each token as it is written so `awk` does 
 handed over unbuffered. Every stage in the pipe can buffer, and progressive delivery survives only if
 none of them do.
 
+## Limitations
+
+The approach works within a few constraints, which it is worth stating plainly before adopting it:
+
+- **Padding overhead.** Progressive small-chunk delivery is achieved by padding each SSE event with
+  ignored comment lines to fill the Lambda streaming runtime buffer. This inflates the on-the-wire
+  response size by roughly 100× to 1000× (a ~15 KB answer can reach several megabytes). It suits
+  chat-style time-to-first-token UX; for bulk output, stream without padding.
+- **Inherited response-streaming limits.** All the AWS Lambda response-streaming limits from the
+  previous article still apply [1]: the 200 MB streamed-payload cap, the 2 MB/s throughput ceiling
+  after the first 6 MB, and continued billing after a client disconnects.
+- **API Gateway REST only.** This uses response streaming through API Gateway REST
+  (`RESPONSE_STREAM`); the same approach does not apply to Lambda Function URLs. For Function URLs,
+  AWS recommends a custom runtime or the Lambda Web Adapter [1].
+
 ## Conclusion
 
 The S3 example streamed for free because each write was a megabyte; this one required real work because
 Bedrock returns a few bytes at a time and the Lambda streaming runtime buffers small writes below the
-language layer, where no `flush()` reaches. The fix is not runtime machinery — no Lambda layers, no
-custom runtime, just the managed `java25` runtime — it is padding: SSE comment lines, ~100 KB on the
-first few events and ~10 KB after, that fill the buffer and force the tokens out where the client can
-see them. The cost is bandwidth, hidden in `:` comment lines the client discards, and the trade-off is
+language layer, where no `flush()` reaches. The fix is not runtime machinery — it is padding: SSE
+comment lines, ~100 KB on the first few events and ~10 KB after, that fill the buffer and force the
+tokens out where the client can see them. The cost is bandwidth, hidden in `:` comment lines the client discards, and the trade-off is
 worth it for a chat-style UX and not for bulk output. The remaining care is the set of server- and
 client-side pitfalls that fail silently with clean logs. Wrapping `ResponseWriter` and `PaddedSseWriter`
 / `PacedSseEmitter` around that approach produces the token-by-token delivery.
@@ -654,7 +707,7 @@ All links are pinned to the `main` branch so they keep matching the code.
 
 ## References
 
-1. E. van Engelen-Maslova, "AWS Lambda Response Streaming for Kotlin and Java," AWS Builder Center. <!-- TODO: paste the exact article URL --> https://builder.aws.com/content/
+1. E. van Engelen-Maslova, "AWS Lambda Response Streaming for Kotlin and Java," AWS Builder Center. https://builder.aws.com/content/3KQYoLu7XiQSn6r13bPEE8jeKTj/aws-lambda-response-streaming-for-kotlin-and-java
 2. "The Curious Case of SSE Streaming Agent Responses on AWS Lambda," AWS Builder Center. https://builder.aws.com/content/39iqpehwjnn2TuNmGnHAnsMcHmP/the-curious-case-of-sse-streaming-agent-responses-on-aws-lambda
 3. "Response streaming for Lambda functions," AWS Lambda Developer Guide. https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html
 4. "Stream the integration response for your proxy integrations," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
