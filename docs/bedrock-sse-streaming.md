@@ -11,7 +11,11 @@ answer arrives as a single terminal burst rather than a progressive trickle. Tha
 writes streaming works, per-token writes do not work out of the box, so I created an additional module to the streaming library - `streaming-sse` library:
 the [`streaming-sse`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/README.md)
 library packages the padding/dribble workaround (`PaddedSseWriter` / `PacedSseEmitter`) on top of
-the existing `streaming-core` module, so other projects do not have to rediscover it.
+the existing `streaming-core` module, so other projects do not have to rediscover it. The workaround
+itself is not ours: the padding approach was described in the AWS Builder Center article "The Curious
+Case of SSE Streaming Agent Responses on AWS Lambda" [2], from a Python/FastAPI stack behind the
+Lambda Web Adapter. We took that article as the inspiration for `streaming-sse`, and the approach it
+suggested worked — `streaming-sse` is the JVM implementation of it.
 
 Reach for this pattern when a JVM Lambda produces its output incrementally and you want each
 increment to reach the client as it is produced rather than buffered to the end — most commonly a
@@ -209,12 +213,11 @@ the padding entirely. The padding bytes never reach application code: the client
 
 ### Prior work
 
-This buffering behaviour was documented independently from a Python/FastAPI stack running behind the
-Lambda Web Adapter — a different language and framework from this Kotlin/JVM one — in the AWS Builder
-Center article "The Curious Case of SSE Streaming Agent Responses on AWS Lambda" [2]. That the same
-buffer appears from an entirely different stack is what confirms it sits in the Lambda streaming
-runtime itself rather than in any one application stack. This article is the JVM equivalent of the
-same finding.
+As noted in the introduction, the padding approach comes from the AWS Builder Center article [2],
+which reported it from a Python/FastAPI stack behind the Lambda Web Adapter. That the same buffer
+appears from an entirely different language and framework is what confirms it sits in the Lambda
+streaming runtime itself rather than in any one application stack. This article is the JVM
+implementation of the same finding.
 
 ## Using the libraries
 
