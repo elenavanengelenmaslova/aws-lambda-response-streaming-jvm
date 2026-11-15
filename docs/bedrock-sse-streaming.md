@@ -2,18 +2,16 @@
 
 ### Progressive token delivery through API Gateway REST, without a custom runtime or Lambda layer
 
-Small-write token relays do not stream progressively on AWS Lambda by default. The large-object
-relay in the [previous article](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-s3-example/README.md) [1],
-where we streamed an S3 object through a Lambda behind API Gateway REST, worked without any tricks:
-it writes roughly a megabyte per chunk, and each write streams through to the client progressively
-for free. An LLM token relay has the opposite shape, and the same straightforward approach does not
-work. Amazon Bedrock hands back a few bytes at a time, and those small writes are held in the Lambda
+Small-write token relays do not stream progressively on AWS Lambda JVM runtime by default. The large-object
+relay in the previous article "AWS Lambda Response Streaming for Kotlin and Java" [1],
+where we streamed an S3 object through a Lambda behind API Gateway REST, worked in a straightforward way:
+it writes roughly a megabyte per chunk, and each write streams through to the client progressively. An LLM token relay behaves differently, and does not work the way I wanted it to - progressive sse trickle. Amazon Bedrock streams a few bytes at a time, and those small writes are held in the Lambda
 response-streaming runtime's internal buffer until it fills or the invocation ends, so the whole
-answer arrives as a single terminal burst rather than a progressive trickle. That gap — megabyte
-writes stream for free, per-token writes do not — is the reason for the new `streaming-sse` library:
+answer arrives as a single terminal burst rather than a progressive trickle. That gap — large
+writes streaming works, per-token writes do not work out of the box, so I created an additional module to the streaming library - `streaming-sse` library:
 the [`streaming-sse`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/README.md)
 library packages the padding/dribble workaround (`PaddedSseWriter` / `PacedSseEmitter`) on top of
-the existing `streaming-core` layer, so other projects do not have to rediscover it.
+the existing `streaming-core` module, so other projects do not have to rediscover it.
 
 Reach for this pattern when a JVM Lambda produces its output incrementally and you want each
 increment to reach the client as it is produced rather than buffered to the end — most commonly a
