@@ -68,10 +68,9 @@ a progressive trickle. The flush happens at the language layer, but the buffer t
 sits below it, inside the Lambda streaming runtime.
 
 That placement identifies where the behaviour originates. It is not a JVM quirk, not something in
-these libraries, and not API Gateway adding a buffer to the path. It is the Lambda streaming runtime
-itself, and it reproduces across languages and even with Lambda Function URLs — removing API Gateway
-from the path does not remove it. The change is therefore not on the JVM side; it is in how bytes
-are written, which is the subject of the rest of this article.
+these libraries, and not API Gateway adding a buffer to the path — it is the Lambda streaming
+runtime itself, and it reproduces across languages. The change is therefore not on the JVM side; it
+is in how bytes are written, which is the subject of the rest of this article.
 
 The workaround is entirely in how bytes are written, not in how the function is packaged or
 provisioned.
@@ -654,9 +653,11 @@ The approach works within a few constraints, which it is worth stating plainly b
 - **Inherited response-streaming limits.** All the AWS Lambda response-streaming limits from the
   previous article still apply [1]: the 200 MB streamed-payload cap, the 2 MB/s throughput ceiling
   after the first 6 MB, and continued billing after a client disconnects.
-- **API Gateway REST only.** This uses response streaming through API Gateway REST
-  (`RESPONSE_STREAM`); the same approach does not apply to Lambda Function URLs. For Function URLs,
-  AWS recommends a custom runtime or the Lambda Web Adapter [1].
+- **API Gateway REST only.** The runtime buffering (and therefore the need for padding) is not
+  specific to API Gateway, but the streaming wire protocol these libraries implement — the metadata
+  prelude written by `streaming-core`'s `ResponseWriter` — targets API Gateway REST
+  (`RESPONSE_STREAM`), not Lambda Function URLs. For Function URLs, AWS recommends a custom runtime
+  or the Lambda Web Adapter [1].
 
 ## Conclusion
 
