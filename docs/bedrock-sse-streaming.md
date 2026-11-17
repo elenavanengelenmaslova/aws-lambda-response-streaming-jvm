@@ -23,8 +23,8 @@ example and tests.
 The pattern fits any JVM Lambda that produces its output incrementally and should deliver each
 increment as it is produced: most commonly a Lambda that calls Amazon Bedrock as part of its
 processing, for example one that runs an agent or LLM graph in-process, or a longer job that reports
-progress events. The shared setup from the previous article — SnapStart with CRaC priming, arm64 and
-tiered compilation — is reused unchanged and not repeated here.
+progress events. The shared setup from the previous article — a regional API Gateway endpoint, SnapStart with CRaC
+priming, arm64 and tiered compilation — is reused unchanged and not repeated here.
 
 ## Demo and architecture
 
@@ -204,7 +204,7 @@ Events:
 ```
 
 The function runs on the managed `java25` runtime, and the API endpoint is regional rather than
-edge-optimized — see the lessons below for why.
+edge-optimized, as in the S3 example — see the lessons below for why.
 
 ### Optional pacing
 
@@ -305,9 +305,10 @@ the close fixed it, and the Bedrock handler uses the same structure.
 `ResponseTransferMode: RESPONSE_STREAM`; the underlying integration value is `STREAM` [4]. Mixing them
 up leaves a buffered endpoint, and the mistake only shows after a deployment.
 
-**Use a regional endpoint.** With an edge-optimized API Gateway endpoint, the response was buffered in
-our setup and reached the client in one burst; switching the API to `EndpointConfiguration: Type:
-REGIONAL` restored progressive delivery. AWS documents response streaming for all REST API endpoint
+**Use a regional endpoint.** This applies to the S3 and Bedrock examples alike. With an
+edge-optimized API Gateway endpoint, the response was buffered in our setup and reached the client in
+one burst; switching the API to `EndpointConfiguration: Type: REGIONAL` restored progressive delivery,
+and every SAM template in the repository uses it. AWS documents response streaming for all REST API endpoint
 types, but with different idle timeouts: 5 minutes for regional endpoints and 30 seconds for
 edge-optimized ones [4], which matters when a model pauses before producing output.
 
@@ -337,9 +338,10 @@ streaming endpoint looks buffered; the API Gateway troubleshooting guide also re
 
 When I started on the Bedrock example, I assumed the approach from the S3 example would work in the same way: write each chunk, flush, and let API Gateway stream it to the client. However, I discovered that Bedrock streaming in smaller chunks caused the same handler to deliver the
 whole answer in one burst, because each write was too small to be forwarded. Getting progressive
-delivery took two additions: padding each event with SSE comment lines, the approach described in
-[2], and a regional API Gateway endpoint. The padding costs a significant amount of bandwidth, so it
-is a deliberate trade-off rather than a default.
+delivery took one addition on top of the S3 setup: padding each event with SSE comment lines, the
+approach described in [2]. The rest of that setup still applies, including the regional API Gateway
+endpoint, which both examples require. The padding costs a significant amount of bandwidth, so it is
+a deliberate trade-off rather than a default.
 
 I packaged the padding in a new `streaming-sse` module on top of `streaming-core`, so Kotlin and Java
 projects can use it without reimplementing it. Both libraries are on Maven Central, and the

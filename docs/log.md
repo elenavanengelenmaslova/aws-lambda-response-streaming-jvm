@@ -2091,7 +2091,7 @@ That framing is what makes it likely to become the article people find when they
   REST API endpoint the streamed response reached the client in a single burst. Switching the API to
   `EndpointConfiguration: Type: REGIONAL` restored progressive delivery. The run details (request,
   timings) were not recorded at the time.
-- **Resolution / status:** **Resolved by configuration.** All SAM templates set `REGIONAL`. Note the
+- **Resolution / status:** **Resolved by configuration.** All SAM templates set `REGIONAL` (`sam/`, `sam-java/`, `sam-bedrock/`) — it is shared setup for the S3 and Bedrock examples, not Bedrock-specific. Note the
   API Gateway docs state response streaming works for all REST API endpoint types, with idle timeouts
   of 5 minutes (regional/private) and 30 seconds (edge-optimized), so the buffering seen on the edge
   endpoint is an observation of this setup, not documented behaviour.
