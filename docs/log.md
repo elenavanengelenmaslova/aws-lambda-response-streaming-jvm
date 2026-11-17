@@ -2112,3 +2112,21 @@ That framing is what makes it likely to become the article people find when they
   is logged, because kotlinx-serialization's message echoes the input (the prompt or model output).
   Covered by `NonFatalTest` (recoverable vs fatal) and a handler test asserting a cancelled source
   propagates without a 502. The S3 examples still use plain `runCatching`.
+
+---
+
+## SAM has no `STREAM` value — any value other than `RESPONSE_STREAM` silently deploys a buffered integration
+
+- **Symptom / trigger:** Checking the article's `RESPONSE_STREAM` vs `STREAM` lesson against the docs.
+  SAM's `Api` event `ResponseTransferMode` lists `BUFFERED | RESPONSE_STREAM`; CloudFormation's
+  `AWS::ApiGateway::Method Integration` and the API Gateway guide use `BUFFERED | STREAM`.
+- **Findings:** In the SAM translator (`aws/serverless-application-model`, develop @ `3dfbd2b`),
+  `swagger.py` sets the integration's `responseTransferMode` to `STREAM` and `push.py` switches the
+  URI to `2021-11-15/.../response-streaming-invocations` only when the value equals the exact string
+  `RESPONSE_STREAM`. With SAM CLI 1.160.1, `sam validate` accepted `RESPONSE_STREAM`, `STREAM` and a
+  bogus value alike, and `sam validate --lint` produced identical output for `RESPONSE_STREAM` and
+  `STREAM` (only two unrelated W3005 warnings on SAM-generated resources). So `STREAM` in a SAM
+  template deploys a plain buffered `/invocations` integration with no error.
+- **Resolution / status:** **Documented.** Article cites the SAM reference and translator source and
+  states the mapping. Note: `sam validate --lint` exits non-zero on our templates because of those
+  W3005 warnings; the repo's gate is plain `sam validate`.

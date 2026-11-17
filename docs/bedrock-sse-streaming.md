@@ -54,7 +54,8 @@ difference. The same model called directly, outside Lambda, emitted 71 deltas sp
 1 MiB writes streamed progressively.
 
 **Documented.** With the response transfer mode set to `STREAM`, API Gateway does not wait for the
-complete response before sending it to the client [4]. AWS documents managed-runtime response
+complete response before sending it to the client [4]; in SAM this is configured as
+`ResponseTransferMode: RESPONSE_STREAM` [6]. AWS documents managed-runtime response
 streaming for Node.js and points other languages to a custom runtime or the Lambda Web Adapter [3].
 Neither page describes a size threshold, or a flush mechanism for small writes.
 
@@ -211,8 +212,12 @@ Events:
       ResponseTransferMode: RESPONSE_STREAM
 ```
 
-The function runs on the managed `java25` runtime, and the API endpoint is regional rather than
-edge-optimized, as in the S3 example — see the lessons below for why.
+`ResponseTransferMode: RESPONSE_STREAM` is the SAM setting for the `Api` event [6]. It maps to the
+response transfer mode `STREAM` documented for API Gateway [4]: SAM does not pass the value through
+unchanged, but sets the integration's transfer mode to `STREAM` and switches the integration URI to Lambda's
+`/response-streaming-invocations` path [7]. The function runs on the managed `java25` runtime, and the
+API endpoint is regional rather than edge-optimized, as in the S3 example — see the lessons below for
+why.
 
 ### Optional pacing
 
@@ -309,9 +314,11 @@ once padding is already pushing them out, which is why `PacedSseEmitter` throws
 The handler never closed the output stream. `output.use { }` plus an explicit `output.flush()` before
 the close fixed it, and the Bedrock handler uses the same structure.
 
-**`RESPONSE_STREAM` versus `STREAM`.** The SAM `Api` event property is
-`ResponseTransferMode: RESPONSE_STREAM`; the underlying integration value is `STREAM` [4]. Mixing them
-up leaves a buffered endpoint, and the mistake only shows after a deployment.
+**`RESPONSE_STREAM` versus `STREAM`.** SAM's valid values are `BUFFERED` and `RESPONSE_STREAM` [6];
+there is no `STREAM` value in SAM. Writing `STREAM` — the API Gateway name from [4] — in a SAM template
+is not rejected: neither `sam validate` nor `sam validate --lint` flagged it in our tests, and the SAM
+translator only enables streaming for the exact string `RESPONSE_STREAM` [7]. Any other value produces
+an ordinary buffered integration, so the mistake only shows after a deployment.
 
 **Use a regional endpoint.** This applies to the S3 and Bedrock examples alike. With an
 edge-optimized API Gateway endpoint, the response was buffered in our setup and reached the client in
@@ -334,7 +341,8 @@ streaming endpoint looks buffered; the API Gateway troubleshooting guide also re
   the newline. `PaddedSseWriterRoundTripTest` documents this. Deltas with newlines need splitting
   before they are written.
 - **API Gateway REST only.** The solution is specific to API Gateway REST APIs with
-  `ResponseTransferMode: RESPONSE_STREAM`, and does not cover Lambda Function URLs. The metadata
+  `ResponseTransferMode: RESPONSE_STREAM` in SAM [6] (`STREAM` in API Gateway [4]), and does not
+  cover Lambda Function URLs. The metadata
   prelude written by `streaming-core` is parsed by API Gateway's integration layer; a Function URL has
   no such layer, and with the managed Java runtime the same handler returned HTTP 502 behind a
   Function URL in our tests. For Function URLs, AWS points to a custom runtime or the Lambda Web
@@ -366,3 +374,5 @@ the version published to Maven Central, so they keep showing the code described 
 3. "Response streaming for Lambda Event Functions," AWS Lambda Developer Guide. https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html
 4. "Stream the integration response for your proxy integrations in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
 5. "Troubleshoot issues with response streaming in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-streaming-troubleshoot.html
+6. "Api" event source, `ResponseTransferMode`, AWS Serverless Application Model Developer Guide. https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+7. AWS SAM translator source, `samtranslator/swagger/swagger.py` (sets `responseTransferMode: STREAM`) and `samtranslator/model/eventsources/push.py` (`/response-streaming-invocations` URI). https://github.com/aws/serverless-application-model/blob/3dfbd2b29a82161c47f6f956091db0a0f3608bb1/samtranslator/swagger/swagger.py
