@@ -3,14 +3,15 @@
 ### Progressive token delivery through API Gateway REST, without a custom runtime or Lambda layer
 
 In the previous article, "AWS Lambda Response Streaming for Kotlin and Java" [1], we streamed a large
-S3 object from a Kotlin Lambda through API Gateway REST. That worked in a straightforward way: the
-handler writes roughly a megabyte per chunk, and the client receives the body progressively. When I
-applied the same approach to Amazon Bedrock output, it did not work the way I wanted it to. Bedrock
-produced its tokens progressively, the handler wrote and flushed every delta, and the client still
+S3 object from a Kotlin Lambda through API Gateway REST, aiming at large blobs that exceed the
+Lambda and API Gateway buffered response limits. That worked in a straightforward way: `copy()` in
+`streaming-core` writes the body in 1 MiB chunks from any `InputStream`, S3 or otherwise, and the
+client receives it progressively. When I applied the same approach to Amazon Bedrock output, it did
+not work the way I wanted it to. Bedrock produced its tokens progressively, the handler wrote and flushed every delta, and the client still
 received the whole answer in a single burst at the end.
 
-The difference is the size of each write. An S3 chunk is a megabyte; a token delta is a few bytes. In
-our deployed environment, large writes reached the client as they were written, while small writes
+The difference is the size of each write. `copy()` writes 1 MiB at a time; a token delta is a few
+bytes. In our deployed environment, large writes reached the client as they were written, while small writes
 were held back until the response completed. The AWS Builder Center article "The Curious Case of SSE
 Streaming Agent Responses on AWS Lambda" [2] reports the same behaviour from a Python/FastAPI stack
 behind the Lambda Web Adapter, estimates the buffer at about 100 KB, and describes a solution:
@@ -50,7 +51,7 @@ It helps to separate what we observed, what AWS documents, and what is inferred.
 first byte (TTFB) equal to the total time, 5.79 s. Calling `flush()` after every delta made no
 difference. The same model called directly, outside Lambda, emitted 71 deltas spread over about
 607 ms — so the model streams, and the delay happens downstream. On the same stack, the S3 example's
-1 MB writes streamed progressively.
+1 MiB writes streamed progressively.
 
 **Documented.** With the response transfer mode set to `STREAM`, API Gateway does not wait for the
 complete response before sending it to the client [4]. AWS documents managed-runtime response
