@@ -335,9 +335,7 @@ streaming endpoint looks buffered; the API Gateway troubleshooting guide also re
 
 ## Conclusion
 
-When I started on the Bedrock example, I assumed the approach from the S3 example would carry over
-unchanged: write each chunk, flush, and let API Gateway stream it to the client. For large S3 chunks
-that worked in a straightforward way. For Bedrock tokens it did not — the same handler delivered the
+When I started on the Bedrock example, I assumed the approach from the S3 example would work in the same way: write each chunk, flush, and let API Gateway stream it to the client. However, I discovered that Bedrock streaming in smaller chunks caused the same handler to deliver the
 whole answer in one burst, because each write was too small to be forwarded. Getting progressive
 delivery took two additions: padding each event with SSE comment lines, the approach described in
 [2], and a regional API Gateway endpoint. The padding costs a significant amount of bandwidth, so it
