@@ -35,7 +35,11 @@ class PromptResolver(
 ) : RequestResolver<PromptRequest> {
 
     override fun resolve(input: InputStream): RequestResult<PromptRequest> {
-        val raw = runCatchingNonFatal { input.readBytes().decodeToString() }.getOrElse { "" }.trim()
+        val raw = runCatching { input.readBytes().decodeToString() }
+            .rethrowFatal()
+            .onFailure { e -> logger.warn(e) { "Could not read the request; using defaults" } }
+            .getOrElse { "" }
+            .trim()
         val body = parseBody(raw)
 
         val prompt = (body?.get("prompt")?.jsonPrimitive?.content ?: DEFAULT_PROMPT)
@@ -46,7 +50,7 @@ class PromptResolver(
         }
 
         fun clampedInt(key: String, default: Int, min: Int, max: Int): Int {
-            val v = body?.get(key)?.jsonPrimitive?.intOrNull() ?: default
+            val v = body?.get(key)?.jsonPrimitive?.intOrNull(key) ?: default
             return v.coerceIn(min, max)
         }
 
@@ -68,13 +72,22 @@ class PromptResolver(
      */
     private fun parseBody(raw: String): kotlinx.serialization.json.JsonObject? {
         if (raw.isEmpty()) return null
-        return runCatchingNonFatal {
+        return runCatching {
             val root = json.parseToJsonElement(raw).jsonObject
             val bodyStr = root["body"]?.jsonPrimitive?.content
             if (bodyStr != null) json.parseToJsonElement(bodyStr).jsonObject else root
-        }.getOrNull()
+        }.rethrowFatal()
+            .onFailure { e ->
+                // Only the exception type is logged: the decoder's message echoes the input, which
+                // contains the prompt.
+                logger.warn { "Request body is not a JSON object (${e::class.simpleName}); using defaults" }
+            }
+            .getOrNull()
     }
 
-    private fun kotlinx.serialization.json.JsonPrimitive.intOrNull(): Int? =
-        runCatchingNonFatal { this.int }.getOrNull()
+    private fun kotlinx.serialization.json.JsonPrimitive.intOrNull(key: String): Int? =
+        runCatching { this.int }
+            .rethrowFatal()
+            .onFailure { e -> logger.warn { "Ignoring non-integer '$key' (${e::class.simpleName}); using default" } }
+            .getOrNull()
 }

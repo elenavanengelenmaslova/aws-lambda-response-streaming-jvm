@@ -3,20 +3,17 @@ package nl.vintik.lambda.bedrock
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Like [runCatching], but only captures recoverable exceptions.
+ * Rethrows a fatal failure instead of keeping it in the [Result]; any other failure stays a failure.
  *
- * Plain `runCatching` catches every [Throwable], which would turn coroutine cancellation, thread
- * interruption, or a JVM [Error] (for example `OutOfMemoryError`) into an ordinary failure value.
- * Those must propagate instead: cancellation and interruption are control signals, and an [Error]
- * means the process is in no state to write an HTTP error response.
+ * `runCatching` captures every [Throwable], including coroutine cancellation, thread interruption and
+ * JVM [Error]s such as `OutOfMemoryError`. Those must propagate rather than be handled like an ordinary
+ * failure, so every `runCatching` in this module is followed by `rethrowFatal()`:
+ *
+ * ```
+ * runCatching { work() }.rethrowFatal().onFailure { e -> logger.warn(e) { "..." } }
+ * ```
  */
-internal inline fun <R> runCatchingNonFatal(block: () -> R): Result<R> =
-    runCatching(block).onFailure { it.rethrowIfFatal() }
+internal fun <T> Result<T>.rethrowFatal(): Result<T> = onFailure { if (it.isFatal()) throw it }
 
-/** Rethrows [this] when it must not be handled as an ordinary failure. */
-internal fun Throwable.rethrowIfFatal() {
-    when (this) {
-        is CancellationException, is InterruptedException, is Error -> throw this
-        else -> Unit
-    }
-}
+internal fun Throwable.isFatal(): Boolean =
+    this is CancellationException || this is InterruptedException || this is Error

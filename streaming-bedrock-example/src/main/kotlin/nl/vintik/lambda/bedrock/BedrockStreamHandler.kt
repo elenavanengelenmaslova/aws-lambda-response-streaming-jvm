@@ -76,7 +76,7 @@ class BedrockStreamHandler(
 
         // Metadata is deferred until the first delta: the model must actually start producing
         // output before the 200 status is committed, so a pre-first-delta failure can still be a 502.
-        val outcome = runCatchingNonFatal {
+        val outcome = runCatching {
             runBlocking {
                 source.stream(request) { delta ->
                     commitMetadataOnce()
@@ -84,7 +84,7 @@ class BedrockStreamHandler(
                     logger.debug { "event=${sse.eventsWritten()} elapsedMs=${System.currentTimeMillis() - start}" }
                 }
             }
-        }
+        }.rethrowFatal()
 
         outcome.fold(
             onSuccess = {

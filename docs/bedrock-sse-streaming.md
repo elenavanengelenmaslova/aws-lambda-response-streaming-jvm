@@ -152,14 +152,14 @@ fun commitMetadataOnce() {
     committed = true
 }
 
-val outcome = runCatchingNonFatal {     // handles recoverable failures; fatal ones propagate
+val outcome = runCatching {
     runBlocking {
         source.stream(request) { delta ->
             commitMetadataOnce()          // first delta commits HTTP 200
             sse.writeEvent(output, delta)
         }
     }
-}
+}.rethrowFatal()                          // fatal failures propagate; the rest is handled below
 
 outcome.fold(
     onSuccess = {
@@ -181,9 +181,9 @@ outcome.fold(
 Deferring the metadata until the first delta is the head-before-stream rule from [1], applied to a
 model call. Once the prelude is written, the status is committed. Before that point, a Bedrock failure
 — throttling, missing model access, an invalid request — can still be returned as HTTP 502. After the
-first delta, a failure is logged and rethrown, and can only truncate the body. `runCatchingNonFatal`
-is a small helper in the example that behaves like `runCatching` but lets cancellation and JVM
-errors propagate instead of turning them into an HTTP error. A successful generation with no deltas still
+first delta, a failure is logged and rethrown, and can only truncate the body. `rethrowFatal()` is
+a small `Result` extension in the example that lets cancellation and JVM errors propagate instead of
+turning them into an HTTP error; every failure the example does handle is logged. A successful generation with no deltas still
 returns HTTP 200 and the terminal event. The handler wraps everything in `output.use { }` and calls
 `output.flush()` before the stream closes. Each of these paths is covered in
 [`BedrockStreamHandlerTest`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/v2.4.1/streaming-bedrock-example/src/test/kotlin/nl/vintik/lambda/bedrock/BedrockStreamHandlerTest.kt).

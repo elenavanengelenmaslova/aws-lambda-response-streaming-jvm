@@ -13,15 +13,15 @@ import kotlin.coroutines.cancellation.CancellationException
 class NonFatalTest {
 
     @Test
-    fun `Given a successful block When run Then the value is returned`() {
-        val result = runCatchingNonFatal { 42 }
+    fun `Given a successful block When rethrowFatal is applied Then the value is kept`() {
+        val result = runCatching { 42 }.rethrowFatal()
         assertEquals(42, result.getOrNull())
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("recoverable")
-    fun `Given a recoverable exception When run Then it is captured as a failure`(e: Throwable) {
-        val result = runCatchingNonFatal { throw e }
+    fun `Given a recoverable exception When rethrowFatal is applied Then it stays a failure`(e: Throwable) {
+        val result = runCatching { throw e }.rethrowFatal()
         val captured = result.exceptionOrNull()
         assertNotNull(captured)
         assertSame(e, captured)
@@ -29,8 +29,8 @@ class NonFatalTest {
 
     @ParameterizedTest(name = "[{index}] {0}")
     @MethodSource("fatal")
-    fun `Given a fatal throwable When run Then it propagates instead of being captured`(e: Throwable) {
-        val thrown = assertThrows(Throwable::class.java) { runCatchingNonFatal { throw e } }
+    fun `Given a fatal throwable When rethrowFatal is applied Then it propagates`(e: Throwable) {
+        val thrown = assertThrows(Throwable::class.java) { runCatching { throw e }.rethrowFatal() }
         assertSame(e, thrown)
     }
 

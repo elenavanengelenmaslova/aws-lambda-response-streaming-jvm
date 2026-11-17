@@ -2098,15 +2098,17 @@ That framing is what makes it likely to become the article people find when they
 
 ---
 
-## `runCatching` in the Bedrock handler caught cancellation and JVM errors — `runCatchingNonFatal`
+## `runCatching` in the Bedrock example caught cancellation and JVM errors, and swallowed parse failures silently
 
 - **Symptom / trigger:** `BedrockStreamHandler` wrapped the model call in `runCatching`, which
   captures every `Throwable`. A `CancellationException`, an `InterruptedException` or a JVM `Error`
   (e.g. `OutOfMemoryError`) raised before the first delta would have been logged and answered with
-  HTTP 502 instead of propagating. The same pattern was used for parsing in `PromptResolver` and
-  `BedrockSource`.
-- **Resolution / status:** **Resolved.** Added `runCatchingNonFatal` (`NonFatal.kt`), which behaves
-  like `runCatching` but rethrows cancellation, interruption and `Error`, and replaced every
-  `runCatching` call in `streaming-bedrock-example`. Covered by `NonFatalTest` (recoverable vs fatal
-  cases) and a handler test asserting a cancelled source propagates and no 502 is written.
-  The S3 examples still use plain `runCatching`.
+  HTTP 502 instead of propagating. `PromptResolver` (request read, body parse, integer knobs) and
+  `BedrockSource` (Nova event parse) used the same pattern with `getOrNull()`/`getOrElse`, and
+  discarded those failures without logging them.
+- **Resolution / status:** **Resolved.** Added `Result<T>.rethrowFatal()` (`NonFatal.kt`), so every
+  call site reads `runCatching { … }.rethrowFatal()` and keeps the full `Result` API. Every handled
+  failure is now logged at WARN before its fallback. For JSON parse failures only the exception type
+  is logged, because kotlinx-serialization's message echoes the input (the prompt or model output).
+  Covered by `NonFatalTest` (recoverable vs fatal) and a handler test asserting a cancelled source
+  propagates without a 502. The S3 examples still use plain `runCatching`.
