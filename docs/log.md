@@ -2052,3 +2052,33 @@ That framing is what makes it likely to become the article people find when they
   buffering, so the end-to-end progressive-delivery proof is the post-deploy check
   against the real deployed Bedrock endpoint, not a unit test. No runtime secrets are
   involved in this finding.
+
+---
+
+## `bedrock-streaming-test.sh` does not measure HTTP TTFB — its "~0 ms" is by construction
+
+- **Symptom / trigger:** The Bedrock README and article draft reported "TTFB ~0 ms" for the padded
+  configuration. Reviewing the script showed the Python reader sets its clock (`base`) when the
+  first line arrives on stdin, and `first` is the first `data:` line — normally that same line. So
+  `ttf_ms` is ~0 regardless of how long the client actually waited, and `total_ms` is the spread from
+  the first to the last data line, not the request duration. The `ttf/total < 0.5` assertion is
+  therefore effectively always true; only `buckets >= MIN_BUCKETS` and `[DONE]` carry signal. The
+  script also never sends `headPadBytes`/`tailPadBytes`, so it always measures the default padding.
+- **Resolution / status:** **Documented, script unchanged.** The article now reports arrival spread
+  and distinct 500 ms windows only, and states that HTTP TTFB was not measured for the padded case
+  (the only HTTP TTFB on record is the unpadded experiment: `time_starttransfer == time_total ==
+  5.79 s`). To measure real TTFB, capture curl's `%{time_starttransfer}` (as
+  `pipeline-streaming-test.sh` does) alongside the per-line timestamps.
+
+---
+
+## `PaddedSseWriter` does not split multi-line deltas — text after a newline is lost to SSE clients
+
+- **Symptom / trigger:** `writeEvent` emits `data: <text>\n\n` literally. A delta containing `\n`
+  yields one `data:` line plus raw continuation lines that have no `data:` prefix; an SSE parser
+  treats those as unknown fields and drops them. `PaddedSseWriterRoundTripTest` asserts this
+  (`"first\nsecond"` recovers only `"first\n"`). The demo's `sed | awk` pipeline hides it because it
+  joins lines anyway, and it also prints a trailing `[DONE]`.
+- **Resolution / status:** **OPEN — documented as a limitation in the article.** A fix would split
+  `text` on `\n` and prefix every line with `data: ` (the SSE spec's multi-line data form); that is a
+  behaviour change to the published writer and would need its round-trip property updated.
