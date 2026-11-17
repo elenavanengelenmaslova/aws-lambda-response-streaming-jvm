@@ -20,7 +20,8 @@
 #   API_KEY                x-api-key value             (default: resolved from stack output ApiKeyId)
 #   BEDROCK_TEST_ENABLED   Must be "true" to run       (default: unset -> skip)
 #   PROMPT                 Prompt text                 (default: a long essay request)
-#   MAX_TOKENS             Generation length           (default: 2000 — long enough to spread)
+#   MAX_TOKENS             Generation length           (default: 5000)
+#   RUNS                   Sequential requests; the LAST one decides pass/fail (default: 3)
 #   MIN_BUCKETS            Min distinct 500ms buckets   (default: 3)
 #
 # Exit codes:
@@ -31,7 +32,8 @@ set -euo pipefail
 
 STACK_NAME="${STACK_NAME:-bedrock-streaming-endpoint}"
 BEDROCK_TEST_ENABLED="${BEDROCK_TEST_ENABLED:-}"
-MAX_TOKENS="${MAX_TOKENS:-2000}"
+MAX_TOKENS="${MAX_TOKENS:-5000}"
+RUNS="${RUNS:-3}"
 MIN_BUCKETS="${MIN_BUCKETS:-3}"
 PROMPT="${PROMPT:-Write a detailed 1500-word essay about the history and future of cloud computing, in flowing prose with several sections.}"
 
@@ -92,17 +94,14 @@ measure() {
   export PROMPT MAX_TOKENS
   body="$(python3 -c 'import json,os;print(json.dumps({"prompt":os.environ["PROMPT"],"maxTokens":int(os.environ["MAX_TOKENS"])}))')"
 
-  info "warmup request (discarded)"
-  curl -sN --http1.1 -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
-    --max-time 240 -o /dev/null "$url" -d "$body" || true
-
-  info "measured request (streaming)"
-  local result timing_file
-  timing_file="$(mktemp)"
-  result="$(curl -sN --http1.1 -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
-    --max-time 240 -w '%{stderr}http_code=%{http_code} ttfb_s=%{time_starttransfer} total_s=%{time_total} bytes=%{size_download}' \
-    "$url" -d "$body" 2>"$timing_file" \
-    | MIN_BUCKETS="$MIN_BUCKETS" python3 -c '
+  local result="" timing_file run
+  for (( run = 1; run <= RUNS; run++ )); do
+    info "request $run/$RUNS (streaming)"
+    timing_file="$(mktemp)"
+    result="$(curl -sN --http1.1 -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
+      --max-time 240 -w '%{stderr}http_code=%{http_code} ttfb_s=%{time_starttransfer} total_s=%{time_total} bytes=%{size_download}' \
+      "$url" -d "$body" 2>"$timing_file" \
+      | MIN_BUCKETS="$MIN_BUCKETS" python3 -c '
 import sys,time,os
 start=time.monotonic()  # reader starts with curl; used only for the extra *_from_start_ms fields
 min_buckets=int(os.environ["MIN_BUCKETS"])
@@ -127,10 +126,12 @@ ok = (ratio < 0.5) and (buckets >= min_buckets) and done
 verdict = "OK" if ok else "FAIL"
 print(verdict + f" events={len(times)} ttf_ms={ttf:.0f} total_ms={total:.0f} buckets={buckets} done={done} ratio={ratio:.2f}"
       f" first_token_from_start_ms={(first-start)*1000.0:.0f} last_token_from_start_ms={(last-start)*1000.0:.0f}")
-')"
-  info "result: $result"
-  info "http timing (curl, from request sent): $(cat "$timing_file" 2>/dev/null)"
-  rm -f "$timing_file"
+')" || result="FAIL curl_error"
+    info "request $run/$RUNS result: $result"
+    info "request $run/$RUNS http timing (curl, from request sent): $(cat "$timing_file" 2>/dev/null)"
+    rm -f "$timing_file"
+  done
+  # The last request decides pass/fail.
   case "$result" in
     OK*) pass "progressive arrival confirmed ($result)";;
     *)   fail "progressive arrival NOT confirmed ($result)";;
