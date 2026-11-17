@@ -44,16 +44,20 @@ class StreamHandler<R : Any>(
     private val responseWriter: ResponseWriter by lazy(responseWriter)
 
     override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
+        val timings = Timings(context.awsRequestId.orEmpty())
+        timings.mark("start", "outputClass=${output::class.java.name}")
         output.use {
             when (val result = requestResolver.resolve(input)) {
                 is RequestResult.Error -> responseWriter.writeError(output, result.statusCode, result.message)
-                is RequestResult.Resolved -> handleObject(result.request, output)
+                is RequestResult.Resolved -> handleObject(result.request, output, timings)
             }
             output.flush()
+            timings.mark("flushed")
         }
+        timings.mark("closed")
     }
 
-    private fun handleObject(request: R, output: OutputStream) {
+    private fun handleObject(request: R, output: OutputStream, timings: Timings) {
         when (val head = runBlocking { source.head(request) }) {
             is HeadResult.NotFound -> {
                 logger.warn { "Requested resource not found; responding 404" }
@@ -65,7 +69,7 @@ class StreamHandler<R : Any>(
                 responseWriter.writeError(output, 502, "Object retrieval failed.")
             }
 
-            is HeadResult.Exists -> streamObject(request, head.size, output)
+            is HeadResult.Exists -> streamObject(request, head.size, output, timings)
         }
     }
 
@@ -76,7 +80,7 @@ class StreamHandler<R : Any>(
      * [ResponseWriter.writeMetadata] returns; a body failure after that only truncates the
      * body and propagates (Req 4.1, 3.3, 6.3).
      */
-    private fun streamObject(request: R, size: Long, output: OutputStream) {
+    private fun streamObject(request: R, size: Long, output: OutputStream, timings: Timings) {
         val metadata = ResponseMetadata(
             statusCode = 200,
             headers = mapOf(
@@ -85,11 +89,37 @@ class StreamHandler<R : Any>(
             ),
         )
         responseWriter.writeMetadata(output, metadata)
+        timings.mark("metadataCommitted", "size=$size")
         // Status committed. From here a failure can only truncate the body — never rewrite the status.
+        var chunks = 0
         runCatching {
-            runBlocking { source.streamBody(request, output) { output.flush() } }
+            runBlocking {
+                source.streamBody(request, output) {
+                    output.flush()
+                    chunks++
+                    timings.mark("chunkFlushed", "n=$chunks")
+                }
+            }
+            timings.mark("bodyEnd", "chunks=$chunks")
         }.onFailure { e ->
             logger.error(e) { "Body stream failed after status commit; response body truncated" }
         }.getOrThrow()
+    }
+}
+
+/**
+ * Timing log lines for locating where streamed bytes are held. Each line carries the Lambda request
+ * id (the value API Gateway logs as `$context.integration.requestId`), the time since the handler
+ * started and the epoch time.
+ */
+private class Timings(private val requestId: String) {
+    private val startNanos = System.nanoTime()
+
+    fun mark(stage: String, extra: String = "") {
+        val suffix = if (extra.isEmpty()) "" else " $extra"
+        logger.info {
+            "timing requestId=$requestId stage=$stage tMs=${(System.nanoTime() - startNanos) / 1_000_000} " +
+                "epochMs=${System.currentTimeMillis()}$suffix"
+        }
     }
 }
