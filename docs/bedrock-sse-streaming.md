@@ -203,9 +203,8 @@ Events:
       ResponseTransferMode: RESPONSE_STREAM
 ```
 
-The function runs on the managed `java25` runtime. The API is regional: streamed responses are subject
-to an idle timeout of 5 minutes for regional endpoints and 30 seconds for edge-optimized ones [4],
-which matters when a model pauses before producing output.
+The function runs on the managed `java25` runtime, and the API endpoint is regional rather than
+edge-optimized — see the lessons below for why.
 
 ### Optional pacing
 
@@ -282,7 +281,8 @@ roughly 10 KB per later event, so the overhead grows with the number of deltas r
 size of the answer. In our experiment, a ~15 KB essay became about 5 MB on the wire. In [2], with
 fewer and larger events, 81 KB became 2.8 MB. The client discards the padding, but it still counts
 toward Lambda's 200 MB streamed-response limit and the 2 MB/s bandwidth cap that applies after the
-first 6 MB [3].
+first 6 MB [3]. API Gateway itself allows up to 15 minutes of streaming and only throttles after
+10 MB [4], so the Lambda limits are the binding ones.
 
 Whether that is acceptable depends on how much a fast first token matters, how many events a response
 produces, how large responses are, and what the extra bytes cost the client and the account. For an
@@ -291,8 +291,8 @@ bulk output, batching deltas into fewer events, or not streaming at all, may be 
 
 ## Lessons learned
 
-**A delay alone does not help.** An earlier "dribble" attempt in MockNest spaced small writes out in
-time. Each write was still small, so the output still arrived as one burst. A delay only paces events
+**A delay alone does not help.** An earlier attempt spaced the small writes out in time instead of
+padding them. Each write was still small, so the output still arrived as one burst. A delay only paces events
 once padding is already pushing them out, which is why `PacedSseEmitter` throws
 `IllegalArgumentException` when a delay is combined with a writer that has no padding.
 
@@ -301,28 +301,20 @@ once padding is already pushing them out, which is why `PacedSseEmitter` throws
 The handler never closed the output stream. `output.use { }` plus an explicit `output.flush()` before
 the close fixed it, and the Bedrock handler uses the same structure.
 
-**Header values are strings.** A metadata prelude with `Map<String, List<String>>` headers is valid
-JSON but made API Gateway return HTTP 502. Headers are `Map<String, String>`; repeated `Set-Cookie`
-values go in the separate `cookies` field [1].
-
 **`RESPONSE_STREAM` versus `STREAM`.** The SAM `Api` event property is
 `ResponseTransferMode: RESPONSE_STREAM`; the underlying integration value is `STREAM` [4]. Mixing them
 up leaves a buffered endpoint, and the mistake only shows after a deployment.
+
+**Use a regional endpoint.** With an edge-optimized API Gateway endpoint, the response was buffered in
+our setup and reached the client in one burst; switching the API to `EndpointConfiguration: Type:
+REGIONAL` restored progressive delivery. AWS documents response streaming for all REST API endpoint
+types, but with different idle timeouts: 5 minutes for regional endpoints and 30 seconds for
+edge-optimized ones [4], which matters when a model pauses before producing output.
 
 **The client buffers too.** Without `-N` (`--no-buffer`), curl holds the output, and a correctly
 streaming endpoint looks buffered; the API Gateway troubleshooting guide also recommends
 `--no-buffer` [5]. Every later stage of a shell pipeline can buffer as well, which is why the demo uses
 `sed -u` and `fflush()` in `awk`.
-
-**HTTP/2 error 92.** In our CI runner, curl over HTTP/2 sometimes failed with
-`curl: (92) HTTP/2 stream 1 was not closed cleanly: INTERNAL_ERROR (err 2)`, although the body had
-been received. A later HTTP/2 retest with curl 8.7.1 against the S3 endpoint completed without errors,
-so this looks specific to some client builds. Our scripts use `--http1.1`.
-
-**Recording the demo.** The first GIF, recorded with `asciinema rec --command`, showed the whole
-response appearing at the end, although the same pipeline streamed when run directly. The terminal
-recorder had coalesced the output timing. The final GIF was rendered from the arrival times of the
-real stream.
 
 ## Limitations
 
@@ -332,23 +324,29 @@ real stream.
   contains a newline is not split into several `data:` lines, so an SSE client drops the text after
   the newline. `PaddedSseWriterRoundTripTest` documents this. Deltas with newlines need splitting
   before they are written.
-- **API Gateway REST only.** The wire protocol in `streaming-core` targets API Gateway REST. With the
-  managed Java runtime, a Lambda Function URL did not stream in our tests; AWS points to a custom
-  runtime or the Lambda Web Adapter for that case [3].
+- **API Gateway REST only.** The solution is specific to API Gateway REST APIs with
+  `ResponseTransferMode: RESPONSE_STREAM`, and does not cover Lambda Function URLs. The metadata
+  prelude written by `streaming-core` is parsed by API Gateway's integration layer; a Function URL has
+  no such layer, and with the managed Java runtime the same handler returned HTTP 502 behind a
+  Function URL in our tests. For Function URLs, AWS points to a custom runtime or the Lambda Web
+  Adapter [3].
 - **Undocumented behaviour.** The padding approach depends on buffering behaviour that AWS does not
   document, and it was measured in one region with one model.
 
 ## Conclusion
 
-Large-object streaming from a JVM Lambda worked in a straightforward way. An LLM token relay did not:
-the same handler delivered the whole answer in one burst, because each write was too small to be
-forwarded. Padding each event with ignored SSE comment lines, as described in [2], made the stream
-progressive, at a significant cost in bandwidth. `streaming-sse` packages that approach for Kotlin and
-Java on top of `streaming-core`.
+When I started on the Bedrock example, I assumed the approach from the S3 example would carry over
+unchanged: write each chunk, flush, and let API Gateway stream it to the client. For large S3 chunks
+that worked in a straightforward way. For Bedrock tokens it did not — the same handler delivered the
+whole answer in one burst, because each write was too small to be forwarded. Getting progressive
+delivery took two additions: padding each event with SSE comment lines, the approach described in
+[2], and a regional API Gateway endpoint. The padding costs a significant amount of bandwidth, so it
+is a deliberate trade-off rather than a default.
 
-Both libraries are on Maven Central, and the
+I packaged the padding in a new `streaming-sse` module on top of `streaming-core`, so Kotlin and Java
+projects can use it without reimplementing it. Both libraries are on Maven Central, and the
 [`streaming-bedrock-example`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v2.4.1/streaming-bedrock-example)
-module is a complete, deployable example: its
+module is a complete, deployable example — its
 [Quick Start](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v2.4.1/streaming-bedrock-example#quick-start)
 lets you try it in your own account. Code links in this article point to the `v2.4.1` release tag,
 the version published to Maven Central, so they keep showing the code described here.

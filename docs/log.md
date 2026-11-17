@@ -2082,3 +2082,16 @@ That framing is what makes it likely to become the article people find when they
 - **Resolution / status:** **OPEN — documented as a limitation in the article.** A fix would split
   `text` on `\n` and prefix every line with `data: ` (the SSE spec's multi-line data form); that is a
   behaviour change to the published writer and would need its round-trip property updated.
+
+---
+
+## Edge-optimized API Gateway endpoint buffered the Bedrock stream — use REGIONAL
+
+- **Symptom / trigger:** Reported by the author during the Bedrock work: with an edge-optimized
+  REST API endpoint the streamed response reached the client in a single burst. Switching the API to
+  `EndpointConfiguration: Type: REGIONAL` restored progressive delivery. The run details (request,
+  timings) were not recorded at the time.
+- **Resolution / status:** **Resolved by configuration.** All SAM templates set `REGIONAL`. Note the
+  API Gateway docs state response streaming works for all REST API endpoint types, with idle timeouts
+  of 5 minutes (regional/private) and 30 seconds (edge-optimized), so the buffering seen on the edge
+  endpoint is an observation of this setup, not documented behaviour.
