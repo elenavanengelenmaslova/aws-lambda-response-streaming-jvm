@@ -7,8 +7,8 @@ relay in the previous article "AWS Lambda Response Streaming for Kotlin and Java
 where we streamed an S3 object through a Lambda behind API Gateway REST, worked in a straightforward way:
 it writes roughly a megabyte per chunk, and each write streams through to the client progressively. An LLM token relay behaves differently, and does not work the way I wanted it to - progressive sse trickle. Amazon Bedrock streams a few bytes at a time, and those small writes are held in the Lambda
 response-streaming runtime's internal buffer until it fills or the invocation ends, so the whole
-answer arrives as a single terminal burst rather than a progressive trickle. That gap — large
-writes streaming works, per-token writes do not work out of the box, so I created an additional module to the streaming library - `streaming-sse` library:
+answer arrives as a single terminal burst rather than a progressive trickle. To fix the gap where large
+writes streaming works, but per-token writes do not work out of the box, I created an additional module to the streaming library - `streaming-sse` library:
 the [`streaming-sse`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/streaming-sse/README.md)
 library packages the padding/dribble workaround (`PaddedSseWriter` / `PacedSseEmitter`) on top of
 the existing `streaming-core` module, so other projects do not have to implement it again. The workaround
