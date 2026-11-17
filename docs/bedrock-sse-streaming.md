@@ -67,7 +67,9 @@ does not force the bytes out; the stream still arrives as one terminal burst at 
 a progressive trickle. The flush happens at the language layer, but the buffer that gates delivery
 sits below it, inside the Lambda streaming runtime.
 
-That placement identifies where the behaviour originates. It is not a JVM quirk, not something in
+That placement identifi
+
+es where the behaviour originates. It is not a JVM quirk, not something in
 these libraries, and not API Gateway adding a buffer to the path — it is the Lambda streaming
 runtime itself, and it reproduces across languages. The change is therefore not on the JVM side; it
 is in how bytes are written, which is the subject of the rest of this article.
@@ -555,6 +557,21 @@ deployment/aws/sam-bedrock/template.yaml` (exit code 0) before committing any te
 [`deployment/aws/sam-bedrock/template.yaml`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/deployment/aws/sam-bedrock/template.yaml).
 This is the shared-setup piece from the S3 example, re-flagged because it can consume a whole deploy
 cycle before it is noticed.
+
+**7. The API must be regional, not edge-optimized, or CloudFront buffers the stream.**
+*Symptom:* the Lambda streams correctly and the SAM transfer mode is right, but on an edge-optimized
+API the client still receives the response in one burst, and longer generations can be cut off
+partway. The streaming works when tested against the regional invoke URL and fails through the
+edge-optimized domain.
+*Fix:* configure the API as `REGIONAL`. An edge-optimized API Gateway puts CloudFront in front of
+the endpoint, and CloudFront buffers the response — it does not forward a chunked stream
+progressively — so the padding that crossed the Lambda runtime buffer is re-buffered at the edge and
+arrives as a single burst. The edge-optimized path also carries a much tighter idle timeout (30 s,
+versus 5 minutes for a regional API), which can terminate a slow generation mid-stream. The example
+sets `EndpointConfiguration: Type: REGIONAL` on the `Api` in
+[`deployment/aws/sam-bedrock/template.yaml`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/main/deployment/aws/sam-bedrock/template.yaml)
+for exactly this reason. If you need a custom domain or edge caching in front of a streaming
+endpoint, terminate it regionally and do not let CloudFront buffer the response.
 
 ## Client-side pitfalls
 
