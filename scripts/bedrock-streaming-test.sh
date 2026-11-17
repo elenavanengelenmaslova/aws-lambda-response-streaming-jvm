@@ -99,11 +99,12 @@ measure() {
     info "request $run/$RUNS (streaming)"
     timing_file="$(mktemp)"
     result="$(curl -sN --http1.1 -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
-      --max-time 240 -w '%{stderr}http_code=%{http_code} ttfb_s=%{time_starttransfer} total_s=%{time_total} bytes=%{size_download}' \
+      --max-time 240 -w '%{stderr}http_code=%{http_code} ttfb_s=%{time_starttransfer} total_s=%{time_total} bytes=%{size_download} api_request_id=%header{x-amzn-requestid}' \
       "$url" -d "$body" 2>"$timing_file" \
       | MIN_BUCKETS="$MIN_BUCKETS" python3 -c '
 import sys,time,os
-start=time.monotonic()  # reader starts with curl; used only for the extra *_from_start_ms fields
+start=time.monotonic()  # reader starts with curl; used only for the extra *_from_start_ms / *_epoch_ms fields
+start_epoch=time.time()
 min_buckets=int(os.environ["MIN_BUCKETS"])
 base=None;first=None;last=None;times=[];done=False
 for raw in iter(sys.stdin.buffer.readline, b""):
@@ -125,7 +126,9 @@ ratio = ttf/total if total>0 else 1.0
 ok = (ratio < 0.5) and (buckets >= min_buckets) and done
 verdict = "OK" if ok else "FAIL"
 print(verdict + f" events={len(times)} ttf_ms={ttf:.0f} total_ms={total:.0f} buckets={buckets} done={done} ratio={ratio:.2f}"
-      f" first_token_from_start_ms={(first-start)*1000.0:.0f} last_token_from_start_ms={(last-start)*1000.0:.0f}")
+      f" first_token_from_start_ms={(first-start)*1000.0:.0f} last_token_from_start_ms={(last-start)*1000.0:.0f}"
+      f" start_epoch_ms={start_epoch*1000.0:.0f} first_token_epoch_ms={(start_epoch+first-start)*1000.0:.0f}"
+      f" last_token_epoch_ms={(start_epoch+last-start)*1000.0:.0f}")
 ')" || result="FAIL curl_error"
     info "request $run/$RUNS result: $result"
     info "request $run/$RUNS http timing (curl, from request sent): $(cat "$timing_file" 2>/dev/null)"

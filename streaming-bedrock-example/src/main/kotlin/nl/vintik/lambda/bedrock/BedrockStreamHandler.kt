@@ -44,33 +44,37 @@ class BedrockStreamHandler(
     private val responseWriter: ResponseWriter by lazy(responseWriter)
 
     override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
+        val timings = StreamTimings(context.awsRequestId.orEmpty())
+        timings.mark("start", "outputClass=${output::class.java.name}")
         output.use {
             when (val result = requestResolver.resolve(input)) {
                 is RequestResult.Error -> responseWriter.writeError(output, result.statusCode, result.message)
-                is RequestResult.Resolved -> stream(result.request, output)
+                is RequestResult.Resolved -> stream(result.request, output, timings)
             }
-            output.flush()
+            timings.timed("flushed") { output.flush() }
         }
+        timings.mark("closed")
     }
 
-    private fun stream(request: PromptRequest, output: OutputStream) {
+    private fun stream(request: PromptRequest, output: OutputStream, timings: StreamTimings) {
         val sse = PaddedSseWriter(request.headPadBytes, request.tailPadBytes, request.headPadEvents)
-        val start = System.currentTimeMillis()
         var committed = false
 
         fun commitMetadataOnce() {
             if (committed) return
-            responseWriter.writeMetadata(
-                output,
-                ResponseMetadata(
-                    statusCode = 200,
-                    headers = mapOf(
-                        "Content-Type" to "text/event-stream; charset=utf-8",
-                        "Cache-Control" to "no-cache",
-                        "Transfer-Encoding" to "chunked",
+            timings.timed("metadataCommitted") {
+                responseWriter.writeMetadata(
+                    output,
+                    ResponseMetadata(
+                        statusCode = 200,
+                        headers = mapOf(
+                            "Content-Type" to "text/event-stream; charset=utf-8",
+                            "Cache-Control" to "no-cache",
+                            "Transfer-Encoding" to "chunked",
+                        ),
                     ),
-                ),
-            )
+                )
+            }
             committed = true
         }
 
@@ -79,9 +83,9 @@ class BedrockStreamHandler(
         val outcome = runCatching {
             runBlocking {
                 source.stream(request) { delta ->
+                    timings.onDelta()
                     commitMetadataOnce()
-                    sse.writeEvent(output, delta)
-                    logger.debug { "event=${sse.eventsWritten()} elapsedMs=${System.currentTimeMillis() - start}" }
+                    timings.timeEventWrite(sse.eventsWritten() + 1) { sse.writeEvent(output, delta) }
                 }
             }
         }.rethrowFatal()
@@ -91,6 +95,7 @@ class BedrockStreamHandler(
                 // A successful generation with zero deltas still returns 200.
                 commitMetadataOnce()
                 sse.writeEnd(output)
+                timings.streamEnd(sse.eventsWritten())
                 logger.info { "stream complete events=${sse.eventsWritten()}" }
             },
             onFailure = { e ->
