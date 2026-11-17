@@ -2095,3 +2095,18 @@ That framing is what makes it likely to become the article people find when they
   API Gateway docs state response streaming works for all REST API endpoint types, with idle timeouts
   of 5 minutes (regional/private) and 30 seconds (edge-optimized), so the buffering seen on the edge
   endpoint is an observation of this setup, not documented behaviour.
+
+---
+
+## `runCatching` in the Bedrock handler caught cancellation and JVM errors — `runCatchingNonFatal`
+
+- **Symptom / trigger:** `BedrockStreamHandler` wrapped the model call in `runCatching`, which
+  captures every `Throwable`. A `CancellationException`, an `InterruptedException` or a JVM `Error`
+  (e.g. `OutOfMemoryError`) raised before the first delta would have been logged and answered with
+  HTTP 502 instead of propagating. The same pattern was used for parsing in `PromptResolver` and
+  `BedrockSource`.
+- **Resolution / status:** **Resolved.** Added `runCatchingNonFatal` (`NonFatal.kt`), which behaves
+  like `runCatching` but rethrows cancellation, interruption and `Error`, and replaced every
+  `runCatching` call in `streaming-bedrock-example`. Covered by `NonFatalTest` (recoverable vs fatal
+  cases) and a handler test asserting a cancelled source propagates and no 502 is written.
+  The S3 examples still use plain `runCatching`.

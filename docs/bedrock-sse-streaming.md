@@ -152,7 +152,7 @@ fun commitMetadataOnce() {
     committed = true
 }
 
-val outcome = runCatching {
+val outcome = runCatchingNonFatal {     // handles recoverable failures; fatal ones propagate
     runBlocking {
         source.stream(request) { delta ->
             commitMetadataOnce()          // first delta commits HTTP 200
@@ -167,8 +167,13 @@ outcome.fold(
         sse.writeEnd(output)
     },
     onFailure = { e ->
-        if (!committed) responseWriter.writeError(output, 502, "Model streaming failed.")
-        else throw e                      // status already committed: body is truncated
+        if (!committed) {
+            logger.warn(e) { "Bedrock stream failed before the first delta; responding 502" }
+            responseWriter.writeError(output, 502, "Model streaming failed.")
+        } else {
+            logger.error(e) { "Bedrock relay failed after status commit; body truncated" }
+            throw e                       // status already committed: body is truncated
+        }
     },
 )
 ```
@@ -176,7 +181,9 @@ outcome.fold(
 Deferring the metadata until the first delta is the head-before-stream rule from [1], applied to a
 model call. Once the prelude is written, the status is committed. Before that point, a Bedrock failure
 — throttling, missing model access, an invalid request — can still be returned as HTTP 502. After the
-first delta, a failure can only truncate the body. A successful generation with no deltas still
+first delta, a failure is logged and rethrown, and can only truncate the body. `runCatchingNonFatal`
+is a small helper in the example that behaves like `runCatching` but lets cancellation and JVM
+errors propagate instead of turning them into an HTTP error. A successful generation with no deltas still
 returns HTTP 200 and the terminal event. The handler wraps everything in `output.use { }` and calls
 `output.flush()` before the stream closes. Each of these paths is covered in
 [`BedrockStreamHandlerTest`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/blob/v2.4.1/streaming-bedrock-example/src/test/kotlin/nl/vintik/lambda/bedrock/BedrockStreamHandlerTest.kt).

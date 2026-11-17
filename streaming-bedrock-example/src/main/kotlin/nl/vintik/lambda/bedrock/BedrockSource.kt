@@ -70,7 +70,7 @@ internal fun novaRequestBody(prompt: String, maxTokens: Int): String {
  * `{"contentBlockDelta":{"delta":{"text":"..."}}}`.
  */
 internal fun extractNovaTextDelta(payloadJson: String): String? =
-    runCatching {
+    runCatchingNonFatal {
         val root = novaJson.parseToJsonElement(payloadJson).jsonObject
         val delta = (root["contentBlockDelta"] as? JsonObject)?.get("delta") as? JsonObject
         delta?.get("text")?.jsonPrimitive?.content

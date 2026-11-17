@@ -35,7 +35,7 @@ class PromptResolver(
 ) : RequestResolver<PromptRequest> {
 
     override fun resolve(input: InputStream): RequestResult<PromptRequest> {
-        val raw = runCatching { input.readBytes().decodeToString() }.getOrElse { "" }.trim()
+        val raw = runCatchingNonFatal { input.readBytes().decodeToString() }.getOrElse { "" }.trim()
         val body = parseBody(raw)
 
         val prompt = (body?.get("prompt")?.jsonPrimitive?.content ?: DEFAULT_PROMPT)
@@ -68,7 +68,7 @@ class PromptResolver(
      */
     private fun parseBody(raw: String): kotlinx.serialization.json.JsonObject? {
         if (raw.isEmpty()) return null
-        return runCatching {
+        return runCatchingNonFatal {
             val root = json.parseToJsonElement(raw).jsonObject
             val bodyStr = root["body"]?.jsonPrimitive?.content
             if (bodyStr != null) json.parseToJsonElement(bodyStr).jsonObject else root
@@ -76,5 +76,5 @@ class PromptResolver(
     }
 
     private fun kotlinx.serialization.json.JsonPrimitive.intOrNull(): Int? =
-        runCatching { this.int }.getOrNull()
+        runCatchingNonFatal { this.int }.getOrNull()
 }

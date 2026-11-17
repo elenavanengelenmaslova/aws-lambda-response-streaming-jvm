@@ -4,11 +4,13 @@ import com.amazonaws.services.lambda.runtime.Context
 import io.mockk.mockk
 import nl.vintik.lambda.streaming.DELIMITER_LEN
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Unit tests for [BedrockStreamHandler], mirroring the S3 example's StreamHandler tests: the real
@@ -101,6 +103,24 @@ class BedrockStreamHandlerTest {
         assertTrue(!produced.contains("\"statusCode\":200"), "200 metadata must NOT have been committed")
         assertTrue(!produced.contains("event: end"), "no SSE terminal event on a pre-first-delta failure")
         assertTrue(out.closed, "output stream must be closed")
+    }
+
+    @Test
+    fun `Given the source is cancelled When handled Then cancellation propagates and no 502 is written`() {
+        // Given — a source that is cancelled before any delta.
+        val handler = BedrockStreamHandler(
+            requestResolver = { PromptResolver() },
+            source = { TokenStreamSource { _, _ -> throw CancellationException("cancelled") } },
+        )
+        val out = RecordingOutputStream()
+
+        // When / Then — cancellation is not converted into an HTTP error response.
+        assertThrows(CancellationException::class.java) {
+            handler.handleRequest(ByteArrayInputStream("{}".toByteArray()), out, context)
+        }
+        val produced = out.bytes.toByteArray().decodeToString()
+        assertTrue(!produced.contains("\"statusCode\":502"), "cancellation must not be mapped to 502")
+        assertTrue(out.closed, "output stream must still be closed")
     }
 
     @Test
