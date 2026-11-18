@@ -2,32 +2,23 @@
 
 ### Progressive token delivery through API Gateway REST, without a custom runtime or Lambda layer
 
-In the previous article, "AWS Lambda Response Streaming for Kotlin and Java" [1], we streamed a large
- object from a source like S3 via a Kotlin and Java Lambda through API Gateway REST, aiming at large blobs that exceed the Lambda
-and API Gateway buffered response limits. That worked: `copy()` in `streaming-core` writes the body in
-1 MiB chunks from any `InputStream`, and a 12 MB object reaches the client in full.
+In the previous article, "AWS Lambda Response Streaming for Kotlin and Java" [1], I introduced
+`aws-lambda-streaming-core`, a small JVM library that writes the API Gateway streaming response
+format from a Lambda `RequestStreamHandler`. It works well for large payloads: a 12 MB S3 object
+reaches the client in full, past the 6 MB buffered Lambda response limit [2] and API Gateway's 10 MB
+buffered limit [3].
 
-When I applied the same approach to Amazon Bedrock output, it did not work the way I wanted. Bedrock
-produced its tokens progressively, the handler wrote and flushed every delta, and the client still
-received the whole answer in one burst at the end.
+Amazon Bedrock is a different shape of problem. The model produces its answer a few characters at a
+time, and the point of streaming it is that the first words appear while the rest is still being
+generated. With `streaming-core` alone, that does not happen: Bedrock streams its deltas, the handler
+writes and flushes each one, and the client receives the whole answer in a single burst at the end.
 
-My first assumption was the one described in the AWS Builder Center article "The Curious Case of SSE Streaming
-Agent Responses on AWS Lambda" [2]: a buffer inside the Lambda streaming runtime that holds small
-writes until it fills, at roughly 100 KB, defeated by padding each event with SSE comment lines.
-Padded, the output did appear a few words at a time, so it looked like it worked — until I measured
-time to first byte.
-
-On the managed JVM runtime there is no buffer to defeat, because **nothing leaves the execution
-environment until the handler returns** — at any write size. Padding never made the stream
-progressive. It made the finished response large enough that *downloading* it took long enough to
-look progressive, which is not the same thing and waists bandwidth.
-
-In this article, I will explain what the managed JVM runtime really does and what does work for token-by-token streaming with no custom runtime and no Lambda layer.
+This article explains why, and what the new `streaming-sse` module does about it.
 
 ## Demo and architecture
 
 The deployed endpoint, called with `curl`. Words appear a few at a time while the model is still
-generating. There is no padding to filter out.
+generating.
 
 ![Animated terminal demo: curl streaming Amazon Bedrock Nova Lite tokens from the Kotlin Lambda as Server-Sent Events, with text appearing progressively a few tokens at a time rather than in a single burst.](./bedrock-streaming-demo.gif)
 
@@ -35,134 +26,67 @@ generating. There is no padding to filter out.
 
 The client sends `POST /stream` with `{"prompt":"...","maxTokens":N}`. API Gateway invokes the Lambda
 in streaming mode, the handler calls Bedrock Nova Lite with `InvokeModelWithResponseStream`, and each
-text delta is written back to the client as an SSE event.
+text delta goes back to the client as an SSE event.
 
-## What the managed JVM runtime actually does
+## How the managed JVM runtime sends a response
 
-It helps to separate what we observed, what AWS documents, and what is inferred.
+The `OutputStream` that a `RequestStreamHandler` receives is a `java.io.ByteArrayOutputStream`. The
+Java runtime interface client creates it, hands it to `handleRequest`, and sends its contents to the
+Lambda Runtime API after the handler returns [6]. There is no connection behind it, so `flush()` has
+nothing to flush to:
 
-**Observed.** The `OutputStream` a `RequestStreamHandler` receives on the managed `java25` runtime is
-a `java.io.ByteArrayOutputStream` — the handler can log its class name and see this. To find out when
-its contents leave, I deployed a function that writes a block of bytes, flushes, then sleeps before
-returning, and compared the handler's own timing lines with the API Gateway access log fields
-`$context.integration.timeToFirstContent` and `$context.integration.timeToAllHeaders` [5]:
-
-| Written | When written | Handler returned | API Gateway received first content |
-|---|---|---|---|
-| 15 MB | 2 ms | 10,003 ms | 10,069 ms |
-| 1 KB | 0 ms | 10,001 ms | 10,029 ms |
-
-The whole body sat in the sandbox for ten seconds while the handler was idle. The response
-*headers* arrived at the same moment as the body, not when the handler wrote them. The same shape
-held on the S3 example: the prelude was written at 14 ms and reached API Gateway at 1,102 ms, after
-all 12.58 MB had been written and the handler had closed.
-
-`Max Memory Used` also grew with the response: five consecutive 12 MB requests in one execution
-environment reported 205, 217, 229, 241 and 253 MB — about the object size per request.
-
-**Documented.** AWS documents managed-runtime response streaming for Node.js and points other
-languages to a custom runtime or the Lambda Web Adapter [3]. The Java runtime interface client is
-open source, and its handler wrapper keeps a `ThreadLocal<ByteArrayOutputStream>`, hands it to
-`handleRequest`, and returns it to the invocation loop afterwards [8]. A maintainer reply on the same
-repository states that response streaming is Node.js-only [9]. So the behaviour is not a bug; the
-managed Java runtime simply has no streaming path.
-
-**Inferred.** Our measurements show when bytes reach API Gateway, not which layer held them. The
-source above is consistent with the handler's stream being a plain heap buffer, which is also what
-the observed class name suggests.
-
-## Why the large blob streaming works with core library
-
-Two things are true at once, and it is worth keeping them apart.
-
-**The transport really is a streaming one.** The access log reports
-`$context.integration.responseTransferMode` as `STREAM`, and the integration URI is Lambda's
-`/response-streaming-invocations` path. That is what lifts the 6 MB buffered Lambda response limit [3]
-and API Gateway's 10 MB buffered limit [4] — a 12 MB or 21 MB object is delivered at all only because
-of it. API Gateway then streams those bytes onward to the client progressively and with bounded
-memory on its side.
-
-**But the handler does not produce them incrementally.** For a large file download that mostly might
-not matter: the client's first byte arrives as soon as the transfer starts, and a 12 MB body takes
-seconds to doenload, so time-to-first-byte looks good. What it costs you is memory — the whole
-response exists in the function's heap before any of it moves, as the numbers above show — and it
-means a handler cannot react to a slow producer.
-
-For large blobs, `streaming-core` on its own is the right tool. For a
-token trickle as SSE it will not work because of buffering until handler completes.
-
-## Why padding does not fix it
-
-Padding each SSE event with comment lines, as in [2], does produce output that arrives in several
-time windows at the client. It is worth being precise about why.
-
-With padding, the handler still writes everything into the heap buffer, and the buffer is still
-posted after the handler returns. The only thing that changed is the size of the finished response.
-A few kilobytes download instantly, so an unpadded answer appears as one burst. Several megabytes
-take seconds to download, and a client printing text as it arrives shows it filling in gradually.
-
-Measured on the deployed endpoint, same prompt and model:
-
-| | Bytes on the wire | Client TTFB | TTFB as share of total |
-|---|---|---|---|
-| No padding | 14 KB | at the end | ~100% |
-| Padding, 100 KB × 3 + 10 KB | 18 MB | 8.68 s of 12.48 s | 70% |
-
-Time to first *token* got worse, not better, and the response carried about 1,280 times more bytes.
-The visual effect is a typewriter animation produced by a slow download — the same effect a client
-can produce locally, for free, without delaying completion. [2] reports a Python/FastAPI stack behind
-the Lambda Web Adapter, which posts to the Runtime API incrementally; I can only say that on the
-managed Java runtime the mechanism is different and padding is not the lever.
-
-So `streaming-sse` carries no padding writer. `SseWriter` writes events and nothing else.
-
-## What does work: post the response yourself
-
-The managed runtime's buffered stream is not the only way to answer an invocation. The Lambda Runtime
-API, which a custom runtime talks to, accepts a response as a **chunked HTTP request** — and it is
-reachable from handler code at `$AWS_LAMBDA_RUNTIME_API` inside the sandbox.
-
-Three settings make that request stream:
-
-```kotlin
-val connection = (URI("http://$endpoint/2018-06-01/runtime/invocation/$requestId/response")
-    .toURL().openConnection() as HttpURLConnection).apply {
-    requestMethod = "POST"
-    doOutput = true
-    setChunkedStreamingMode(0)                                       // chunked transfer encoding
-    setRequestProperty("Lambda-Runtime-Function-Response-Mode", "streaming")
-    setRequestProperty("Content-Type", "application/vnd.awslambda.http-integration-response")
-}
+```
+Handler writes:  [ chunk 1 ][ chunk 2 ][ chunk 3 ]   → all into one in-memory buffer
+Handler returns: ────────────────────────────────┤
+Client receives:                                 [ chunk 1 ][ chunk 2 ][ chunk 3 ]
 ```
 
-The content type is the marker that Node's `awslambda.HttpResponseStream.from()` sets through
-`setContentType`: it tells the service the body opens with the metadata prelude. So the wire format
-is unchanged — `streaming-core`'s `ResponseWriter` writes the same prelude, the same eight-byte
-delimiter and the same body as before. Only the destination differs, and the destination is a socket
-instead of a heap buffer.
+This is not a size threshold or a buffer that can be filled. It applies equally to a 1 KB write and a
+15 MB one, and it applies to the response headers as well — they reach API Gateway when the handler
+returns, not when they are written. Padding each Server-Sent Event with SSE comment lines, the
+approach described in [5] for a Python stack behind the Lambda Web Adapter, does not change it on the
+managed JVM runtime: it makes the response larger, so the download that follows takes longer, which
+is not the same as streaming it. AWS documents managed-runtime response streaming for Node.js only,
+and points other languages at a custom runtime or the Lambda Web Adapter [2, 7].
 
-That alone is not enough. After the handler returns, AWS's invocation loop posts *its* response for
-an invocation that is already answered, the post fails, and the runtime process exits — every
-invocation ends as `Runtime.ExitError`, even though the client received a correct, complete response.
+That leaves two quite different situations.
 
-### Stopping the duplicate post
+**Large payloads are fine.** The integration is a genuinely streaming one, which is what lifts the
+6 MB and 10 MB buffered limits, and API Gateway forwards the body to the client progressively as it
+receives it. For a file download the client's first byte arrives as soon as the transfer starts.
+`streaming-core` is the right tool, and nothing in the previous article changes. What it costs is
+memory: the whole response exists in the function's heap before any of it moves.
 
-The loop needs one change: skip its post when the handler has already answered. Three ways to get
-there, and only the last is usable.
+**A token trickle is not.** Here the whole value is bytes leaving while the handler is still working,
+and that is exactly what the buffered stream cannot do.
 
-The runtime interface client cannot be replaced from the deployment package. `/var/task` is not on
-the JVM classpath at all — the runtime launches with only its own jars on `-classpath`, and customer
-code is loaded separately by a `CustomerClassLoader` — so a class shipped under a runtime package
-name can never win.
+## How `streaming-sse` makes it stream
 
-`AWS_LAMBDA_EXEC_WRAPPER`, which is supported on all managed runtimes [10], can rewrite the runtime's
-command line and substitute a whole invocation loop. That works, and it streams. It also silently
-stops CRaC hooks from firing, so SnapStart priming quietly stops running: in a control comparison,
-`beforeCheckpoint` fired under AWS's loop and never fired under a replacement. It needs an executable
-script in the package, which a library cannot ship.
+The Runtime API, which a custom runtime talks to, accepts an invocation response as a **chunked HTTP
+request**. It is reachable from handler code at `$AWS_LAMBDA_RUNTIME_API` inside the execution
+environment. `StreamingResponse` posts the response there itself and gives the handler that live
+stream instead of the buffered one.
 
-A **Java agent** is the one that fits. `premain` runs before the runtime's `main`, so AWS's loop stays
-in place — including whatever drives the CRaC callbacks — and the agent patches a single method:
+Three settings on that request are what make it stream:
+
+```kotlin
+setChunkedStreamingMode(0)                                       // chunked transfer encoding
+setRequestProperty("Lambda-Runtime-Function-Response-Mode", "streaming")
+setRequestProperty("Content-Type", "application/vnd.awslambda.http-integration-response")
+```
+
+The content type is the same marker that Node's `awslambda.HttpResponseStream.from()` applies through
+`setContentType`: it tells the service the body begins with the metadata prelude. So the wire format
+does not change. `streaming-core`'s `ResponseWriter` writes the same metadata, the same eight-byte
+delimiter and the same body [1]. Only the destination changes, from a heap buffer to a socket.
+
+One thing then needs handling. AWS's invocation loop does not know the invocation has been answered,
+so after the handler returns it sends its own response for the same request, that send fails, and the
+runtime process exits — every invocation ends in `Runtime.ExitError`, even though the client received
+a correct response.
+
+The module ships a small **Java agent** for this. `premain` runs before the runtime's `main`, and it
+patches one method so the loop skips its send when the handler has already answered:
 
 ```java
 // LambdaRuntimeApiClientImpl
@@ -172,36 +96,44 @@ void reportInvocationSuccess(String requestId, byte[] response, String xrayHeade
 }
 ```
 
-Everything else is left byte-identical: fetching the next invocation, the SnapStart restore hook,
-error reporting, logging. An agent is also just a jar plus one flag, which means it can ship as a
-library dependency.
+Everything else is left as it is: fetching the next invocation, error reporting, logging, and the
+CRaC hooks that SnapStart priming depends on. Replacing the whole invocation loop also works, but it
+stops those hooks from firing, so priming quietly stops running.
 
-It fails safe. If the jar cannot be loaded or the runtime method has changed, nothing is patched and
-the function keeps working on the normal buffered path. `StreamingAgent.isPatched()` reports the
-truth, and `StreamingResponse` refuses to stream when the patch is absent — so a runtime change shows
-up as one clear error instead of a failed invocation per request.
+The agent fails safe. If it cannot load, or the runtime method has changed, nothing is patched and the
+function keeps working on the normal buffered path. `StreamingAgent.isPatched()` reports which state
+you are in, and `StreamingResponse` refuses to stream when the patch is absent, so a runtime change
+surfaces as one clear error instead of a failed invocation per request.
 
-## Setup: three steps
+## Using the library
+
+`streaming-sse` declares `streaming-core` as an `api` dependency, so one line brings in both:
 
 ```kotlin
 implementation("nl.vintik:aws-lambda-streaming-sse:3.0.0")
 ```
 
-Make the fat jar an agent, and package it as a zip. `-javaagent` needs a real jar file, and a
-`CodeUri` pointing at a bare jar is extracted loose into `/var/task`, leaving nothing to point at. A
-zip with the jar under `lib/` is the standard Java Lambda layout:
+Make the fat jar double as the agent, and package it as a zip. `Premain-Class` on the manifest is
+what lets the function's own jar act as the agent, so there is no second artifact. `-javaagent`
+needs a real jar file, and a `CodeUri` pointing at a bare jar is extracted loose into `/var/task`,
+leaving nothing to point at, so the package is a zip with the jar under `lib/` — the standard Java
+Lambda layout:
 
 ```kotlin
 tasks.shadowJar {
+    archiveFileName.set("my-function.jar")
     manifest { attributes("Premain-Class" to "nl.vintik.lambda.streaming.sse.StreamingAgent") }
 }
 
 tasks.register<Zip>("lambdaZip") {
+    archiveFileName.set("my-function.zip")
     from(tasks.shadowJar) { into("lib") }
 }
 ```
 
-Point the runtime at the agent:
+The jar name is whatever you set as `archiveFileName`. Lambda unpacks the package into `/var/task`,
+so `into("lib")` puts the jar at `/var/task/lib/my-function.jar`, which is the path the
+`-javaagent` flag below needs. Those two have to agree:
 
 ```yaml
 Runtime: java25                    # unchanged
@@ -220,177 +152,104 @@ Events:
     Properties:
       Path: /stream
       Method: post
+      # Must be exactly RESPONSE_STREAM [4]. Any other value deploys a buffered integration
+      # without an error, and nothing streams.
       ResponseTransferMode: RESPONSE_STREAM
 ```
 
-That is the whole deployment change: one zip task and one flag.
+That is the whole deployment change: one zip task and one flag. The runtime stays `java25`, and
+SnapStart, CRaC priming and warm reuse are unaffected. Use a regional API Gateway endpoint — with an
+edge-optimized one the response was buffered in my setup, and the idle timeout is 30 seconds rather
+than 5 minutes [3].
 
-## In the handler
+In the handler, `send` opens the request, writes the metadata, runs your body with the live stream,
+and completes the request:
 
 ```kotlin
-override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
-    when (val result = requestResolver.resolve(input)) {
-        // Nothing is committed yet, so an error can still choose its status. A short JSON body
-        // does not need streaming — it goes out on the runtime's own buffered stream.
-        is RequestResult.Error -> output.use {
-            responseWriter.writeError(output, result.statusCode, result.message)
-        }
+val metadata = ResponseMetadata(
+    statusCode = 200,
+    headers = mapOf(
+        "Content-Type" to "text/event-stream; charset=utf-8",
+        "Cache-Control" to "no-cache",
+    ),
+)
 
-        is RequestResult.Resolved -> streaming.send(context.awsRequestId, sseMetadata()) { live ->
-            runBlocking {
-                source.stream(result.request) { delta -> sse.writeEvent(live, delta) }
-            }
-            sse.writeEnd(live)
-        }
-    }
+streaming.send(context.awsRequestId, metadata) { live ->
+    val sse = SseWriter()
+    source.stream(request) { delta -> sse.writeEvent(live, delta) }
+    sse.writeEnd(live)
 }
 ```
 
-`StreamingResponse.send` opens the chunked request, writes the prelude, runs the body with the live
-stream, completes the request and marks the invocation answered. The `output` the runtime handed us is
-deliberately untouched on the success path.
+`SseWriter` handles the event framing: one `data:` line per line of text, a blank line between
+events, and a terminal `event: end` / `data: [DONE]` so a client can tell a finished stream from a
+dropped connection. The `OutputStream` the runtime passed to the handler is left untouched.
 
-The ordering rule from [1] still applies, and matters more here: the status is committed the moment
-the prelude and delimiter reach the wire. Validate first. A Bedrock failure *before* the first delta —
-throttling, missing model access — can still be returned as HTTP 502 on the buffered stream. After
-the first delta, a failure can only truncate the body.
-
-`SseWriter` replaces the padded writer. It also splits text containing newlines across several
-`data:` lines, as the SSE specification requires, which fixes a real bug in the padded version: a
-conforming client dropped everything after the first newline in a delta.
-
-## Measured results
-
-Deployed endpoint in `eu-west-1`, Nova Lite, `maxTokens=2000`, no padding:
-
-| Run | Tokens | Answer | Bytes on the wire | Client TTFB | Total | Arrival windows |
-|---|---|---|---|---|---|---|
-| 1 | 595 | 7,316 chars | 12,343 | 0.172 s | 11.72 s | 17 × 500 ms |
-| 2 | 688 | 8,131 chars | 14,121 | 0.199 s | 9.46 s | 18 × 500 ms |
-
-First token at about 2% of total time, and the token stream spans the generation rather than a
-download. Server side, API Gateway had the response headers at 31 ms and the first content at 307 ms,
-with the integration stream open for the full 9.3 s. Individual events were 9–39 bytes.
-
-What else held, which is the part that makes it usable rather than merely possible:
-
-- `REPORT` lines show no `Status: error` — the duplicate post is gone.
-- SnapStart restores normally (`RESTORE_REPORT Restore Duration: 189–456 ms`), and the CRaC
-  `beforeCheckpoint` hook fires, so priming still runs.
-- Execution environments are reused: five consecutive invocations with no init or restore between
-  them, the small ones billed at 6 ms.
-- `Max Memory Used` stayed flat at 97 MB for synthetic bodies up to 15 MB, and 145 MB with the
-  Bedrock SDK loaded. It no longer tracks response size.
-
-The deployed example is checked by `scripts/bedrock-streaming-test.sh`, which invokes paid Bedrock and
-runs only with `BEDROCK_TEST_ENABLED=true`. It asserts four things: curl's `%{time_starttransfer}` is
-under 35% of total time, tokens land in at least four distinct windows, bytes on the wire stay within
-4× the answer's own size, and the terminal `[DONE]` event arrives. The third is a guard against
-padding coming back; the first is the assertion the previous version of that script could not make,
-because it timed from the first line it read and so reported a time to first byte of roughly zero by
-construction.
-
-The unit tests cover the wire format, the SSE framing including multi-line text, the status ordering,
-and the bytecode patch — the patch test generates a synthetic class with the same method signature,
-patches it, and loads it so the JVM verifier runs. No local emulator implements streaming invocation,
-so progressive delivery itself is shown only by the deployed measurements above: one region, one
-model, a small number of runs.
-
-## Lessons learned
-
-**Measure time to first byte, not the look of the output.** Text appearing a few words at a time is
-not evidence that bytes left early; a slow download of a finished response looks identical. Curl's
-`%{time_starttransfer}` as a share of `%{time_total}` separates the two in one request. What settled
-the mechanism was a handler that writes, flushes, then *sleeps* — comparing the handler's own clock
-against API Gateway's access log made the answer unambiguous in two runs.
-
-**Padding is a download, not a stream.** An inter-chunk delay does not help either: both change when
-or how much is written, and neither changes that the write goes into a heap buffer.
-
-**One patch beats a replacement.** Substituting the whole invocation loop works and costs you CRaC
-priming, with no error to tell you. Patching one method keeps everything else AWS's.
-
-**`AutoPublishAlias` only republishes on code change.** A config-only deploy updates `$LATEST` and
-leaves the `live` alias — which API Gateway invokes — on the previous version with the old
-environment. I measured an old configuration for a while because of this. After changing only a
-parameter, check the alias's version, not `$LATEST`.
-
-**A CRaC hook needs someone to construct it.** `Priming` registers itself in its constructor, so if
-nothing instantiates it the hook is never registered and no priming happens. Both Kotlin examples
-were in that state: the class was fully unit tested and completely inert in production, because the
-tests supplied the construction site the handler did not. The fix is one eager field; the regression
-test reads it reflectively.
-
-**`RESPONSE_STREAM` versus `STREAM`.** SAM's valid values are `BUFFERED` and `RESPONSE_STREAM` [6];
-there is no `STREAM` in SAM. Writing `STREAM` — the API Gateway name from [4] — is not rejected by
-`sam validate` or `--lint`, and the SAM translator enables streaming only for the exact string
-`RESPONSE_STREAM` [7]. Any other value deploys an ordinary buffered integration, so the mistake shows
-up only after a deployment.
-
-**Use a regional endpoint.** With an edge-optimized API Gateway endpoint the response was buffered in
-our setup and reached the client in one burst; `EndpointConfiguration: Type: REGIONAL` restored
-progressive delivery. AWS documents streaming for all REST endpoint types but with different idle
-timeouts — 5 minutes regional, 30 seconds edge-optimized [4] — which matters when a model pauses.
-
-**The client buffers too.** Without `-N` (`--no-buffer`), curl holds the output and a correctly
-streaming endpoint looks buffered; the API Gateway troubleshooting guide recommends it as well [5].
-Later stages of a shell pipeline buffer too, which is why a demo pipeline needs `sed -u` and
-`fflush()` in `awk`.
+The head-before-stream rule from [1] still applies, and matters more here. The status is committed as
+soon as the metadata and delimiter reach the wire, so validate before calling `send`. A Bedrock
+failure *before* the first delta — throttling, or missing model access — can still be returned as
+HTTP 502 on the handler's buffered stream. After the first delta, a failure can only truncate the
+body.
 
 ## Limitations
 
-- **Undocumented behaviour.** Posting the invocation response from handler code, and the method the
-  agent patches, are not part of any AWS contract. A runtime update can change either. The failure
-  mode is "streaming unavailable", not "function broken", but it is a real risk: pin the runtime
-  version and keep a post-deploy check that asserts a real TTFB.
-- **You are patching the runtime.** One method, fail-safe, with the rest untouched — but it is still
-  instrumentation of AWS internals, and that is a deliberate choice rather than a default.
-- **API Gateway REST only.** `ResponseTransferMode: RESPONSE_STREAM` in SAM [6] (`STREAM` in API
-  Gateway [4]). HTTP APIs do not support response streaming; Function URLs do, but with the managed
-  Java runtime the prelude protocol returned HTTP 502 behind one in our tests [3].
-- **Bandwidth caps.** Lambda throttles after the first 6 MB of a streamed response [3]; API Gateway
-  after 10 MB [4]. Far less relevant now that the response is only as large as the answer.
+The standard response-streaming limitations [2] still apply, and this module adds two of its own.
+
+- **Undocumented behaviour.** Sending the invocation response from handler code, and the method the
+  agent patches, are not part of any AWS contract, and a runtime update can change either. The
+  failure mode is that streaming becomes unavailable rather than that the function breaks, but it is
+  worth pinning the runtime version and keeping a post-deploy check.
+- **You are patching the runtime.** One method, fail-safe, with everything else untouched — but it is
+  still instrumentation of AWS internals, and a deliberate choice rather than a default.
+- **API Gateway REST only.** `ResponseTransferMode: RESPONSE_STREAM` in SAM [4], `STREAM` at the API
+  Gateway integration level [3]. HTTP APIs do not support response streaming, and with the managed
+  Java runtime the prelude format returns HTTP 502 behind a Function URL.
 - **Billing is unchanged.** Streaming does not shorten the invocation. You are billed for the whole
-  handler duration, including any time spent waiting on the model.
-- **Concurrency.** The answered-flag is per-thread, which keeps concurrent invocations in one
-  execution environment independent. Verified for one invocation at a time; not tested on Lambda
-  Managed Instances.
+  handler duration, including time spent waiting for the model.
+- **The client buffers too.** Without `-N` (`--no-buffer`), curl holds its output and a correctly
+  streaming endpoint looks buffered; the API Gateway troubleshooting guide recommends the same flag
+  [8]. Later stages of a shell pipeline buffer as well.
+
+## The Bedrock example
+
+[`streaming-bedrock-example`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v3.0.0/streaming-bedrock-example)
+is a complete, deployable endpoint built on the module: `PromptResolver` parses and clamps the
+request, `BedrockSource` calls Nova Lite with `InvokeModelWithResponseStream`, and
+`BedrockStreamHandler` relays each delta as an SSE event. It ships with SnapStart and CRaC priming,
+least-privilege IAM scoped to one inference profile, API-key auth, and the SAM template shown above.
+
+Its
+[Quick Start](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v3.0.0/streaming-bedrock-example#quick-start)
+covers building, testing, deploying and resolving the endpoint URL and API key, so you can run it in
+your own account. The repository also includes a post-deploy check that invokes paid Bedrock only
+when `BEDROCK_TEST_ENABLED=true`. It asserts the things that distinguish streaming from a fast
+download: curl's `%{time_starttransfer}` as a fraction of the total time, tokens arriving in several
+distinct time windows, a response no larger than the answer itself, and the terminal `[DONE]` event.
 
 ## Conclusion
 
-The S3 example from [1] was right about what it claimed: response streaming through API Gateway
-delivers payloads past the buffered limits, and `streaming-core` writes that wire format correctly.
-What I had wrong was the next step. On the managed JVM runtime the handler's `OutputStream` is a heap
-buffer, so the response is transported as a stream but produced in one piece — fine for a large file,
-useless for a token trickle, and the reason the whole answer sits in memory first.
+`aws-lambda-streaming-core` does what the previous article described. For large objects — an S3
+download, a CSV export, a generated report — it writes the API Gateway streaming format correctly and
+carries payloads well past the 6 MB Lambda and 10 MB API Gateway buffered limits, with the body
+transferred in bounded chunks rather than assembled as a `String`.
 
-Padding looked like the fix and was not. It bought a slower first token and about 1,280 times the
-bytes, in exchange for a typewriter effect a client can produce by itself.
+What it cannot do on the managed JVM runtime is send anything before the handler returns, because the
+`OutputStream` it writes to is an in-memory buffer. For a large download that barely matters. For
+Server-Sent Events it is the whole point, so progressive token delivery needs the new
+`aws-lambda-streaming-sse` module, which sends the response to the Lambda Runtime API as it is
+produced and keeps AWS's invocation loop from sending a second one.
 
-What works is to answer the invocation yourself — a chunked request to the Lambda Runtime API with
-the response-mode header and the prelude content type — and to stop AWS's loop from posting a
-duplicate, by patching one method with a Java agent. Nothing else about the function changes:
-`Runtime: java25`, SnapStart, CRaC priming, warm reuse and the handler signature all stay as they
-were, with no custom runtime, no Lambda layer and no wrapper script. Tokens reach the client at about
-2% of total time, and the response carries only the answer.
-
-`streaming-sse` 3.0 packages this — `StreamingResponse`, `SseWriter` and the agent — on top of
-`streaming-core`. Both are on Maven Central, and the
-[`streaming-bedrock-example`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v3.0.0/streaming-bedrock-example)
-module is a complete, deployable example; its
-[Quick Start](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/v3.0.0/streaming-bedrock-example#quick-start)
-lets you try it in your own account. Code links point to the `v3.0.0` release tag, the version
-published to Maven Central, so they keep showing the code described here.
+Both libraries are on Maven Central, and the Kotlin Bedrock example is on GitHub. Code links point to
+the `v3.0.0` release tag, the version published to Maven Central, so they keep showing the code
+described here.
 
 ## References
 
 1. E. van Engelen-Maslova, "AWS Lambda Response Streaming for Kotlin and Java," AWS Builder Center. https://builder.aws.com/content/3KQYoLu7XiQSn6r13bPEE8jeKTj/aws-lambda-response-streaming-for-kotlin-and-java
-2. "The Curious Case of SSE Streaming Agent Responses on AWS Lambda," AWS Builder Center. https://builder.aws.com/content/39iqpehwjnn2TuNmGnHAnsMcHmP/the-curious-case-of-sse-streaming-agent-responses-on-aws-lambda
-3. "Response streaming for Lambda Event Functions," AWS Lambda Developer Guide. https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html
-4. "Stream the integration response for your proxy integrations in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
-5. "Troubleshoot issues with response streaming in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-streaming-troubleshoot.html
-6. "Api" event source, `ResponseTransferMode`, AWS Serverless Application Model Developer Guide. https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
-7. AWS SAM translator source, `samtranslator/swagger/swagger.py` (sets `responseTransferMode: STREAM`) and `samtranslator/model/eventsources/push.py` (`/response-streaming-invocations` URI). https://github.com/aws/serverless-application-model/blob/3dfbd2b29a82161c47f6f956091db0a0f3608bb1/samtranslator/swagger/swagger.py
-8. AWS Lambda Java runtime interface client source, `EventHandlerLoader.wrapRequestStreamHandler` (collects handler output in a `ThreadLocal<ByteArrayOutputStream>`). https://github.com/aws/aws-lambda-java-libs/blob/main/aws-lambda-java-runtime-interface-client/src/main/java/com/amazonaws/services/lambda/runtime/api/client/EventHandlerLoader.java
-9. "Response streaming support for java lambda," aws/aws-lambda-java-libs issue #476. https://github.com/aws/aws-lambda-java-libs/issues/476
-10. "Modifying the runtime environment," AWS Lambda Developer Guide (wrapper scripts are supported on all native runtimes). https://docs.aws.amazon.com/lambda/latest/dg/runtimes-modify.html
+2. "Response streaming for Lambda Event Functions," AWS Lambda Developer Guide. https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html
+3. "Stream the integration response for your proxy integrations in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html
+4. "Api" event source, `ResponseTransferMode`, AWS Serverless Application Model Developer Guide. https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+5. "The Curious Case of SSE Streaming Agent Responses on AWS Lambda," AWS Builder Center. https://builder.aws.com/content/39iqpehwjnn2TuNmGnHAnsMcHmP/the-curious-case-of-sse-streaming-agent-responses-on-aws-lambda
+6. AWS Lambda Java runtime interface client, `EventHandlerLoader.wrapRequestStreamHandler` (collects handler output in a `ThreadLocal<ByteArrayOutputStream>`). https://github.com/aws/aws-lambda-java-libs/blob/main/aws-lambda-java-runtime-interface-client/src/main/java/com/amazonaws/services/lambda/runtime/api/client/EventHandlerLoader.java
+7. "Response streaming support for java lambda," aws/aws-lambda-java-libs issue #476. https://github.com/aws/aws-lambda-java-libs/issues/476
+8. "Troubleshoot issues with response streaming in API Gateway," Amazon API Gateway Developer Guide. https://docs.aws.amazon.com/apigateway/latest/developerguide/response-streaming-troubleshoot.html
