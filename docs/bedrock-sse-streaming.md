@@ -13,18 +13,18 @@ received the whole answer in one burst at the end.
 
 My first explanation was the one in the AWS Builder Center article "The Curious Case of SSE Streaming
 Agent Responses on AWS Lambda" [2]: a buffer inside the Lambda streaming runtime that holds small
-writes until it fills, at roughly 100 KB, defeated by padding each event with SSE comment lines. I
-implemented that, it produced something that looked progressive, and I shipped it.
+writes until it fills, at roughly 100 KB, defeated by padding each event with SSE comment lines.
+Padded, the output did appear a few words at a time, so it looked like it worked — until I measured
+time to first byte.
 
-Then I measured it properly, and the explanation turned out to be wrong. On the managed JVM runtime
-there is no buffer to defeat, because **nothing leaves the execution environment until the handler
-returns** — at any write size. Padding never made the stream progressive. It made the finished
-response large enough that *downloading* it took long enough to look progressive, which is not the
-same thing and costs a great deal of bandwidth.
+On the managed JVM runtime there is no buffer to defeat, because **nothing leaves the execution
+environment until the handler returns** — at any write size. Padding never made the stream
+progressive. It made the finished response large enough that *downloading* it took long enough to
+look progressive, which is not the same thing and costs a great deal of bandwidth.
 
-This article is the corrected version: what the managed JVM runtime really does, why the S3 example
-is still fine, why padding is not, and what does work — token-by-token delivery with no padding at
-all, still with no custom runtime and no Lambda layer.
+So this article covers what the managed JVM runtime really does, why that is still fine for the S3
+case, why padding is not the answer for a token trickle, and what does work — token-by-token
+delivery with no padding at all, still with no custom runtime and no Lambda layer.
 
 ## Demo and architecture
 
@@ -116,7 +116,7 @@ can produce locally, for free, without delaying completion. [2] reports a Python
 the Lambda Web Adapter, which posts to the Runtime API incrementally; I can only say that on the
 managed Java runtime the mechanism is different and padding is not the lever.
 
-I removed `PaddedSseWriter` and `PacedSseEmitter` from `streaming-sse` because of this.
+So `streaming-sse` carries no padding writer. `SseWriter` writes events and nothing else.
 
 ## What does work: post the response yourself
 
@@ -300,11 +300,11 @@ model, a small number of runs.
 
 ## Lessons learned
 
-**Measure the thing you are claiming.** I believed the ~100 KB buffer explanation for weeks because
-the output looked progressive and a credible source described the same symptom. What settled it was a
-handler that writes, flushes, then *sleeps* — comparing the handler's clock against API Gateway's
-access log made the answer unambiguous in two runs. If a mechanism is load-bearing for an article or
-a library, it is worth an experiment that can falsify it.
+**Measure time to first byte, not the look of the output.** Text appearing a few words at a time is
+not evidence that bytes left early; a slow download of a finished response looks identical. Curl's
+`%{time_starttransfer}` as a share of `%{time_total}` separates the two in one request. What settled
+the mechanism was a handler that writes, flushes, then *sleeps* — comparing the handler's own clock
+against API Gateway's access log made the answer unambiguous in two runs.
 
 **Padding is a download, not a stream.** An inter-chunk delay does not help either: both change when
 or how much is written, and neither changes that the write goes into a heap buffer.
