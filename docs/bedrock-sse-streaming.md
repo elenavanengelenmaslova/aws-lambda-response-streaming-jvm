@@ -3,7 +3,7 @@
 ### Progressive token delivery through API Gateway REST, without a custom runtime or Lambda layer
 
 In the previous article, "AWS Lambda Response Streaming for Kotlin and Java" [1], we streamed a large
-S3 object from a Kotlin Lambda through API Gateway REST, aiming at large blobs that exceed the Lambda
+ object from a source like S3 via a Kotlin and Java Lambda through API Gateway REST, aiming at large blobs that exceed the Lambda
 and API Gateway buffered response limits. That worked: `copy()` in `streaming-core` writes the body in
 1 MiB chunks from any `InputStream`, and a 12 MB object reaches the client in full.
 
@@ -11,7 +11,7 @@ When I applied the same approach to Amazon Bedrock output, it did not work the w
 produced its tokens progressively, the handler wrote and flushed every delta, and the client still
 received the whole answer in one burst at the end.
 
-My first explanation was the one in the AWS Builder Center article "The Curious Case of SSE Streaming
+My first assumption was the one described in the AWS Builder Center article "The Curious Case of SSE Streaming
 Agent Responses on AWS Lambda" [2]: a buffer inside the Lambda streaming runtime that holds small
 writes until it fills, at roughly 100 KB, defeated by padding each event with SSE comment lines.
 Padded, the output did appear a few words at a time, so it looked like it worked — until I measured
@@ -20,11 +20,9 @@ time to first byte.
 On the managed JVM runtime there is no buffer to defeat, because **nothing leaves the execution
 environment until the handler returns** — at any write size. Padding never made the stream
 progressive. It made the finished response large enough that *downloading* it took long enough to
-look progressive, which is not the same thing and costs a great deal of bandwidth.
+look progressive, which is not the same thing and waists bandwidth.
 
-So this article covers what the managed JVM runtime really does, why that is still fine for the S3
-case, why padding is not the answer for a token trickle, and what does work — token-by-token
-delivery with no padding at all, still with no custom runtime and no Lambda layer.
+In this article, I will explain what the managed JVM runtime really does and what does work for token-by-token streaming with no custom runtime and no Lambda layer.
 
 ## Demo and architecture
 
@@ -73,7 +71,7 @@ managed Java runtime simply has no streaming path.
 source above is consistent with the handler's stream being a plain heap buffer, which is also what
 the observed class name suggests.
 
-## Why the S3 example is still fine
+## Why the large blob streaming works with core library
 
 Two things are true at once, and it is worth keeping them apart.
 
@@ -84,14 +82,14 @@ and API Gateway's 10 MB buffered limit [4] — a 12 MB or 21 MB object is delive
 of it. API Gateway then streams those bytes onward to the client progressively and with bounded
 memory on its side.
 
-**But the handler does not produce them incrementally.** For a large file download that mostly does
+**But the handler does not produce them incrementally.** For a large file download that mostly might
 not matter: the client's first byte arrives as soon as the transfer starts, and a 12 MB body takes
-seconds to come down, so time-to-first-byte looks good. What it costs you is memory — the whole
+seconds to doenload, so time-to-first-byte looks good. What it costs you is memory — the whole
 response exists in the function's heap before any of it moves, as the numbers above show — and it
 means a handler cannot react to a slow producer.
 
-For large blobs, `streaming-core` on its own is the right tool and the previous article stands. For a
-token trickle it is not enough: the thing you want is exactly the thing the buffered path cannot do.
+For large blobs, `streaming-core` on its own is the right tool. For a
+token trickle as SSE it will not work because of buffering until handler completes.
 
 ## Why padding does not fix it
 
