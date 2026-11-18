@@ -1,99 +1,210 @@
-# streaming-sse
+# aws-lambda-streaming-sse
 
-A tiny, reusable library that makes **small-chunk Server-Sent Events actually stream progressively** from a JVM AWS Lambda behind API Gateway REST. It promotes the proven padding/dribble workaround out of [`streaming-bedrock-example`](../streaming-bedrock-example/) into a standalone module so this repo's examples and the external MockNest project can share one implementation.
+Real HTTP response streaming for Kotlin and Java Lambda functions on the **managed** JVM runtime —
+Server-Sent Events that arrive token by token, not in one burst at the end.
 
-Built on [`aws-lambda-streaming-core`](../README.md) (declared `api`, so a consumer that depends on `streaming-sse` gets `streaming-core` transitively). No AWS SDK, no coroutines — just the SSE framing and the buffer workaround.
-
-## The problem: Lambda's response-streaming buffer
-
-When a Lambda writes **large** chunks (e.g. the [S3 example](../streaming-s3-example/)'s ~1 MB blocks), response streaming works with no tricks. But an LLM token relay writes only a few bytes per token, and here the **AWS Lambda response-streaming runtime holds small writes in an internal buffer** and only forwards them to the client when the buffer fills (**~100 KB observed**) or the invocation ends.
-
-This buffering happens in the **Lambda streaming runtime itself, below the language layer** — not in the JVM, not in this library, and not in API Gateway. There is **no application-level `flush()` that overrides it**: a naive token relay flushes every write and still arrives as a single terminal burst rather than a progressive trickle.
-
-The behaviour is documented independently (from a Python/FastAPI + Lambda Web Adapter stack) in the AWS Builder Center article [“The Curious Case of SSE Streaming Agent Responses on AWS Lambda”](https://builder.aws.com/content/39iqpehwjnn2TuNmGnHAnsMcHmP/the-curious-case-of-sse-streaming-agent-responses-on-aws-lambda). *(External reference; content not reproduced here.)*
-
-## The workaround: tiered SSE-comment padding (+ optional dribble)
-
-SSE comment lines start with `:` and are silently ignored by compliant clients (and dropped by a plain `sed -n 's/^data: //p'` filter). `PaddedSseWriter` appends a comment-line padding block to each event so the flushed chunk crosses the buffer:
-
-```
-data: <token text>\n\n
-: <padding spaces>\n\n      <- ignored by the client; only there to trip the buffer
-```
-
-Padding is **tiered**, matching what is needed in practice:
-
-- **~100 KB head padding on the first few events** (`DEFAULT_HEAD_PAD_BYTES` = `102400`, `DEFAULT_HEAD_PAD_EVENTS` = `3`) — breaks the initial buffer so the first tokens appear fast.
-- **~10 KB tail padding on every event afterwards** (`DEFAULT_TAIL_PAD_BYTES` = `10240`) — keeps the stream flowing; the runtime re-buffers after the first few events without ongoing tail padding.
-
-On top of the writer, `PacedSseEmitter` adds an **optional inter-chunk dribble delay** that spaces events out over time (for a deliberately paced UX) rather than emitting them as fast as the model produces them.
-
-### Delay alone does nothing — it needs padding
-
-This is the key, verifiable claim: an **inter-chunk delay on its own does not force chunks past the runtime buffer**. Without padding, each small write still never crosses the ~100 KB buffer, so the delayed chunks coalesce and burst at the end exactly as they would with no delay (this is what the earlier MockNest "dribble" attempt ran into). The delay is effective **only when combined with padding** — once padding has the stream flowing, the delay paces delivery.
-
-The module enforces this in code: `PacedSseEmitter` **rejects construction** (with an `IllegalArgumentException`) when a non-`NO_DELAY` delay is configured against a writer that carries no padding (`!writer.hasPadding()`). You cannot accidentally configure a delay that would silently do nothing.
-
-### Trade-off: bandwidth for responsiveness
-
-Padding inflates the on-the-wire response size by roughly **100× to 1000×** relative to the original payload (a ~15 KB answer can become several MB on the wire). You trade bandwidth for responsiveness. For a chat-style UX where time-to-first-token matters, that is usually worth it; for bulk output it is not. The padding bytes never reach application code — the client's SSE parser (or a `sed` filter) drops them.
-
-## Public API
-
-Package `nl.vintik.lambda.streaming.sse`. All declarations are under `explicitApi()`; the committed surface lives in [`api/streaming-sse.api`](api/streaming-sse.api).
-
-### `PaddedSseWriter`
-
-A pure, deterministic SSE + padding encoder. It owns only the event framing and padding; the metadata prelude is written by `streaming-core`'s `ResponseWriter` before the first event.
+No Lambda layer, no custom runtime, no wrapper script, no change to your handler signature.
+SnapStart, CRaC priming hooks and warm reuse all keep working.
 
 ```kotlin
-// Explicit tiers…
-val writer = PaddedSseWriter(headPadBytes = 102_400, tailPadBytes = 10_240, headPadEvents = 3)
-// …or the no-arg convenience constructor applying the DEFAULT_* tiers:
-val defaultWriter = PaddedSseWriter()
-
-val n = writer.writeEvent(output, "some token")  // data: line + tiered padding comment; flushes; returns bytes written
-writer.writeEnd(output)                          // exact terminal bytes: event: end\ndata: [DONE]\n\n; flushes
-writer.eventsWritten()                           // zero-based count of events written so far
-writer.hasPadding()                              // true when headPadBytes > 0 || tailPadBytes > 0
+implementation("nl.vintik:aws-lambda-streaming-sse:<version>")
 ```
 
-- `writeEvent(output, text): Int` — writes one `data: <text>` event, appends the tier's padding comment (head tier for event index `< headPadEvents`, tail tier afterwards; omitted when that tier's pad is `0`), flushes, and returns the exact UTF-8 byte count written (including padding).
-- `writeEnd(output)` — writes the exact terminal bytes `event: end\ndata: [DONE]\n\n` and flushes.
-- `eventsWritten(): Int` — events written so far.
-- `hasPadding(): Boolean` — whether any tier carries padding bytes.
-- Construction rejects a negative value for any tier with `IllegalArgumentException`.
-- Default constants: `DEFAULT_HEAD_PAD_BYTES` (`102400`), `DEFAULT_TAIL_PAD_BYTES` (`10240`), `DEFAULT_HEAD_PAD_EVENTS` (`3`).
+## The problem this solves
 
-### `PacedSseEmitter`
+On the managed JVM runtime the `OutputStream` a `RequestStreamHandler` receives is a
+`java.io.ByteArrayOutputStream`. Everything written accumulates in memory and is posted only **after
+`handleRequest` returns**, so no byte can reach the client while the handler is still running.
+`flush()` changes nothing — there is no connection behind the stream.
 
-A thin wrapper that owns the optional pacing (dribble) concern and delegates all encoding to a `PaddedSseWriter`. The sleeper is injected so tests assert the pacing schedule with zero wall-clock delay.
+Measured on a managed `java25` function: 15 MB written at **2 ms**, handler idle for 10 s, and API
+Gateway received the first byte — including the response headers — at **10 069 ms**. The same holds
+at every write size, from 1 KB to 15 MB. There is no internal buffer to defeat and no threshold to
+cross.
+
+`StreamingResponse` posts the response itself, incrementally, as a chunked request to the Lambda
+Runtime API, and hands you that live stream instead.
+
+| | on the wire | first token | as % of total |
+|---|---|---|---|
+| buffered handler `OutputStream` | 14 KB | 9.3 s (at the end) | 100% |
+| SSE padding workaround (now deprecated) | 18 MB | 8.68 s | 70% |
+| **`StreamingResponse` + `SseWriter`** | **14 KB** | **0.199 s** | **2%** |
+
+Measured against Amazon Bedrock Nova Lite through an API Gateway REST endpoint; see `docs/log.md`
+in the repository for the full method and raw numbers.
+
+## Setup: three steps
+
+### 1. Depend on the module
 
 ```kotlin
-val emitter = PacedSseEmitter(writer, delayMillis = 100)   // default delayMillis = NO_DELAY, sleep = Thread::sleep
-
-emitter.emit(output, "some token")   // writes + flushes one padded event, then pauses before the NEXT event; returns bytes written
-emitter.end(output)                  // delegates to writer.writeEnd; never applies a trailing delay
-emitter.eventsWritten()              // delegates to the writer
+dependencies {
+    implementation("nl.vintik:aws-lambda-streaming-sse:<version>")
+}
 ```
 
-- `emit(output, text): Int` — writes and flushes one padded event via the writer, then (if a delay is configured and this is not the first event) sleeps `delayMillis`. The event is always written and flushed **before** any pause, so each paced chunk crosses the buffer first. Returns the writer's byte count.
-- `end(output)` — delegates to `writeEnd`; never sleeps.
-- `eventsWritten(): Int` — delegates to the writer.
-- Default constants: `NO_DELAY` (`0`), `MIN_DELAY_MILLIS` (`1`), `MAX_DELAY_MILLIS` (`5000`).
-- Construction rejects (with `IllegalArgumentException`) a delay above `MAX_DELAY_MILLIS`, a delay below `MIN_DELAY_MILLIS` that is not the `NO_DELAY` sentinel, and a non-`NO_DELAY` delay against a writer with no padding (delay alone cannot cross the buffer — see above).
+### 2. Make your fat jar an agent, and package it as a zip
 
-## Client-side: dropping the padding
+The agent is what stops AWS's invocation loop from posting a second response for an invocation you
+have already answered. `-javaagent` needs a real **jar file** on disk, and a `CodeUri` pointing at a
+bare jar is extracted loose into `/var/task`, leaving no jar to point at — so the deployment package
+must be a zip carrying the jar under `lib/`. That is the standard Java Lambda zip layout.
 
-The padding lives only in `:` comment lines, so a compliant SSE client ignores it. From the shell, a plain `sed`/`awk` pipeline recovers the original payload byte-for-byte:
+```kotlin
+tasks.shadowJar {
+    archiveFileName.set("my-function.jar")
+    manifest {
+        attributes("Premain-Class" to "nl.vintik.lambda.streaming.sse.StreamingAgent")
+    }
+}
 
-```bash
-curl -N ... | sed -u -n 's/^data: //p' | awk '{printf "%s",$0; fflush()}'
+tasks.register<Zip>("lambdaZip") {
+    archiveFileName.set("my-function.zip")
+    from(tasks.shadowJar) { into("lib") }
+}
 ```
 
-`sed -n 's/^data: //p'` keeps only the token text and drops the `:` padding comments; the terminal event contributes a single trailing `[DONE]` sentinel line.
+### 3. Point the runtime at the agent
 
-## See also
+```yaml
+Resources:
+  MyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: java25            # unchanged
+      CodeUri: build/dist/my-function.zip
+      Handler: com.example.MyHandler
+      AutoPublishAlias: live     # SnapStart keeps working
+      SnapStart:
+        ApplyOn: PublishedVersions
+      Environment:
+        Variables:
+          JAVA_TOOL_OPTIONS: >-
+            -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+            -javaagent:/var/task/lib/my-function.jar
+      Events:
+        Stream:
+          Type: Api
+          Properties:
+            Path: /stream
+            Method: post
+            # Must be exactly RESPONSE_STREAM. Any other value silently deploys a buffered
+            # integration, and nothing will stream.
+            ResponseTransferMode: RESPONSE_STREAM
+```
 
-- [`streaming-bedrock-example`](../streaming-bedrock-example/) — a deployed Lambda that consumes this module to stream Bedrock Nova Lite tokens, with a measured progressive-arrival test.
-- [`aws-lambda-streaming-core`](../README.md) — the API Gateway streaming wire protocol (`ResponseWriter`) this module builds on.
+That is the whole deployment change: one zip task and one flag.
+
+## Usage
+
+```kotlin
+class ChatHandler : RequestStreamHandler {
+
+    private val streaming = StreamingResponse()
+
+    override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
+        val prompt = parse(input)                      // validate BEFORE committing a status
+
+        val metadata = ResponseMetadata(
+            statusCode = 200,
+            headers = mapOf(
+                "Content-Type" to "text/event-stream; charset=utf-8",
+                "Cache-Control" to "no-cache",
+            ),
+        )
+
+        streaming.send(context.awsRequestId, metadata) { live ->
+            val sse = SseWriter()
+            model.tokens().forEach { sse.writeEvent(live, it) }
+            sse.writeEnd(live)
+        }
+    }
+}
+```
+
+The `output` the runtime handed you is deliberately left untouched.
+
+`send` takes the request id as a `String` rather than a `Context`, so this module depends on no AWS
+artifact and adds nothing to your classpath beyond `streaming-core`.
+
+### Ordering rule
+
+The status is committed the moment the metadata and the 8-byte delimiter are written, exactly as on
+the buffered path. **Validate before calling `send`.** Once the first byte is out, a later failure
+can only truncate the body — it cannot turn a 200 into a 502.
+
+## What the agent does, and what it does not
+
+It patches one method of the Lambda runtime interface client:
+
+```java
+// LambdaRuntimeApiClientImpl
+void reportInvocationSuccess(String requestId, byte[] response, String xrayHeader) {
+    if (StreamingState.alreadyAnswered()) return;   // ← injected
+    …
+}
+```
+
+Everything else is left byte-identical, including `nextInvocation`, the SnapStart `restoreNext`
+hook, error reporting and the CRaC coordination AWS's loop performs. That restraint is the point: an
+earlier approach replaced the whole invocation loop and silently stopped CRaC `beforeCheckpoint`
+hooks from firing, so SnapStart priming stopped running with no error anywhere.
+
+**It fails safe.** If the jar cannot be appended to the class loader search, or the runtime class has
+changed, nothing is patched and your function keeps working on AWS's normal buffered path.
+`StreamingAgent.isPatched()` reports the truth, and `StreamingResponse.send` refuses to stream when
+the patch is absent — so a runtime change surfaces as one clear error instead of a failed invocation
+per request. Assert `isPatched()` in a post-deploy check if you want that verified on every deploy.
+
+## Honest limitations
+
+- **Undocumented runtime behaviour.** Posting the invocation response from handler code, and the
+  method this patches, are not part of any AWS contract. A runtime update can change them. The
+  failure mode is "streaming unavailable", not "function broken", but it is a real risk — pin your
+  runtime version and keep a post-deploy check.
+- **API Gateway REST only** for streaming responses. HTTP APIs do not support it; Function URLs do,
+  but the managed JVM runtime rejects the prelude protocol there.
+- **Bandwidth caps** apply past the first 10 MB on REST APIs (6 MB on Function URLs).
+- **Billing is unchanged.** Streaming does not shorten the invocation; you are billed for the whole
+  handler duration, pauses included.
+- **Concurrency.** `StreamingState` is per-thread, which keeps concurrent invocations in one
+  execution environment independent. Verified for one invocation at a time; untested on Lambda
+  Managed Instances.
+
+## Removed in 3.0: the padding workaround
+
+`PaddedSseWriter` and `PacedSseEmitter` are **gone**. They were built on the belief that the runtime
+held small writes in a ~100 KB internal buffer until it filled, so each event was inflated with
+SSE-comment padding to cross it. There is no such buffer. Padding only made the finished body large
+enough that *downloading* it took long enough to look progressive — about **1 280× the bytes** for a
+first token roughly **44× later**. It also dropped everything after the first newline in a delta,
+which `SseWriter` fixes by emitting one `data:` line per line.
+
+Migrating from 2.x:
+
+```kotlin
+// before — padding, writing into the runtime's buffered stream
+val sse = PaddedSseWriter(headPadBytes = 102_400, tailPadBytes = 10_240, headPadEvents = 3)
+model.tokens().forEach { sse.writeEvent(output, it) }
+sse.writeEnd(output)
+
+// after — real streaming, no padding
+StreamingResponse().send(context.awsRequestId, metadata) { live ->
+    val sse = SseWriter()
+    model.tokens().forEach { sse.writeEvent(live, it) }
+    sse.writeEnd(live)
+}
+```
+
+Plus the two deployment lines from [Setup](#setup-three-steps): the zip layout and the
+`-javaagent` flag. Without the agent `send` fails fast with an explanatory message rather than
+streaming into a response the runtime will then duplicate.
+
+If you want to pace delivery deliberately — to match a reading speed, or a downstream rate limit —
+sleep in your own loop between `SseWriter.writeEvent` calls. That is one line and it drags no
+padding along. Note the pause is billed Lambda time.
+
+## Licence
+
+MIT. See [LICENSE](../LICENSE).

@@ -2,11 +2,12 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >-
   Bedrock streaming endpoint - a Kotlin/JVM Lambda behind an API Gateway REST proxy
-  integration that relays Amazon Bedrock Nova Lite token deltas to the client via response
-  streaming (RESPONSE_STREAM). To make token-by-token delivery visible through API Gateway
-  REST, each SSE event is padded past the Lambda streaming runtime's internal buffer (~100 KB)
-  with tiered SSE-comment padding (see the module README). Cold-start optimized with SnapStart
-  + tiered compilation on arm64/Java 25.
+  integration that relays Amazon Bedrock Nova Lite token deltas to the client as Server-Sent
+  Events, arriving token by token. Real streaming, with no SSE padding: the handler posts its
+  response incrementally to the Lambda Runtime API via streaming-sse's StreamingResponse, and a
+  Java agent (-javaagent below) stops the runtime loop from posting a duplicate. No Lambda layer,
+  no custom runtime, no wrapper script. Cold-start optimized with SnapStart + CRaC priming +
+  tiered compilation on arm64/Java 25.
 
 Parameters:
   MemorySizeMb:
@@ -79,7 +80,10 @@ Resources:
     Properties:
       FunctionName: bedrock-streaming-endpoint
       Handler: nl.vintik.lambda.bedrock.BedrockStreamingHandler
-      CodeUri: ../../../build/dist/bedrock-streaming-endpoint.jar
+      # A ZIP carrying lib/<fat jar>, not a bare jar: -javaagent (below) needs a real jar FILE, and
+      # Lambda extracts a bare-jar CodeUri's contents loose into /var/task. This is the standard
+      # Java Lambda zip layout.
+      CodeUri: ../../../build/dist/bedrock-streaming-endpoint.zip
       MemorySize: !Ref MemorySizeMb
       Timeout: !Ref TimeoutSeconds
       # Cold-start optimization: SnapStart with an auto-published 'live' alias.
@@ -88,8 +92,15 @@ Resources:
         ApplyOn: PublishedVersions
       Environment:
         Variables:
-          # Tiered compilation stop-at level 1 for faster restore-time warmup.
-          JAVA_TOOL_OPTIONS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+          # Tiered compilation stop-at level 1 for faster restore-time warmup, plus the streaming
+          # agent. The agent is what makes real token-by-token delivery possible: it stops AWS's
+          # invocation loop from posting a second response for an invocation the handler has already
+          # streamed. Without it every invocation would end in Runtime.ExitError. It patches one
+          # method and leaves the rest of the loop — including the CRaC/SnapStart hooks — alone.
+          # No Lambda layer, no custom runtime, no wrapper script. See the streaming-sse README.
+          JAVA_TOOL_OPTIONS: >-
+            -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+            -javaagent:/var/task/lib/bedrock-streaming-endpoint.jar
       # Least privilege: only InvokeModelWithResponseStream, only on the Nova Lite
       # inference profile and the regional foundation-model copies it routes to.
       Policies:

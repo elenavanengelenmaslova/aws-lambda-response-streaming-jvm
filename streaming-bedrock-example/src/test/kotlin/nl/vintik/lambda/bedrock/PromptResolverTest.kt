@@ -19,20 +19,16 @@ class PromptResolverTest {
         val resolved = assertInstanceOf(RequestResult.Resolved::class.java, result)
         val req = resolved.request as PromptRequest
         assertEquals(DEFAULT_PROMPT, req.prompt)
-        assertEquals(DEFAULT_HEAD_PAD_BYTES, req.headPadBytes)
-        assertEquals(DEFAULT_TAIL_PAD_BYTES, req.tailPadBytes)
         assertEquals(DEFAULT_MAX_TOKENS, req.maxTokens)
     }
 
     @Test
-    fun `Given a proxy event body When resolved Then prompt and knobs are read from the nested body`() {
-        val raw = """{"body":"{\"prompt\":\"hello\",\"headPadBytes\":2048,\"tailPadBytes\":256,\"maxTokens\":123}"}"""
+    fun `Given a proxy event body When resolved Then prompt and maxTokens are read from the nested body`() {
+        val raw = """{"body":"{\"prompt\":\"hello\",\"maxTokens\":123}"}"""
         val result = resolve(raw)
         val resolved = assertInstanceOf(RequestResult.Resolved::class.java, result)
         val req = resolved.request as PromptRequest
         assertEquals("hello", req.prompt)
-        assertEquals(2048, req.headPadBytes)
-        assertEquals(256, req.tailPadBytes)
         assertEquals(123, req.maxTokens)
     }
 
@@ -52,15 +48,25 @@ class PromptResolverTest {
     }
 
     @Test
-    fun `Given out-of-range knobs When resolved Then they are clamped to safe bounds`() {
-        val raw = """{"prompt":"p","maxTokens":999999,"headPadBytes":99999999,"tailPadBytes":-5,"headPadEvents":1000}"""
+    fun `Given an out-of-range maxTokens When resolved Then it is clamped to the ceiling`() {
+        val result = resolve("""{"prompt":"p","maxTokens":999999}""")
+        val resolved = assertInstanceOf(RequestResult.Resolved::class.java, result)
+        assertEquals(MAX_TOKENS_CEILING, (resolved.request as PromptRequest).maxTokens)
+    }
+
+    @Test
+    fun `Given a leftover padding knob from the old API When resolved Then it is ignored rather than failing`() {
+        val raw = """{"prompt":"p","headPadBytes":102400,"tailPadBytes":10240,"headPadEvents":3}"""
         val result = resolve(raw)
         val resolved = assertInstanceOf(RequestResult.Resolved::class.java, result)
-        val req = resolved.request as PromptRequest
-        assertEquals(MAX_TOKENS_CEILING, req.maxTokens)
-        assertEquals(MAX_PAD_BYTES, req.headPadBytes)
-        assertEquals(0, req.tailPadBytes, "negative tail pad clamps to 0")
-        assertEquals(100, req.headPadEvents, "headPadEvents clamps to 100")
+        assertEquals("p", (resolved.request as PromptRequest).prompt)
+    }
+
+    @Test
+    fun `Given a maxTokens below the floor When resolved Then it is clamped to one`() {
+        val result = resolve("""{"prompt":"p","maxTokens":0}""")
+        val resolved = assertInstanceOf(RequestResult.Resolved::class.java, result)
+        assertEquals(1, (resolved.request as PromptRequest).maxTokens)
     }
 
     @Test

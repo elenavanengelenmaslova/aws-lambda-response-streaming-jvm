@@ -2130,3 +2130,963 @@ That framing is what makes it likely to become the article people find when they
 - **Resolution / status:** **Documented.** Article cites the SAM reference and translator source and
   states the mapping. Note: `sam validate --lint` exits non-zero on our templates because of those
   W3005 warnings; the repo's gate is plain `sam validate`.
+---
+
+## Measured: on managed `java25`, no bytes reach the API Gateway integration until the handler returns
+
+- **Symptom / trigger:** The entries above attribute the Bedrock terminal-burst behaviour to a
+  **~100 KB buffer inside the Lambda response-streaming runtime** that releases bytes when it fills,
+  with tiered SSE padding as the lever that crosses it. That model was adopted from a Python +
+  Lambda Web Adapter report, not measured on this stack. Instrumenting both Lambdas with timing
+  lines (`StreamTimings`, `StreamHandler.Timings`) and both API Gateway stages with the
+  response-streaming access-log variables made it directly measurable, and the numbers do not fit
+  the model. Recorded here as raw facts; the article is unchanged pending the isolation probe
+  described at the end.
+
+- **Environment (all measurements):** region `eu-west-1`, managed runtime `java25`, `arm64`,
+  1024 MB, SnapStart `PublishedVersions` with the `live` alias, API Gateway **REST**, `REGIONAL`
+  endpoint, proxy integration with SAM `ResponseTransferMode: RESPONSE_STREAM`.
+  `bedrock-streaming-endpoint` version **15**, `CodeSha256` `adcS8ulWidN5jG8UaG2SIIYWbIbE4E6K2eupbWQiY5s=`;
+  `s3-file-streaming-endpoint` version **23**, `CodeSha256` `COjozl/YPwBZjSL+Erzt7FSsw7HQsiMkNbrDTBVtjyQ=`.
+  Local branch at `b7924cd`. No secrets recorded (the API key is resolved at run time and masked).
+
+- **Access-log semantics used** (from the [API Gateway response-streaming troubleshooting page](https://docs.aws.amazon.com/apigateway/latest/developerguide/response-streaming-troubleshoot.html)):
+  `$context.integration.timeToAllHeaders` is connection-established → all integration response
+  headers received; `timeToFirstContent` is connection-established → **first content bytes**
+  received; `integration.latency` is connection-established → integration response stream complete.
+  **Doc discrepancy worth knowing:** the page documents `responseTransferMode` as `BUFFERED |
+  STREAMED`, but the access log emits **`STREAM`**. Every request below logged `"transferMode":"STREAM"`,
+  so these are genuinely streaming integrations, which is also why the 12–21 MB bodies get past the
+  6 MB buffered-response limit.
+
+- **Finding 1 — `timeToAllHeaders == timeToFirstContent` on every request.** 15 requests across both
+  stacks, warm and cold: the two values are identical to the millisecond (one off-by-one at
+  12939/12940). API Gateway never sees headers before content. Since the "integration response
+  headers" are parsed from the metadata prelude the handler writes by hand, this says the prelude
+  does not travel ahead of the body.
+
+- **Finding 2 — first content lands just after the handler closes, never when the prelude is written.**
+  Handler clock (`tMs`, from invocation start) joined to the API Gateway clock via
+  `$context.integration.requestId`:
+
+  | Request | prelude written | bytes in stream by then | handler `closed` | `timeToAllHeaders` | `timeToFirstContent` | `integrationLatency` | body |
+  |---|---|---|---|---|---|---|---|
+  | Bedrock `a8dbcef4` | 422 ms | ~0 | 8787 ms | 8816 ms | 8816 ms | 9321 ms | 7.84 MB |
+  | S3 `3ad39761` | 14 ms | 0 | 1044 ms | 1102 ms | 1102 ms | 2658 ms | 12.58 MB |
+  | Bedrock `d5e1b8a0` | 4149 ms | ~0 | 12211 ms | 12939 ms | 12940 ms | 17000 ms | 18.75 MB |
+  | Bedrock `ae8e3eee` | 272 ms | ~0 | 9414 ms | 9639 ms | 9639 ms | 13443 ms | 18.11 MB |
+  | Bedrock `efea6924` | 268 ms | ~0 | 8498 ms | 8599 ms | 8599 ms | 12397 ms | 18.11 MB |
+  | Bedrock `e74d06d8` | 452 ms | ~0 | 9920 ms | 10098 ms | 10098 ms | 14281 ms | 18.76 MB |
+
+  The Bedrock prelude sat in the sandbox for 8.4 s (`a8dbcef4`) while 7.84 MB accumulated behind it.
+  The S3 prelude sat for 1.03 s while all 12.58 MB was written. In every case the first content
+  reaches API Gateway **26–204 ms after the handler closed**, and the whole body then transfers in
+  the remaining `integrationLatency` window.
+
+- **Finding 3 — a volume threshold is excluded up to at least 12.5 MB.** The deliberate test
+  (`scripts/stream-emission-probe.sh`, defaults `headPadBytes=1048576 headPadEvents=10
+  tailPadBytes=10240 maxTokens=5000`) writes ~10 MB inside the first second and then keeps the
+  invocation alive for another 7–11 s. Raw handler lines for `efea6924`:
+
+  ```
+  stage=start              tMs=0    outputClass=java.io.ByteArrayOutputStream
+  stage=firstDelta         tMs=268
+  stage=metadataCommitted  tMs=268
+  stage=event n=1          tMs=272  bytesTotal=1048590
+  stage=event n=3          tMs=415  bytesTotal=3145788
+  stage=event n=100        tMs=1347 bytesTotal=11409729   <- 11.4 MB written, 7.2 s before close
+  stage=event n=700        tMs=7910 bytesTotal=17568902
+  stage=streamEnd          tMs=8498 events=753 bytesTotal=18112982 writeMsMax=16.7
+  stage=closed             tMs=8498
+  ```
+  11.4 MB was in the stream at 1347 ms; API Gateway's first content was 8599 ms. The earlier S3
+  request wrote all 12.58 MB and still showed nothing until close. A fill-and-release threshold at
+  ~100 KB, 1 MB, 6 MB or 10 MB would have been plainly visible in these runs. It was not.
+  Every `write()` costs ~0 ms at the handler (`writeMsMax=16.7` only for the 1 MB padded events), i.e.
+  the handler is writing to memory, not to a socket — consistent with the observed
+  `outputClass=java.io.ByteArrayOutputStream`.
+
+- **Finding 4 — the mechanism is visible in AWS's own source.** In
+  [`EventHandlerLoader.wrapRequestStreamHandler`](https://github.com/aws/aws-lambda-java-libs/blob/main/aws-lambda-java-runtime-interface-client/src/main/java/com/amazonaws/services/lambda/runtime/api/client/EventHandlerLoader.java)
+  the runtime interface client keeps a `ThreadLocal<ByteArrayOutputStream>` (initial capacity 1024),
+  resets it per invocation, hands it to `handleRequest`, and **returns it as the invocation result**
+  (`public ByteArrayOutputStream call(InvocationRequest request)`). There is no code path that can
+  transmit while the handler is inside `handleRequest`, and no streaming response mode. On the same
+  repo, [issue #476](https://github.com/aws/aws-lambda-java-libs/issues/476) carries a maintainer
+  reply that response streaming is Node.js-only. *Caveat, not yet verified:* that artifact is
+  published for container images and custom runtimes; the managed `java25` runtime hands the handler
+  the same `java.io.ByteArrayOutputStream` type, but it has not been confirmed to be this exact jar.
+
+- **Finding 5 — memory grows with response size.** `Max Memory Used` over five consecutive 12 MB S3
+  requests in one environment: 205 → 217 → 229 → 241 → 253 MB (+12 MB per request, the object size).
+  Three consecutive 18 MB Bedrock requests: 283 → 330 → 345 MB. The handler's bounded copy buffer
+  bounds its own loop; it cannot bound the runtime's accumulator. This **contradicts the earlier
+  "memory stays bounded for large objects" note**. `Max Memory Used` is a high-water mark, so the
+  growth pattern is strong but not proof; a decisive test would be a 100 MB+ body.
+
+- **Finding 6 — what the padding actually buys, and why the pipeline test is unreliable.** With
+  ~10 MB of head padding the client measured `ttfb_s=8.68 total_s=12.48` (18.1 MB): **first byte
+  after 70% of the total**, i.e. the client waited out the entire generation. Token arrival still
+  spread over 3.8 s in 8 distinct 500 ms buckets, because 18 MB takes ~3.8 s to download. So the
+  "progressive arrival" the client observes is the **download duration of an inflated body**, not
+  incremental production. This also explains the `main`-passes / branch-fails flakiness:
+  `bedrock-streaming-test.sh` sets its clock on the first line it reads (so `ratio` is ~0 by
+  construction, already noted above) and `done` is always true, leaving `buckets >= 3` as the only
+  live criterion — which is satisfied iff the download takes over a second. It is a bandwidth
+  assertion, not a streaming assertion, and `rethrowFatal` cannot affect it.
+
+- **Reproducing it:** `scripts/stream-emission-probe.sh` (opt-in behind `BEDROCK_TEST_ENABLED=true`)
+  fires N requests with the padding knobs and joins the three clocks for each invocation, printing
+  `preludeAt_ms / closedAt_ms / allHeaders_ms / firstContent_ms / integLat_ms`. The decisive numbers
+  are server-side, so they do not depend on the client's network. Verified end to end:
+  ```
+  BEDROCK_TEST_ENABLED=true RUNS=1 AWS_REGION=eu-west-1 ./scripts/stream-emission-probe.sh
+  api-req   preludeAt_ms  closedAt_ms  allHeaders_ms  firstContent_ms  integLat_ms
+  e74d06d8  452           9920         10098          10098            14281        bytes=18758580
+  ```
+
+- **Resolution / status:** **Measured and reproduced (6 joined requests, 2 stacks, 15 access-log
+  lines); one gap remains before any conclusion is written up.** A release threshold strictly
+  between ~12.5 MB and the body size of these runs cannot be separated from "released at return" by
+  these measurements alone, because the handler kept writing until it closed. The isolation probe
+  that closes it: a throwaway stack whose handler writes ~15 MB immediately, flushes, **sleeps 10 s**,
+  then returns — `timeToFirstContent` ≈ 0 s means a threshold exists, ≈ 10 s means nothing leaves
+  until the handler returns. Until that runs, `docs/bedrock-sse-streaming.md`, the `streaming-sse`
+  KDoc/README and the `sam-bedrock` template description keep their ~100 KB-buffer wording.
+
+---
+
+## Settled by isolation probe: the managed `java25` runtime forwards nothing until the handler returns — at any volume
+
+- **Symptom / trigger:** The entry above left exactly one gap. In every production measurement the
+  handler kept writing right up to the moment it closed, so "released when the handler returns"
+  could not be separated from "released once some volume threshold above ~12.5 MB is crossed".
+  The isolation probe closes it by writing the whole body **up front** and then going **idle**.
+
+- **Instrument:** throwaway module `streaming-probe` (`EmissionProbeHandler`) + throwaway stack
+  `deployment/aws/sam-probe/` + driver `scripts/stall-probe.sh`. The handler writes `bytes` bytes of
+  filler in `chunks` flushed writes, then `Thread.sleep(sleepMs)`, then returns. Nothing is written
+  after the sleep, so during the stall the complete body sits in the buffer with the handler doing
+  nothing. The prelude is written with `streaming-core`'s `ResponseWriter` — the same code path as
+  the real examples — and the stack matches them exactly: `java25`, `arm64`, 1024 MB, SnapStart
+  `PublishedVersions` + `live` alias, tiered compilation, REGIONAL REST API,
+  `ResponseTransferMode: RESPONSE_STREAM`.
+
+- **Preconditions verified before measuring** (`aws apigateway get-integration`), because a buffered
+  integration would invalidate everything: `type=AWS_PROXY`,
+  `responseTransferMode=STREAM`, URI
+  `…/2021-11-15/functions/arn:aws:lambda:eu-west-1:…:function:stream-emission-probe:live/response-streaming-invocations`.
+  Deployed version 1, `CodeSha256` `PrY7cVjRKOx+nwkyE5rNjgHaEUKSSuks0aLZUpq0dZQ=`,
+  SnapStart `OptimizationStatus: On`.
+
+- **Command:** `AWS_REGION=eu-west-1 ./scripts/stall-probe.sh` (warmup + 2 runs per variant).
+
+- **Raw result.** Handler columns are the handler's clock in ms from invocation start; the API
+  Gateway columns are its own clock from the integration connection:
+
+  | variant | api-req | writesDone | sleepEnd | closed | allHeaders | firstContent | integLatency | body |
+  |---|---|---|---|---|---|---|---|---|
+  | control (sleepMs=0) | `73acaf92` | 130 | — | 131 | 362 | 364 | 3044 | 15 MB |
+  | control (sleepMs=0) | `719818c7` | 2 | — | 3 | 96 | 96 | 2746 | 15 MB |
+  | **stall-big** | `3431db2b` | **2** | 10003 | 10003 | **10069** | **10069** | 12726 | 15 MB |
+  | **stall-big** | `9f95fc60` | **2** | 10002 | 10003 | **10066** | **10066** | 13022 | 15 MB |
+  | stall-tiny | `b9f34acc` | 0 | 10001 | 10001 | 10029 | 10029 | 10025 | 1 KB |
+  | stall-tiny | `1b605d31` | 0 | 10000 | 10001 | 10023 | 10023 | 10019 | 1 KB |
+
+  Raw handler lines for `3431db2b` (Lambda request `86bbcb78`):
+  ```
+  stage=start            tMs=0     outputClass=java.io.ByteArrayOutputStream
+  stage=parsed           tMs=0     bytes=15728640 chunks=15 sleepMs=10000
+  stage=metadataCommitted tMs=0
+  stage=chunkFlushed     tMs=1     n=1  written=1048576
+  stage=chunkFlushed     tMs=2     n=15 written=15728640
+  stage=writesDone       tMs=2     chunks=15 bytes=15728640
+  stage=sleepStart       tMs=2
+  stage=sleepEnd         tMs=10003
+  stage=closed           tMs=10003
+  REPORT Duration: 10079.20 ms  Max Memory Used: 199 MB
+  ```
+
+- **Conclusion (reproduced, 2 runs per variant, 3 variants):** **15 MB was fully written and flushed
+  by 2 ms, the handler then sat idle for 10 seconds, and API Gateway received nothing — not the
+  headers, not one content byte — until 10066–10069 ms, right after the handler returned.** The
+  1 KB variant behaves identically. There is **no volume-triggered release**: the figure is not
+  ~100 KB, it is not 6 MB, it is not 15 MB, it does not exist. On the managed `java25` runtime the
+  response leaves the execution environment **only when the handler returns**, and
+  `OutputStream.flush()` has no effect on the transport. This matches the AWS source exactly
+  (`EventHandlerLoader.wrapRequestStreamHandler` collects into a `ThreadLocal<ByteArrayOutputStream>`
+  and returns it as the invocation result) and the maintainer reply on
+  [aws-lambda-java-libs#476](https://github.com/aws/aws-lambda-java-libs/issues/476) that response
+  streaming is Node.js-only. Writing 15 MB took **2 ms**, i.e. memory speed, which is the same fact
+  from the handler's side.
+
+- **What response streaming on the JVM therefore *is*, and still genuinely buys:** the integration
+  really is a streaming one (`responseTransferMode=STREAM`, `/response-streaming-invocations`), and
+  that is not cosmetic — it is what lifts the 6 MB buffered-response cap and API Gateway's 10 MB
+  buffered cap, which is why the 12–21 MB bodies in this repo are delivered at all. API Gateway then
+  streams those bytes to the client progressively and with bounded memory on *its* side. What the
+  JVM handler cannot do is produce them incrementally: the body is complete, and fully resident in
+  the sandbox's heap, before the first byte moves. **Large-payload delivery: real. Incremental
+  production / early first byte: not available on the managed JVM runtime.**
+
+- **Consequence for the SSE padding workaround:** it does not defeat a runtime buffer, because there
+  is no buffer to defeat. What padding changes is the **size of the finished body**, and therefore
+  how long API Gateway takes to push it to the client — which is the only window in which a client
+  can observe anything arriving "progressively". Control run `719818c7` is the clean illustration:
+  handler done in 3 ms, first content at 96 ms, then 2.75 s to transfer 15 MB — the client measures
+  TTFB 0.17 s / total 2.82 s and calls it streaming. In the padded Bedrock runs the generation
+  happens first and the download second, so padding makes time-to-first-token strictly **worse**
+  (measured: `ttfb_s=8.68` of `total_s=12.48`) while making the arrival spread wider. For a chat UX,
+  which is the use case the padding was introduced for, that is the opposite of the goal.
+
+- **Resolution / status:** **Settled.** The ~100 KB runtime-buffer explanation is wrong for the
+  managed JVM runtime and must be replaced wherever it appears: `docs/bedrock-sse-streaming.md`, the
+  `streaming-sse` module KDoc (`PaddedSseWriter`) and README, `streaming-bedrock-example/README.md`,
+  and the `deployment/aws/sam-bedrock/template.yaml` description. The two post-deploy scripts also
+  assert the wrong thing (`buckets >= 3` is a download-duration check, and
+  `bedrock-streaming-test.sh`'s `ratio` is ~0 by construction) and are the cause of the
+  `main`-passes / branch-fails flakiness. The probe module, stack and driver script are kept in the
+  repo so the measurement is re-runnable when AWS changes the runtime; the **stack was deleted**
+  after this run. `streaming-probe` is deliberately absent from `release-tag.yml`'s trigger paths,
+  `workflow-publish.yml`'s task list, the root Kover aggregation, `verifyCoverageReports` and
+  `codecov.yml`. No secrets recorded.
+
+---
+
+## It CAN trickle: posting the response to the Runtime API yourself streams from a managed `java25` Lambda — at the cost of one dead execution environment per request
+
+- **Symptom / trigger:** Having established that the managed runtime forwards nothing until the
+  handler returns, the question became whether anything inside the sandbox can emit incrementally
+  without a custom runtime and without a layer. The one candidate: the Runtime API itself, which is
+  reachable from handler code at `$AWS_LAMBDA_RUNTIME_API` and is exactly what a custom runtime posts
+  to. Added `mode=runtimeapi` to `EmissionProbeHandler`: ignore the `OutputStream` the runtime
+  provides, and instead open a chunked `POST` to
+  `/2018-06-01/runtime/invocation/{requestId}/response` carrying
+  `Lambda-Runtime-Function-Response-Mode: streaming` and
+  `Content-Type: application/vnd.awslambda.http-integration-response` (the marker Node's
+  `awslambda.HttpResponseStream.from()` sets via `setContentType`), then write prelude + 8 NUL bytes
+  + 3 × 64 KB chunks spaced 2 s apart, flushing each.
+
+- **Environment:** throwaway stack `stream-emission-probe`, version 2, `CodeSha256`
+  `52HmN3QwSWtP8flUddedEoUa6Lev6X7yJTTTvAvgWuk=`, `java25` / `arm64` / 1024 MB, SnapStart on,
+  REGIONAL REST API, `ResponseTransferMode: RESPONSE_STREAM`. Runtime API endpoint observed as
+  `169.254.100.1:9001`. Command:
+  `AWS_REGION=eu-west-1 RUNS=2 VARIANTS='runtimeapi|mode=runtimeapi&chunks=3&chunkBytes=65536&gapMs=2000' ./scripts/stall-probe.sh`
+
+- **Result — it streams.** Handler clock vs API Gateway clock, run 1 (Lambda `703d0672`):
+
+  ```
+  stage=runtimeApiStart   tMs=5     endpoint=169.254.100.1:9001
+  stage=runtimeApiPrelude tMs=10
+  stage=runtimeApiChunk   tMs=13    n=1 bytes=65536
+  stage=runtimeApiChunk   tMs=2013  n=2 bytes=131072
+  stage=runtimeApiChunk   tMs=4015  n=3 bytes=196608
+  stage=runtimeApiPosted  tMs=4018  httpStatus=202
+  stage=closed            tMs=4019
+  → API Gateway: timeToAllHeaders=33  timeToFirstContent=33  integrationLatency=4031
+  → client:      http_code=200  ttfb_s=0.130  total_s=4.158  bytes=196608
+  ```
+
+  | variant | api-req | first chunk written | closed | allHeaders | firstContent | integLatency | client TTFB / total |
+  |---|---|---|---|---|---|---|---|
+  | runtimeapi | `4f65f557` | 13 ms | 4019 ms | **33 ms** | **33 ms** | 4031 ms | 0.130 s / 4.158 s |
+  | runtimeapi | `a6a1ad27` | 607 ms | 4615 ms | **858 ms** | **858 ms** | 4915 ms | 1.013 s / 5.028 s |
+
+  Compare the buffered path on the same stack: 15 MB written by 2 ms, first content at 10069 ms.
+  Here the first chunk is written at 13 ms and API Gateway has it at 33 ms — **4 seconds before the
+  handler returns**. The Runtime API accepted the streaming response with **HTTP 202**. The client
+  received a correct 200, the prelude's headers and all 196,608 bytes, progressively.
+  `Max Memory Used: 94 MB`, against 199–345 MB for buffered bodies: the response never materializes
+  in the heap, which is the one success criterion the S3 example has never actually met.
+
+- **The price — the execution environment dies on every invocation.** After the handler returns, the
+  managed runtime loop posts its own response for a request id that is already answered, gets a 4xx,
+  tries to report that through `/invocation/{id}/error`, and gets 403 there too:
+
+  ```
+  Exception in thread "main" com.amazonaws.services.lambda.runtime.api.client.runtimeapi
+    .LambdaRuntimeClientException: http://169.254.100.1:9001/2018-06-01/runtime/invocation/
+    703d0672-…/error Response code: '403'.
+  REPORT  Duration: 4201.64 ms  Billed Duration: 4202 ms  Max Memory Used: 94 MB
+          Status: error  Error Type: Runtime.ExitError
+  ```
+
+  Consequences, all observed in the same log:
+  - **Every invocation is recorded as `Status: error` / `Runtime.ExitError`**, despite the client
+    getting a correct, complete 200. A function with a 100% error rate is unusable under any normal
+    alarm or SLO.
+  - **No warm reuse.** The runtime process exits, so the sandbox is discarded and the next request
+    pays a restore: `RESTORE_START Runtime Version: java:25.mainline.v89` /
+    `RESTORE_REPORT Restore Duration: 381.85 ms`. Run 2 shows the cost inline — `parsed` at 470 ms
+    and the first chunk at 607 ms, against 3 ms and 13 ms on the already-warm run 1.
+  - Billed duration is unchanged (it still covers the whole handler).
+
+- **Side finding, and it closes an earlier caveat:** the exception class is
+  `com.amazonaws.services.lambda.runtime.api.client.runtimeapi.LambdaRuntimeClientException`, which
+  is **the open-source runtime interface client**. The previous entry flagged as unverified whether
+  the managed `java25` runtime actually uses the `aws-lambda-java-runtime-interface-client` artifact
+  whose source explains the buffering. It does. The `ThreadLocal<ByteArrayOutputStream>` in
+  `EventHandlerLoader.wrapRequestStreamHandler` is therefore the real mechanism, not an analogue.
+
+- **Resolution / status:** **Measured, reproduced twice — progressive delivery from a managed JVM
+  Lambda is possible, and it is not a supported pattern.** It is undocumented, it depends on
+  internal Runtime API behaviour that can change without notice, and in this form it marks every
+  invocation as failed and burns the execution environment. Not shippable as-is.
+
+  **Open follow-up, one variable:** the error and the recycle both stem from the managed loop
+  posting a second response. If the handler calls `System.exit(0)` (or
+  `Runtime.getRuntime().halt(0)`) immediately after its own post completes, the loop never gets to
+  post. The environment is still discarded either way, but the invocation may then be recorded as a
+  success rather than `Runtime.ExitError`. That single change is the difference between "unusable"
+  and "usable at the cost of a ~380 ms SnapStart restore per request", so it decides whether any of
+  this is publishable. Probe stack left deployed for that run; delete it afterwards with
+  `aws cloudformation delete-stack --stack-name stream-emission-probe --region eu-west-1`.
+
+---
+
+## `System.exit(0)` / `halt(0)` do NOT rescue it — `Runtime.ExitError` is unavoidable, so the Runtime API trick stays a finding, not a technique
+
+- **Symptom / trigger:** The self-posted streaming response works (previous entry) but every
+  invocation is recorded as `Status: error` / `Runtime.ExitError`, because after the handler returns
+  the managed loop posts a second response for an already-answered request, fails, and dies. The
+  obvious fix is to deny the loop that chance: kill the JVM as soon as our own post returns 202.
+  Added an `exit` knob to `EmissionProbeHandler` — `none` (return normally), `exit`
+  (`System.exit(0)`, runs shutdown hooks) and `halt` (`Runtime.getRuntime().halt(0)`, skips them) —
+  with a 100 ms pre-exit delay so the log line reaches CloudWatch.
+
+- **Environment:** `stream-emission-probe` version 3, `CodeSha256`
+  `6BDC3cmrKACPQ1jiZNnLp2b81LTmKGTwxK09uDGb2K0=`, otherwise unchanged. Command:
+  `AWS_REGION=eu-west-1 RUNS=2 VARIANTS='rt-none|…&exit=none rt-exit|…&exit=exit rt-halt|…&exit=halt' ./scripts/stall-probe.sh`
+
+- **Result — the platform verdict is identical in all three modes:**
+
+  | variant | api-req | first chunk | closed | firstContent | integLatency | client TTFB / total | REPORT |
+  |---|---|---|---|---|---|---|---|
+  | rt-none | `e7d5f686` | 12 ms | 4020 ms | 59 ms | 4059 ms | 0.133 s / 4.138 s | `Runtime.ExitError` |
+  | rt-none | `5194a836` | 581 ms | 4590 ms | 828 ms | 4828 ms | 0.903 s / 4.908 s | `Runtime.ExitError` |
+  | rt-exit | `75bfc80e` | 489 ms | 4496 ms | 651 ms | 4662 ms | 0.730 s / 4.744 s | `Runtime.ExitError` |
+  | rt-exit | `b825c134` | 453 ms | 4460 ms | 621 ms | 4621 ms | 0.699 s / 4.708 s | `Runtime.ExitError` |
+  | rt-halt | `5667e123` | 491 ms | 4499 ms | 676 ms | 4675 ms | 0.753 s / 4.824 s | `Runtime.ExitError` |
+  | rt-halt | `b1ed3198` | 463 ms | 4471 ms | 636 ms | 4637 ms | 0.716 s / 4.723 s | `Runtime.ExitError` |
+
+  What killing the JVM *does* change: the `LambdaRuntimeClientException … /error Response code:
+  '403'` stack trace is gone — the logs are clean, because the loop never gets to post. What it does
+  not change: `Status: error  Error Type: Runtime.ExitError` on every single invocation.
+
+  ```
+  stage=runtimeApiPosted tMs=4459 httpStatus=202
+  stage=closed           tMs=4460 mode=runtimeapi exit=exit
+  stage=exiting          tMs=4463 via=exit delayMs=100
+  REPORT  Duration: 4728.75 ms  Billed Duration: 4729 ms  Max Memory Used: 121 MB
+          Status: error  Error Type: Runtime.ExitError
+  ```
+
+- **Why it cannot be fixed from handler code:** `Runtime.ExitError` means *the runtime process
+  exited*. Exiting on purpose is indistinguishable from crashing, as far as the platform's
+  bookkeeping is concerned: the invocation was never completed **by the runtime loop**, and a
+  response delivered through our own side-channel post does not appear in that ledger even though
+  the service did hand it to the caller. There are only three ways out of the handler and all three
+  are errors — return (loop double-posts → exception → `Runtime.ExitError`), kill the JVM
+  (`Runtime.ExitError` directly), or block until the deadline (`Task timed out`, plus full-timeout
+  billing). Making the loop's own post succeed is impossible, because the invocation is already
+  answered.
+
+- **Second measured cost: no warm reuse, so the steady state pays a restore per request.** Because
+  the environment is destroyed every time, every subsequent request starts with a SnapStart restore.
+  The one row with a 12 ms first chunk and 0.133 s TTFB (`e7d5f686`) is the invocation that happened
+  to follow the buffered-mode warmup on a live environment; every other row sits at 450–580 ms to
+  first chunk and ~0.7–0.9 s TTFB. That is the honest number for this approach: **~0.7 s to first
+  byte, not ~0.13 s**. `Max Memory Used` stayed at 119–121 MB regardless of body size.
+
+- **Resolution / status:** **Closed. Progressive delivery from a managed `java25` Lambda is
+  possible, and it is not usable.** It needs a 100% invocation error rate and the loss of warm
+  starts, on top of being undocumented and dependent on internal Runtime API behaviour. Verdict for
+  the repo: this is an **article finding**, kept reproducible via `streaming-probe` /
+  `deployment/aws/sam-probe/` / `scripts/stall-probe.sh`, and it is **not** a candidate for a
+  published `streaming-runtime-api` module. The earlier architecture sketch (new module alongside
+  `streaming-core`, SSE framing retargeted onto an incremental sink) is therefore dropped — there is
+  no supportable sink to target.
+
+  What the article can now state, all measured on this repo's own stacks: response streaming on the
+  managed JVM runtime buys **large payloads past the 6 MB/10 MB buffered caps** and nothing else;
+  **early first byte and incremental production are not available**; the SSE padding workaround is
+  **not** defeating a runtime buffer and makes time-to-first-token worse; and the Runtime API
+  side-channel proves the platform itself is willing to stream, so the gap is purely in the managed
+  Java runtime's invocation loop — which is a concrete, reportable ask for AWS rather than a
+  limitation of the JVM.
+
+  Probe stack deleted after this run.
+
+---
+
+## SOLVED: true progressive streaming on managed `java25` — swap the invocation loop with `AWS_LAMBDA_EXEC_WRAPPER`, no layer, no custom runtime, SnapStart intact
+
+- **Symptom / trigger:** Everything above says the same thing — the managed runtime buffers the
+  response because AWS's runtime interface client hands the handler a
+  `ThreadLocal<ByteArrayOutputStream>` and posts it after `handleRequest` returns, and the
+  handler-side Runtime API side channel works but costs a `Runtime.ExitError` per invocation. The
+  remaining question was whether the RIC itself can be displaced from inside the deployment package.
+
+- **Step 1 — why shadowing the RIC cannot work (read-only `mode=inspect`).** The JVM command line on
+  managed `java25`/arm64:
+
+  ```
+  /var/lang/bin/java -XX:MaxHeapSize=891289k -XX:+UseSerialGC
+    --add-opens=java.base/java.io=ALL-UNNAMED
+    -Dorg.crac.Core.Compat=com.amazonaws.services.lambda.crac
+    -XX:+ErrorFileToStderr -XX:UseSVE=0 --enable-native-access ALL-UNNAMED
+    -Dcom.amazonaws…runtimeapi.NativeClient.JNI=/var/runtime/lib/jni/libaws-lambda-jni.linux-aarch_64.so
+    -classpath /var/runtime/lib/aws-lambda-java-core-1.4.0.jar
+              :/var/runtime/lib/aws-lambda-java-runtime-interface-client-2.12.2-linux-aarch_64.jar
+              :/var/runtime/lib/aws-lambda-java-serialization-1.1.5.jar
+              :/var/runtime/lib/utils-lite-2.34.0.jar
+    com.amazonaws.services.lambda.runtime.api.client.AWSLambda <handlerClass>
+  ```
+
+  `/var/task` is **not on the JVM classpath at all** — customer code loads from `file:/var/task/`
+  through a separate `CustomerClassLoader`, while the RIC loads from `/var/runtime` on the `app`
+  loader. Parent-first delegation therefore guarantees a class shipped under an RIC package name can
+  never win. Two incidental facts worth keeping: the deployed RIC is **2.12.2**, and the runtime's
+  own `aws-lambda-java-core` is **1.4.0** even when the deployment package ships 1.4.1 — the
+  runtime's copy wins for `com.amazonaws.*`.
+
+- **Step 2 — the lever.** `AWS_LAMBDA_EXEC_WRAPPER` is
+  [supported on all native (managed) runtimes](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-modify.html)
+  and excluded only on the `provided.*` OS-only family. A wrapper script **in the deployment
+  package** (no layer) receives that whole command line as `"$@"` — confirmed, `argc=14` — and can
+  rewrite it. A bare `.jar` cannot carry an executable script, so the package becomes a `.zip`:
+  `lib/<fat jar>` plus `wrapper.sh` at mode `0755`, with
+  `AWS_LAMBDA_EXEC_WRAPPER=/var/task/wrapper.sh`.
+
+- **Step 3 — own the loop.** `wrapper.sh` in `main` mode prepends the function jar to `-classpath`
+  and replaces `com.amazonaws.services.lambda.runtime.api.client.AWSLambda` with
+  `nl.vintik.lambda.probe.StreamingRuntimeMain` (~150 lines): `GET /invocation/next`, then a chunked
+  `POST /invocation/{id}/response` carrying `Lambda-Runtime-Function-Response-Mode: streaming` and
+  the prelude content type, whose **`OutputStream` is handed straight to the handler**. The handler
+  is untouched — still a plain `RequestStreamHandler` writing the prelude through `streaming-core`'s
+  `ResponseWriter`. Because this loop posts exactly once, there is no duplicate response and none of
+  the earlier `Runtime.ExitError`.
+
+  The handler's own diagnostic line is the tell:
+  `outputClass=sun.net.www.protocol.http.HttpURLConnection$StreamingOutputStream` — a live socket,
+  where every other measurement in this log reads `java.io.ByteArrayOutputStream`.
+
+- **Measured result.** `stream-emission-probe` version 6/7, `java25`, `arm64`, 1024 MB, SnapStart on,
+  REGIONAL REST API, `ResponseTransferMode: RESPONSE_STREAM`:
+
+  | variant | shape | first write | handler closed | firstContent | integLatency | client TTFB / total | REPORT |
+  |---|---|---|---|---|---|---|---|
+  | stall-big | 15 MB, then sleep 10 s | 45 ms | 10185 ms | **49 ms** | 2723 ms | 0.126 s / **2.806 s** | ok |
+  | stall-big | same | 382 ms | 10485 ms | **700 ms** | 3358 ms | 0.784 s / 3.446 s | ok |
+  | sse-paced | 3 × 64 KB, 2 s apart, no `Content-Length` | 3 ms | 4006 ms | **25 ms** | 4114 ms | **0.099 s / 4.196 s** | ok |
+  | sse-paced | same | 5 ms | 4008 ms | **57 ms** | 4056 ms | 0.129 s / 4.152 s | ok |
+  | tiny-warm | 1 KB | 0 ms | 1 ms | 29 ms | 25 ms | 0.103 s | ok |
+  | tiny-warm | 1 KB | 1 ms | 1 ms | 32 ms | 28 ms | 0.107 s | ok |
+
+  - **Progressive delivery, for real.** `sse-paced` is the token-streaming shape: first byte reaches
+    the client at **2.4% of total**, and the integration stream stays open the full 4 s. The 15 MB
+    case delivers the complete body to the client in 2.8 s while the handler is still sleeping until
+    10.2 s.
+  - **No errors.** Every `REPORT` is clean — no `Status: error`, no `Error Type`. The Runtime API
+    answered `postStatus=202` on every invocation.
+  - **SnapStart works.** `RESTORE_START Runtime Version: java:25.mainline.v89`,
+    `RESTORE_REPORT Restore Duration: 189.26–673.20 ms`, `Billed Restore Duration: 0–184 ms`.
+  - **Warm reuse works.** Five consecutive invocations in one environment with no `INIT_START` and no
+    `RESTORE_START` between them; the two 1 KB ones billed **6 ms** each.
+  - **Memory is finally bounded.** `Max Memory Used: 87–89 MB` for a 15 MB body, against 199–345 MB
+    on the buffered path. The body never exists as a byte array.
+
+- **What it costs — you are replacing AWS's invocation loop.** The 150-line probe loop implements
+  none of what the RIC provides: X-Ray trace propagation, the platform's structured JSON logging and
+  log-level handling, POJO `RequestHandler<I, O>` handlers and their serialization, `CognitoIdentity`
+  / `ClientContext`, AWS-shaped error payloads with stack traces, graceful shutdown, and whatever the
+  Telemetry/Extensions API expects. Anything relying on those breaks silently.
+
+  Also: swapping the main class is **not** a documented use of `AWS_LAMBDA_EXEC_WRAPPER` (the wrapper
+  itself is documented and supported; rewriting the runtime's argv is not). A runtime update that
+  changes flag order or the main class name breaks the wrapper — ours degrades to AWS's own loop
+  (buffered, working) rather than failing, because the replacement is a literal match on the main
+  class name. Billed duration still covers the whole handler (4011 ms for the 4 s paced stream).
+
+- **Untested, and it matters for this repo:** the runtime still passes
+  `-Dorg.crac.Core.Compat=com.amazonaws.services.lambda.crac`, SnapStart restores happen, and the
+  probe has no CRaC hook — so whether a customer `org.crac.Resource` `beforeCheckpoint` hook (the
+  `Priming` class in every example module here) still fires under a replaced main loop is **not
+  established**. Also untested: concurrency beyond 2, payloads near the 200 MB streaming limit,
+  Managed Instances as a capacity provider, and the 2 MBps bandwidth cap after the first 10 MB on
+  REST API (6 MB on Function URLs).
+
+  One incidental observation: `GET /invocation/next` did **not** advertise
+  `Lambda-Runtime-Function-Response-Mode` (`platformResponseMode=<none>`) even though API Gateway
+  invoked through the response-streaming integration — the streaming post was accepted regardless.
+
+- **Also closed, for free:** **Lambda Web Functions cannot help** — that form factor is Node.js only.
+
+- **Resolution / status:** **Progressive HTTP response streaming from a Kotlin/JVM Lambda on the
+  managed `java25` runtime is achievable, with SnapStart, warm reuse, bounded memory and clean
+  invocation status, using only a wrapper script in the deployment package.** The price is owning the
+  invocation loop and depending on the runtime's argv shape. Reproducible via `streaming-probe`,
+  `deployment/aws/sam-probe/` (`WrapperMode=main`) and `scripts/stall-probe.sh`. Probe stack deleted
+  after the run.
+
+  Open decision, not taken here: whether this graduates from a finding into something this repo
+  ships — a documented pattern in the article, an example module, or a small published
+  `streaming-runtime-loop` artifact — and if so, how much of the RIC's behaviour the loop must
+  reimplement before it is honest to recommend. The CRaC-hook question above gates that, since every
+  example in this repo primes with CRaC.
+
+---
+
+## The streaming loop silently disables CRaC/SnapStart hooks — priming never runs
+
+- **Symptom / trigger:** The wrapper-swapped invocation loop (previous entry) streams correctly with
+  SnapStart restores happening, but the probe had no CRaC hook, so whether a customer
+  `org.crac.Resource` still receives its callbacks was unestablished. Every example module in this
+  repo primes with one, so this gates whether the loop is usable here. Added `ProbePriming` (a
+  `Resource` that only logs, registered in its constructor) plus an eager
+  `val PRIMING = ProbePriming()` in `EmissionProbeHandler`'s companion, then compared
+  `WrapperMode=log` (AWS's loop) against `WrapperMode=main` (ours).
+
+- **Result:**
+
+  | loop | `[probe-crac] registered` | `beforeCheckpoint` | `afterRestore` | SnapStart restore |
+  |---|---|---|---|---|
+  | AWS `AWSLambda` (control) | yes ×2 | **yes ×2** | **yes** | `RESTORE_REPORT 449.15 ms` |
+  | `StreamingRuntimeMain` (ours) | yes ×2 | **never** | **never** | `RESTORE_REPORT 343.48 ms` |
+
+  The hook registers in both cases — the handler is constructed during init either way. The
+  microVM is still snapshotted and restored under our loop. What is missing is anything driving the
+  CRaC callbacks: no priming before the snapshot, no `afterRestore` work. Streaming itself was
+  unaffected in the same deployment (paced run: client `ttfb=0.221 s` of `total=4.238 s`).
+
+- **Why, inferred:** the callbacks are driven by the runtime, not the platform. The JVM is launched
+  with `-Dorg.crac.Core.Compat=com.amazonaws.services.lambda.crac`, which points `org.crac` at an
+  AWS compat implementation (`com.amazonaws.services.lambda.crac.Core`) on the runtime classpath,
+  and the Runtime API has a SnapStart-specific `GET /runtime/restore/next` endpoint. AWS's
+  `AWSLambda` loop coordinates both. Ours calls neither, so the registered resources are simply
+  never visited. Not verified by reading that compat class — the class name is inferred from the
+  system property value.
+
+- **Resolution / status:** **Measured. The streaming loop and CRaC priming are mutually exclusive as
+  implemented.** Restoring hook support would mean reflectively driving AWS's CRaC compat class and
+  the `/runtime/restore/next` endpoint — more undocumented internals on top of an already
+  undocumented argv rewrite. Untested. Note one mitigating fact for this repo specifically: the
+  Kotlin examples do not prime today either (next entry), so the loop would not regress their actual
+  behaviour — it would make correct priming harder to add later.
+
+---
+
+## `Priming` is never instantiated in either Kotlin example — the CRaC hook has never been registered
+
+- **Symptom / trigger:** Found while wiring the probe's CRaC test. `Priming` registers itself in its
+  constructor (`init { Core.getGlobalContext().register(this) }`), so something must construct it
+  during initialization. In `streaming-s3-example-java` something does:
+  `private static final Priming PRIMING = new Priming();` in `StreamHandler`. In
+  **`streaming-s3-example` and `streaming-bedrock-example` nothing constructs it** —
+  `S3StreamingHandler` and `BedrockStreamingHandler` only wire their stream handlers, and a repo-wide
+  search for a construction site under `src/main/**` finds only the Java module's field.
+
+- **Consequence:** in both Kotlin example stacks the resource is never registered, so
+  `beforeCheckpoint` never runs and no critical path is warmed before the snapshot. The class is
+  fully unit-tested (which is why coverage never flagged it) and completely inert in production. The
+  `tech.md` cold-start standard requires priming; two of three examples do not meet it.
+
+- **Resolution / status:** **OPEN — a real bug, not recorded as fixed.** The fix is one eager field
+  per Kotlin handler, mirroring the Java example, e.g.
+  `private companion object { @Suppress("unused") val PRIMING = Priming() }` in
+  `S3StreamingHandler` / `BedrockStreamingHandler`. Verification is a log line: deploy, then look for
+  `Priming critical paths before checkpoint` in the function log group during the snapshot phase —
+  the probe's control run proves a correctly registered hook does appear there. Worth checking
+  whether any cold-start numbers previously attributed to priming were measured without it.
+
+---
+
+## SAM `AutoPublishAlias` does not publish a version for a config-only change — env-var updates never reach the alias
+
+- **Symptom / trigger:** Flipping the probe's `WrapperMode` template parameter from `log` to `main`
+  deployed "successfully" and the stack parameter read `main`, but the function kept behaving as
+  `log`, and a repeat deploy reported `Error: No changes to deploy`. Direct inspection:
+
+  ```
+  $LATEST            PROBE_WRAPPER_MODE=main  CodeSha256=a7pEBOOvL3AHqxMuf49y98Od0hkwJuLHnq5XQbQb2hQ=
+  version 8 (alias)  PROBE_WRAPPER_MODE=log   CodeSha256=a7pEBOOvL3AHqxMuf49y98Od0hkwJuLHnq5XQbQb2hQ=
+  ```
+
+- **Root cause:** `AutoPublishAlias` publishes a new `AWS::Lambda::Version` when the **code** changes.
+  A published version is an immutable snapshot of code *and* configuration, so a configuration-only
+  change updates `$LATEST` and leaves the alias pointing at the previous version with the old
+  environment. API Gateway invokes the alias, so the change is invisible — with no error anywhere.
+
+- **Why it matters beyond the probe:** every stack here uses `AutoPublishAlias: live` and passes
+  configuration through template parameters (`JAVA_TOOL_OPTIONS`, `BUCKET_NAME`,
+  `NovaLiteProfileId`, memory, timeout). Changing any of those **without** also changing the jar
+  will not take effect on the served alias. Any past experiment that flipped a parameter and
+  re-measured without rebuilding was measuring the old configuration.
+
+- **Resolution / status:** **Resolved for the probe, and a standing trap to check for elsewhere.**
+  The probe's `lambdaZip` now embeds a per-build stamp file (`writeDeployStamp`), so every deploy has
+  a unique `CodeSha256` and therefore publishes a version that actually carries the new environment.
+  General rule: after a config-only deploy, verify with
+  `aws lambda get-function-configuration --function-name <fn>:$(aws lambda get-alias … --query FunctionVersion --output text)`
+  that the ALIAS version carries the value, not just `$LATEST`. The repo's own convention of
+  confirming `CodeSha256` before trusting results covers the code case but not this one.
+
+---
+
+## BEST RESULT: a Java agent that patches one RIC method — streaming, CRaC hooks alive, warm reuse, clean status, shippable as a library
+
+- **Symptom / trigger:** The wrapper-script approach streams but (a) cannot be delivered as a
+  library — a jar cannot set `AWS_LAMBDA_EXEC_WRAPPER`, mark a file executable or change `CodeUri` —
+  and (b) replaces AWS's invocation loop, which was measured to silently stop CRaC hooks firing. The
+  handler-side chunked `POST` streams correctly on its own; its ONLY defect is that AWS's loop then
+  posts a second response for an already-answered invocation and dies as `Runtime.ExitError`. So the
+  minimum viable fix is to suppress that one post and leave everything else of AWS's loop intact.
+
+- **Delivery mechanism — a `-javaagent`, no wrapper script.** `JAVA_TOOL_OPTIONS` (already set by
+  every template here) accepts `-javaagent:`, and `premain` runs before AWS's `AWSLambda.main`.
+  Confirmed working from the deployment package with **no `AWS_LAMBDA_EXEC_WRAPPER` set at all**
+  (template `WrapperMode=none`, which omits that variable via a `Conditions` / `!If` on the whole
+  `Variables` block):
+  ```
+  JAVA_TOOL_OPTIONS = -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+                      -javaagent:/var/task/lib/stream-emission-probe.jar
+  AWS_LAMBDA_EXEC_WRAPPER = <absent>
+  ```
+  `Premain-Class` is set on the function's own shadow jar manifest, so the agent and the function
+  are one artifact. **The package must be a zip carrying `lib/<jar>`**, because `-javaagent` needs a
+  real jar FILE and a bare-jar `CodeUri` is extracted loose into `/var/task`. That is the standard
+  Java Lambda zip layout, so it costs one Gradle `Zip` task.
+
+- **Discovery findings that shaped it (phase 1, transformed nothing):**
+  - The agent loads and can retransform: `premain jvm=25.0.5+10-LTS`, `canRetransform=true`.
+  - All five watched RIC classes pass through the transformer, from
+    `/var/runtime/lib/aws-lambda-java-runtime-interface-client-2.12.2-linux-aarch_64.jar` on the
+    `app` loader — so they CAN be patched even though they cannot be shadowed.
+  - The method that posts the response is
+    **`LambdaRuntimeApiClientImpl.reportInvocationSuccess(String, byte[], String): void`** — not
+    `postInvocationResponse` as the published source suggested. Siblings worth knowing:
+    `restoreNext(): void` (the SnapStart restore hook, confirming the earlier inference),
+    `reportInitError`, `reportRestoreError`, `reportInvocationError(String, LambdaError, String)`.
+  - **`AWSLambda` holds no field for the client** — its declared fields are constants plus
+    `customerClassLoader`. The client is a local in `main`, so a reflection-only variant (swap the
+    instance for a `java.lang.reflect.Proxy`) is impossible. Bytecode is required.
+
+- **The patch.** `ResponsePostSuppressor` is a `ClassFileTransformer` that prepends one guard to that
+  one method:
+  ```java
+  if (StreamingState.alreadyAnswered()) return;
+  ```
+  Built with the **JDK's own Class-File API** (`java.lang.classfile`, final in Java 24), so there is
+  **no ASM dependency** on a Java 25 runtime. `13505 -> 13584 bytes`. Two details that matter:
+  - The patched class is on the **app** loader while function code is on the child
+    `CustomerClassLoader`, and a parent cannot see a child's classes — so `premain` calls
+    `Instrumentation.appendToSystemClassLoaderSearch(<function jar>)`, the documented mechanism for
+    this, making one shared `StreamingState` visible to both. Without it the guard would throw
+    `NoClassDefFoundError`.
+  - It **fails safe**: any parse/transform failure, or a missing append, returns the class untouched
+    and the function stays on AWS's normal buffered path rather than breaking. `StreamingState` is a
+    per-thread flag reset at the start of every invocation, so a reused environment cannot leak an
+    "answered" flag into the next request.
+
+- **Measured result** (`stream-emission-probe` version 12, `CodeSha256`
+  `5bb3BeL/U18pRrnuVPKTct4oNnIF3V+MwcQqDXSxesc=`, `java25`/`arm64`/1024 MB, SnapStart on, REGIONAL
+  REST API, `RESPONSE_STREAM`; 3 × 64 KB chunks 2 s apart):
+
+  | api-req | first write | handler closed | allHeaders | firstContent | integLatency | client TTFB / total | REPORT |
+  |---|---|---|---|---|---|---|---|
+  | `2b72ae96` | 22 ms | 4028 ms | 60 ms | **60 ms** | 4060 ms | 0.207 s / 4.508 s | **ok** |
+  | `d823a17b` | 3 ms | 4007 ms | 27 ms | **27 ms** | 4027 ms | 0.191 s / 4.206 s | **ok** |
+
+  Everything the previous approaches each gave up, this one keeps:
+  - **Progressive delivery** — first content at API Gateway 27–60 ms into a 4 s stream; client first
+    byte at ~4.5% of total.
+  - **Clean invocation status** — `REPORT=ok`, no `Status: error`, no `Runtime.ExitError`. The patch
+    does what the `System.exit(0)` experiment could not.
+  - **CRaC hooks fire** — `[probe-crac] registered` ×2, `beforeCheckpoint` ×2, `afterRestore` ×1,
+    because AWS's loop is untouched. This is the decisive difference from the wrapper approach.
+  - **Warm reuse** — one `RESTORE_REPORT Restore Duration: 456.07 ms`, then three invocations in the
+    same environment with no `INIT_START`/`RESTORE_START` between them (billed 542 ms, 4030 ms,
+    4009 ms).
+  - **Bounded memory** — `Max Memory Used: 97 MB` throughout.
+  - **No wrapper script, no layer, no custom runtime, no argv rewriting.**
+
+- **What is still owned by the consumer:** writing the streamed response itself (open the chunked
+  `POST` to `/invocation/{id}/response` with
+  `Lambda-Runtime-Function-Response-Mode: streaming` + the prelude content type, then write prelude
+  + 8 NUL bytes + body — `streaming-core`'s `ResponseWriter` unchanged), the zip packaging, and the
+  `-javaagent` flag. Everything else — `nextInvocation`, error reporting, `restoreNext`, CRaC
+  coordination, logging, `Context` construction, handler discovery — stays AWS's.
+
+- **Residual risks, unchanged by this result:** the patch matches one method name and descriptor in
+  RIC 2.12.2; a runtime update that renames or re-signs it means no patch (fails safe to buffered,
+  but silently — a real library must expose whether the patch applied and refuse to stream blind).
+  Posting the response from handler code is still undocumented behaviour. Untested: concurrency
+  beyond 2, payloads near the 200 MB limit, Managed Instances, the 2 MBps cap after the first 10 MB
+  on REST API, and interaction with X-Ray.
+
+- **Resolution / status:** **This is the shippable shape.** Progressive HTTP response streaming from
+  a Kotlin/JVM Lambda on the managed `java25` runtime, with SnapStart and CRaC priming intact, warm
+  reuse, bounded memory and clean invocation status — delivered as a dependency plus one
+  `JAVA_TOOL_OPTIONS` flag and a zip layout. Reproducible via `streaming-probe`,
+  `deployment/aws/sam-probe/` (`WrapperMode=none`) and `scripts/stall-probe.sh`. Probe stack deleted
+  after the run. No decision taken yet on whether this graduates into a published module, and the
+  article is still untouched.
+
+---
+
+## The token shape works too: 24-byte events stream progressively with NO padding — the padding workaround is obsolete
+
+- **Symptom / trigger:** Every streaming measurement on the agent path so far used chunks of 64 KB or
+  1 MB. The original failure mode was specifically about **small** writes — a few bytes per LLM
+  token — and `HttpURLConnection.setChunkedStreamingMode(0)` picks a default chunk size (4 KB in the
+  JDK), so sub-chunk writes could in principle still coalesce until the buffer fills. Untested, and
+  decisive for the actual use case.
+
+- **Test:** 60 events of **24 bytes**, 100 ms apart — a 1,440-byte total body, i.e. the LLM-token
+  shape — against the agent build (`stream-emission-probe` version 13, `CodeSha256`
+  `tz9a3FMwXFg4UcurwGYvHgaSjpkvgwOQYsUdQatIXuw=`, `WrapperMode=none`, no wrapper script), with a
+  64 KB-chunk run alongside as the reference.
+
+  ```
+  AWS_REGION=eu-west-1 RUNS=2 VARIANTS='tokens-24b|mode=runtimeapi&chunks=60&chunkBytes=24&gapMs=100
+    chunks-64k|mode=runtimeapi&chunks=3&chunkBytes=65536&gapMs=2000' ./scripts/stall-probe.sh
+  ```
+
+  | variant | body | first write | handler closed | firstContent | integLatency | client TTFB / total | REPORT |
+  |---|---|---|---|---|---|---|---|
+  | **tokens-24b** | **1,440 B** | 7 ms | 5944 ms | **46 ms** | 5976 ms | **0.211 s / 6.145 s** | ok |
+  | **tokens-24b** | 1,440 B | 2 ms | 5935 ms | **19 ms** | 5947 ms | **0.183 s / 6.108 s** | ok |
+  | chunks-64k | 196,608 B | 3 ms | 4005 ms | 26 ms | 4022 ms | 0.167 s / 4.278 s | ok |
+  | chunks-64k | 196,608 B | 2 ms | 4006 ms | 21 ms | 4019 ms | 0.166 s / 4.182 s | ok |
+
+- **Result:** small writes stream. API Gateway received the first content **19–46 ms** in, the
+  integration stream stayed open for the full ~6 s, and the client's first byte arrived at **3% of
+  total**. Per-write `flush()` on the chunked connection does emit a partial chunk — the JDK's
+  default chunk length does not hold small writes. `REPORT=ok` on every run.
+
+- **Why this retires the padding workaround.** Same endpoint, same stack, the two approaches to
+  getting bytes to a client early:
+
+  | approach | on the wire | client TTFB | client total | TTFB as % of total |
+  |---|---|---|---|---|
+  | tiered SSE padding (buffered path) | **18 MB** | 8.68 s | 12.48 s | 70% |
+  | agent + streamed response | **1.4 KB** | 0.18 s | 6.11 s | **3%** |
+
+  Roughly **12,500× fewer bytes** and a first byte ~48× sooner. The padding was never defeating a
+  runtime buffer (there is none); it was inflating the body so the download took long enough to look
+  progressive. With a genuinely streamed response there is nothing to work around, and
+  `PaddedSseWriter`'s reason to exist is gone.
+
+- **Concurrency note (reasoned, not measured):** `StreamingState` is a `ThreadLocal`, and the handler
+  and AWS's `reportInvocationSuccess` call run on the same thread — the handler's own log lines are
+  `[main]`, and the RIC's loop posts from the thread it invoked on. On Event Functions · On-Demand an
+  execution environment serves one invocation at a time, so the flag cannot be observed by another
+  invocation. A multi-concurrent provider (Managed Instances) runs invocations on separate threads,
+  which the per-thread flag should also handle by construction — but that is untested.
+
+- **Resolution / status:** **The original question is answered end to end.** Progressive,
+  token-by-token HTTP response streaming from a Kotlin/JVM Lambda behind API Gateway REST, on the
+  managed `java25` runtime, with SnapStart and CRaC priming intact, warm reuse, bounded memory,
+  clean invocation status, no layer, no custom runtime, no wrapper script, no padding — delivered as
+  a dependency plus one `JAVA_TOOL_OPTIONS` flag and a zip layout. Probe stack deleted after the run.
+
+---
+
+## End to end on the real workload: Bedrock Nova Lite tokens stream token-by-token with no padding, 12 KB on the wire
+
+- **Symptom / trigger:** Everything up to here used synthetic filler. The capstone question is
+  whether the agent path delivers the workload that started this investigation: Amazon Bedrock Nova
+  Lite deltas relayed as SSE, with **no padding**, arriving progressively at the client. Added
+  `mode=bedrock` to the probe (`BedrockTokenProbe`) which writes one unpadded `data: <text>\n\n` per
+  model delta and flushes, straight into the live Runtime API connection. Scoped
+  `bedrock:InvokeModelWithResponseStream` IAM on the probe stack, mirroring `sam-bedrock`.
+
+- **Environment:** `stream-emission-probe` version 14, `WrapperMode=none` (**no wrapper script**;
+  `AWS_LAMBDA_EXEC_WRAPPER` absent), agent via
+  `JAVA_TOOL_OPTIONS=… -javaagent:/var/task/lib/stream-emission-probe.jar`, `java25`/`arm64`/1024 MB,
+  SnapStart on, REGIONAL REST API, `RESPONSE_STREAM`, Nova Lite `eu.amazon.nova-lite-v1:0`,
+  `maxTokens=2000`.
+
+- **Client view** (`GET /probe?mode=bedrock&maxTokens=2000`, per-line arrival timestamps):
+
+  | run | tokens | answer chars | **on the wire** | token spread | 500 ms buckets | **client TTFB** | total |
+  |---|---|---|---|---|---|---|---|
+  | 1 | 595 | 7,316 | **12,343 B** | 8,350 ms | **17** | **0.172 s** | 11.724 s |
+  | 2 | 688 | 8,131 | **14,121 B** | 8,844 ms | **18** | **0.199 s** | 9.461 s |
+
+- **Server view** (API Gateway access log joined to the handler clock, run 2):
+
+  ```
+  timeToAllHeaders=31   timeToFirstContent=307   integrationLatency=9280   responseLength=14121
+  stage=bedrockToken  tMs=760   n=3    eventBytes=39
+  stage=bedrockToken  tMs=1936  n=100  eventBytes=9
+  stage=bedrockToken  tMs=4318  n=300  eventBytes=14
+  stage=bedrockToken  tMs=8066  n=600  eventBytes=12
+  stage=bedrockEnd    tMs=9254  events=688
+  stage=runtimeApiPosted tMs=9255 httpStatus=202 answeredFlagSet=true
+  REPORT  Max Memory Used: 145 MB   (no Status: error, no Error Type)
+  [probe-crac] registered / beforeCheckpoint      (priming hooks still driven)
+  ```
+
+  Response **headers reach API Gateway at 31 ms**, before any token exists — which is what an SSE
+  client needs to start rendering — and content then flows from ~307 ms until the generation ends at
+  9.3 s. Individual events are **9–39 bytes**. Memory is 145 MB (higher than the 97 MB filler runs
+  only because the Bedrock SDK client is loaded) and does not track response size.
+
+- **Against the padded workaround this repo currently ships**, same endpoint shape, same model:
+
+  | approach | on the wire | client TTFB | TTFB as % of total | token spread | buckets |
+  |---|---|---|---|---|---|
+  | tiered SSE padding (buffered path) | **18,113,007 B** | 8.68 s | 70% | 3.8 s (download) | 8 |
+  | agent + streamed response, no padding | **14,121 B** | **0.199 s** | **2%** | 8.8 s (generation) | **18** |
+
+  About **1,280× fewer bytes**, first token roughly **44× sooner**, and the trickle now spans the
+  actual generation rather than the download of an inflated body. This is genuine token-by-token
+  delivery, not a typewriter effect produced by a slow download.
+
+- **Resolution / status:** **The original question is fully answered on a real workload.**
+  Progressive SSE token streaming from a Kotlin/JVM Lambda behind API Gateway REST on the managed
+  `java25` runtime — SnapStart and CRaC priming intact, warm reuse, bounded memory, clean invocation
+  status, no layer, no custom runtime, no wrapper script, no padding — delivered as a dependency plus
+  one `JAVA_TOOL_OPTIONS` flag and a zip layout. The padding workaround, `PaddedSseWriter` and the
+  `streaming-sse` module's reason to exist are superseded. Probe stack deleted after the run; the
+  `mode=bedrock` probe, the agent and the driver script stay in the repo so this is re-runnable.
+
+---
+
+## Implemented: `streaming-sse` 3.0 streams for real, padding removed, Bedrock example migrated, SnapStart hooks fixed
+
+- **Symptom / trigger:** With the agent approach proven (entries above), the findings had to become
+  code: a library that streams, an example that uses it, a post-deploy test that can actually fail,
+  and the SnapStart priming bug fixed. Everything below is implemented and verified locally; the
+  endpoint has not been redeployed yet.
+
+- **`streaming-sse` rewritten around a real transport.** New public API:
+  - `StreamingResponse.send(requestId, metadata) { live -> … }` — opens a chunked `POST` to the
+    Runtime API, writes the prelude through `streaming-core`'s `ResponseWriter`, runs the body with
+    the **live** stream, completes, then marks the invocation answered. Refuses to stream when the
+    agent is absent, so a misconfigured deploy fails with one explanatory error instead of
+    `Runtime.ExitError` per request.
+  - `SseWriter` — framing only, and it **splits multi-line text across `data:` lines**, fixing the
+    long-standing bug where everything after the first newline was dropped by a conforming parser.
+  - `StreamingAgent.premain` / `isPatched()`, `StreamingState`, `ResponseChannel` +
+    `RuntimeApiChannelFactory` (the connection, behind an interface so it is testable).
+  - **`PaddedSseWriter` and `PacedSseEmitter` deleted**, with their nine test files. Their premise —
+    a ~100 KB runtime buffer — does not exist. This is a **breaking change**; see the release note
+    below.
+
+- **Two implementation traps, both caught by the bytecode test rather than in production:**
+  1. **A branch needs a stack map frame.** Injecting `IFEQ` into a class file of version 50 or later
+     without a frame at the branch target fails verification. `F_SAME` describes it exactly, since
+     at that point the stack is empty and the locals are the method's parameters — emitting it by
+     hand avoids `COMPUTE_FRAMES`, which would otherwise have to resolve the runtime's own class
+     hierarchy. `visitMaxs` also has to raise `maxStack` to at least 1.
+  2. **A Kotlin `object`'s members are not static.** The injected `INVOKESTATIC
+     StreamingState.alreadyAnswered()Z` failed with
+     `IncompatibleClassChangeError: Expected static method`. `@JvmStatic` on the three members is
+     load-bearing, not cosmetic.
+
+  The test generates a synthetic class with the same method name and descriptor, patches it, loads
+  it (so the JVM verifier runs) and asserts a counter proves the guard short-circuits. Both bugs
+  would have shipped otherwise.
+
+- **ASM instead of the JDK Class-File API.** The probe used `java.lang.classfile`, which needs no
+  dependency — but it is Java 24+, and `streaming-sse` deliberately targets **Java 21** so it stays
+  usable on the `java21` Lambda runtime. `org.ow2.asm:asm` 9.11.1 added to the version catalog,
+  `implementation`-scoped.
+
+- **`StreamingResponse` takes a `String` request id, not a `Context`.** The module's stated design is
+  that no AWS artifact flows through it; taking `Context` would have broken that for one field.
+
+- **Bedrock example migrated.** `BedrockStreamHandler` now writes through `StreamingResponse` +
+  `SseWriter`; `PromptRequest` lost `headPadBytes` / `tailPadBytes` / `headPadEvents`; `Priming`
+  warms `SseWriter` instead of the padded writer. Pre-commit errors (400/502) still go out
+  **buffered** on the runtime's own stream — nothing is committed at that point, and a short JSON
+  body does not need streaming. Deployment: `CodeUri` is now
+  `bedrock-streaming-endpoint.zip` (`lib/<fat jar>`), the shadow jar manifest carries
+  `Premain-Class`, and `JAVA_TOOL_OPTIONS` gained
+  `-javaagent:/var/task/lib/bedrock-streaming-endpoint.jar`. Both deploy workflows now name the
+  **zip** as the artifact to sanity-check, since the jar is still produced and would have masked a
+  missing zip.
+
+- **SnapStart priming bug fixed.** `S3StreamingHandler` and `BedrockStreamingHandler` each gained
+  `private companion object { @Suppress("unused") private val PRIMING = Priming() }`, mirroring the
+  Java example's static field, so class initialization registers the CRaC hook. Each has a
+  regression test that reads the static field reflectively — the one thing the existing `PrimingTest`
+  could not catch, because it constructs `Priming` itself and so supplies the missing construction
+  site.
+
+- **`scripts/bedrock-streaming-test.sh` rewritten with four assertions**, each guarding a failure
+  that actually occurred:
+  1. **Real HTTP TTFB** from curl's `%{time_starttransfer}` must be under 35% of total. The old
+     script timed from the first line it read, so its "TTFB ~0 ms" was true by construction and the
+     assertion could never fail. Buffered measures ~100%; streaming measured 2%.
+  2. **Progressive arrival** — tokens in ≥ 4 distinct 500 ms buckets.
+  3. **No padding inflation** — bytes on the wire within 4× the answer's own size. The padded path
+     was 2 227×.
+  4. **Complete stream** — the `[DONE]` sentinel arrives.
+
+  It also reports whether the deployed alias actually carries `-javaagent`, because a buffered
+  result with a correct body is exactly what a missing agent looks like. The assertion logic was
+  exercised offline against six synthetic metric sets (real streaming, buffered, padding
+  regression, truncated, no tokens, HTTP error) and discriminates correctly.
+
+- **Verification run locally:** full CI gate green — `verifyCoverageReports koverVerify apiCheck`
+  with all six coverage reports passing, `streaming-sse` at its 90% bound and the examples at 80%;
+  `apiDump` regenerated; `sam validate` exit 0 on all four templates; shellcheck clean on every
+  script touched. `verify-quality-signals.sh` reports 118 passed / 7 failed, and **all seven
+  failures are pre-existing** in files this work never touched (the Kotlin badge version drift, the
+  codecov `files:` check, four `release-tag.yml` permission-table rows and the CONTRIBUTING workflow
+  map) — confirmed by `git status` showing `README.md`, `CONTRIBUTING.md`, `.github/` and
+  `verify-quality-signals.sh` unmodified.
+
+- **Release note — this is a MAJOR version.** `streaming-sse` is published to Maven Central and two
+  public classes were removed, so 2.x consumers break at compile time. `release-tag.yml` computes
+  the version from Conventional Commits, so the merge needs a `feat!:` subject or a
+  `BREAKING CHANGE:` footer, or it will cut a minor and publish a breaking change as 2.x.
+  `streaming-core` is unchanged but shares the single `releaseVersion`, so it goes to 3.0.0 too —
+  that is the existing one-tag-one-version model, not a new decision. No new module was added, so
+  neither of the two documented release traps (trigger paths, publish task list) applies.
+  `streaming-sse`'s POM now carries a new runtime dependency (ASM); its description was rewritten.
+
+- **Resolution / status:** **Implemented and locally verified; not yet deployed.** Next step is a
+  deploy of `bedrock-streaming-endpoint` followed by `BEDROCK_TEST_ENABLED=true
+  ./scripts/bedrock-streaming-test.sh`. Still open and deliberately untouched:
+  `docs/bedrock-sse-streaming.md` (the article), the root README, the `.kiro/specs/*` documents that
+  describe the padding design, and the S3 example — which would also benefit, since its memory
+  currently grows with object size and `StreamingResponse` would make it genuinely bounded.
+
+---
+
+## Probe removed — read the entries above as a record, not as runnable code
+
+- **What was removed:** the `streaming-probe` module (including `StreamingRuntimeMain`,
+  `wrapper.sh`, `ProbePriming`, `BedrockTokenProbe` and the probe's own copies of
+  `StreamingAgent` / `StreamingState` / `ResponsePostSuppressor`), the throwaway
+  `deployment/aws/sam-probe/` stack, and `scripts/stall-probe.sh` /
+  `scripts/stream-emission-probe.sh`. Earlier entries in this log reference those paths; they are
+  the record of how each measurement was taken, not files you will find in the tree.
+
+- **Why, beyond tidiness:** once `streaming-sse` shipped the real agent, the probe held a **second,
+  divergent copy** of the same mechanism. CI never compiled the probe module — `workflow-build.yml`
+  runs only the coverage tasks, which do not reach it — so it would have rotted while still looking
+  authoritative, and a future reader could easily have patched the wrong copy. It also carried no
+  tests and was excluded from every coverage gate by design.
+
+- **What replaces it:** the behaviour is now exercised by `streaming-bedrock-example` against the
+  real stack, and asserted by `scripts/bedrock-streaming-test.sh` (real curl TTFB as a fraction of
+  total, token bucket spread, a bytes-on-the-wire inflation guard, the `[DONE]` sentinel, plus a
+  report of whether the deployed alias actually carries `-javaagent`). The agent's bytecode patch is
+  verified in unit tests against a synthetic class, which is stronger than the probe was: it loads
+  the patched class so the JVM verifier runs.
+
+- **If the runtime changes and this has to be re-derived**, everything needed is in the entries
+  above rather than in code: the full JVM command line the managed `java25` runtime launches, the
+  fact that `/var/task` is absent from the classpath, the deployed RIC version and its class list,
+  the exact method name and descriptor that was patched, the SnapStart/CRaC control-versus-test
+  comparison, and the three CloudWatch fields to join
+  (`$context.integration.timeToAllHeaders`, `timeToFirstContent`, `integration.latency`, matched to
+  the handler's `timing … stage=` lines through `$context.integration.requestId`).
+
+- **Resolution / status:** **Removed.** No stack was left deployed; the probe stack had already been
+  deleted after its final run.

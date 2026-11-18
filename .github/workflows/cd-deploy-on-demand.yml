@@ -46,7 +46,10 @@ jobs:
           - sam-dir: deployment/aws/sam-bedrock
             stack-name: bedrock-streaming-endpoint
             build-task: ':streaming-bedrock-example:build'
-            jar-name: bedrock-streaming-endpoint.jar
+            # The ZIP, not the jar: this endpoint streams for real, which needs the fat jar loaded
+            # as a -javaagent, which needs a real jar FILE inside the package. The jar is still
+            # built, so naming it here would let a missing zip reach SAM unnoticed.
+            jar-name: bedrock-streaming-endpoint.zip
     uses: ./.github/workflows/workflow-deploy-aws.yml
     with:
       environment: default

@@ -20,6 +20,10 @@ kotlinLogging = "8.0.4"
 slf4j = "2.0.20"
 jackson = "2.22.4"
 crac = "1.5.0"
+# ASM, used by streaming-sse's Java agent to patch one method of the Lambda runtime interface
+# client. The JDK's own Class-File API would do this without a dependency, but it is Java 24+ and
+# streaming-sse deliberately targets Java 21 so it stays usable on the java21 Lambda runtime.
+asm = "9.11.1"
 
 junit = "6.1.3"
 mockk = "1.14.11"
@@ -53,6 +57,7 @@ kotlin-logging-jvm     = { module = "io.github.oshai:kotlin-logging-jvm", versio
 slf4j-simple           = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 jackson-databind       = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 crac                   = { module = "org.crac:crac", version.ref = "crac" }
+asm                    = { module = "org.ow2.asm:asm", version.ref = "asm" }
 
 junit-jupiter          = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }  # version from junit-jupiter
