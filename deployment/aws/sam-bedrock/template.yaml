@@ -73,7 +73,8 @@ Resources:
 
   # ---------------------------------------------------------------------------
   # The streaming Lambda. RequestStreamHandler that writes the API Gateway
-  # streaming protocol by hand and relays Nova Lite deltas as padded SSE events.
+  # streaming protocol by hand and relays Nova Lite deltas as SSE events,
+  # posting them to the Runtime API as they arrive (streaming-sse).
   # ---------------------------------------------------------------------------
   BedrockStreamingFunction:
     Type: AWS::Serverless::Function

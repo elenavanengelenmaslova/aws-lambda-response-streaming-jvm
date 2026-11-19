@@ -9,8 +9,8 @@ import java.io.ByteArrayOutputStream
 
 /**
  * Framing tests for [SseWriter]. The headline property is the round trip: whatever a conforming SSE
- * client reassembles from the `data:` fields must equal the text that was written — including text
- * containing newlines, which the superseded `PaddedSseWriter` silently truncates.
+ * client reassembles from the `data:` fields must equal the text that was written, including text
+ * containing newlines.
  */
 class SseWriterTest {
 

@@ -34,7 +34,6 @@ See the [`streaming-sse` README](../streaming-sse/README.md) for the mechanism a
 | | on the wire | client TTFB | as % of total | token spread |
 |---|---|---|---|---|
 | buffered handler stream | 14 KB | at the end | 100% | one burst |
-| SSE padding (removed in 3.0) | **18 MB** | 8.68 s | 70% | 3.8 s (the download) |
 | **this example** | **14 KB** | **0.199 s** | **2%** | 8.8 s (the generation) |
 
 Server side: API Gateway had the response headers at 31 ms and the first content at 307 ms, with the

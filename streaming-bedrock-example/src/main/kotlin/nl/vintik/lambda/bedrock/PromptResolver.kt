@@ -9,7 +9,7 @@ import java.io.InputStream
 
 private val logger = KotlinLogging.logger {}
 
-/** Defaults chosen to make the padding workaround visible out of the box (see module README). */
+/** Defaults chosen so an empty request body still produces a long enough answer to watch it stream. */
 internal const val DEFAULT_PROMPT =
     "Explain in flowing prose why HTTP response streaming matters for serverless applications."
 internal const val DEFAULT_MAX_TOKENS = 1000
@@ -21,7 +21,7 @@ internal const val MAX_TOKENS_CEILING = 5_000
 /**
  * [RequestResolver] for the Bedrock streaming endpoint. Parses the API Gateway proxy event, reads
  * the client payload from its `body` field (itself JSON: `{"prompt":..., "maxTokens":..., ...}`),
- * validates the prompt, and clamps the padding/token knobs to safe bounds.
+ * validates the prompt, and clamps the token count to safe bounds.
  *
  * A missing or blank prompt falls back to [DEFAULT_PROMPT] so the endpoint is demoable with an
  * empty body. A prompt longer than [MAX_PROMPT_LEN] is rejected with HTTP 400 and no model call.

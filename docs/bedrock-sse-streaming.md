@@ -76,8 +76,8 @@ setRequestProperty("Content-Type", "application/vnd.awslambda.http-integration-r
 ```
 
 The content type is the same marker that Node's `awslambda.HttpResponseStream.from()` applies through
-`setContentType`: it tells the service the body begins with the metadata prelude. So the wire format
-does not change. `streaming-core`'s `ResponseWriter` writes the same metadata, the same eight-byte
+`setContentType`: it tells the service the body starts with the response metadata rather than being
+the response itself. So the wire format does not change. `streaming-core`'s `ResponseWriter` writes the same metadata, the same eight-byte
 delimiter and the same body [1]. Only the destination changes, from a heap buffer to a socket.
 
 One thing then needs handling. AWS's invocation loop does not know the invocation has been answered,
@@ -193,7 +193,7 @@ body.
 
 ## Limitations
 
-The standard response-streaming limitations [2] still apply, and this module adds two of its own.
+The standard response-streaming limitations [2] still apply, and this module adds three of its own.
 
 - **Undocumented behaviour.** Sending the invocation response from handler code, and the method the
   agent patches, are not part of any AWS contract, and a runtime update can change either. The
@@ -202,8 +202,8 @@ The standard response-streaming limitations [2] still apply, and this module add
 - **You are patching the runtime.** One method, fail-safe, with everything else untouched — but it is
   still instrumentation of AWS internals, and a deliberate choice rather than a default.
 - **API Gateway REST only.** `ResponseTransferMode: RESPONSE_STREAM` in SAM [4], `STREAM` at the API
-  Gateway integration level [3]. HTTP APIs do not support response streaming, and with the managed
-  Java runtime the prelude format returns HTTP 502 behind a Function URL.
+  Gateway integration level [3]. HTTP APIs and Lambda Function URLs are not supported.
+- **Standard Lambda only.** Not tested on Lambda Managed Instances.
 - **Billing is unchanged.** Streaming does not shorten the invocation. You are billed for the whole
   handler duration, including time spent waiting for the model.
 - **The client buffers too.** Without `-N` (`--no-buffer`), curl holds its output and a correctly

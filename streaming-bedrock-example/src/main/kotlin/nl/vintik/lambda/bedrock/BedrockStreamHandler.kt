@@ -30,10 +30,8 @@ private val logger = KotlinLogging.logger {}
  * `streaming-sse` README; the SAM template in `deployment/aws/sam-bedrock/` has both.
  *
  * ### What this replaces
- * This endpoint used to pad every SSE event with ~10–100 KB of SSE comments to defeat what was
- * believed to be a ~100 KB buffer inside the runtime. There is no such buffer, and padding only
- * inflated the body until downloading it took long enough to look progressive: 18 MB on the wire
- * for a first token at 70% of total, against 14 KB for a first token at 2%. See `docs/log.md`.
+ * This endpoint used to pad each SSE event with SSE comment lines to defeat a runtime buffer that
+ * does not exist; it only inflated the body, and never streamed. See `docs/log.md`.
  *
  * ### Ordering guarantees
  * - A request-resolution error is answered **buffered**, on the runtime's own stream, with no body

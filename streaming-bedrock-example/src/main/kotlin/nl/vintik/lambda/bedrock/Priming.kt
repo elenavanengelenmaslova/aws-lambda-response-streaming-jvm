@@ -19,7 +19,7 @@ private val logger = KotlinLogging.logger {}
  * the snapshot is created, leaving the restored snapshot warm.
  *
  * [beforeCheckpoint] exercises the local critical paths in one pass — Bedrock client construction,
- * request resolution (JSON parsing), SSE padding encoding, and metadata serialization — WITHOUT
+ * request resolution (JSON parsing), SSE event encoding, and metadata serialization — WITHOUT
  * invoking the model (no network, no cost). Failures propagate so a broken snapshot is never
  * published.
  */
