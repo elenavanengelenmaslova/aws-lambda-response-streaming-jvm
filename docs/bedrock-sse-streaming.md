@@ -5,7 +5,7 @@
 In my previous article I introduced `aws-lambda-streaming-core`, a small JVM library that writes the
 API Gateway streaming response format from a Lambda `RequestStreamHandler` [1]. It takes care of the
 response framing and the bounded byte copy, so a Kotlin or Java function can return a body well past
-the 6 MB buffered response limit [2] without recreating the protocol in every project.
+the 6 MB buffered response limit [2].
 
 Then I pointed it at Amazon Bedrock. Nova Lite produces its answer a few characters at a time, and
 the reason to put that behind an SSE endpoint is that the first words should appear while the rest is
@@ -13,7 +13,7 @@ still being generated. My handler received each delta, wrote it as an SSE event 
 client received the complete answer in a single burst when the invocation finished.
 
 This article covers why that happens, what I measured, and what I had to build to get tokens
-delivered as they are produced. It also corrects something I claimed in the first article.
+delivered as they are produced.
 
 ## The endpoint
 
@@ -35,7 +35,7 @@ Then I found "The Curious Case of SSE Streaming Agent Responses on AWS Lambda" o
 Center [5], which describes exactly my symptom: silence, then every event at once. Its diagnosis is
 an undocumented buffer of roughly 100 KB, and its fix is to pad each SSE event with a large comment
 block to push that buffer past its threshold. That application is Python and FastAPI behind the
-Lambda Web Adapter, where the technique works.
+Lambda Web Adapter, where the workaround worked according to that article[5].
 
 On my managed JVM Lambda it did not. I built a tiered version of it, and the demo looked convincing
 enough that I believed it until I measured the client's real time to first byte. With roughly 10 MB
@@ -56,11 +56,7 @@ and returns it as the invocation result [6]. Nothing in that path can transmit w
 still inside `handleRequest`, and a maintainer reply on the same repository confirms response
 streaming is a Node.js-only feature of the managed runtimes [7].
 
-```
-Handler writes:  [ chunk 1 ][ chunk 2 ][ chunk 3 ]   → all into one in-memory buffer
-Handler returns: ────────────────────────────────┤
-Client receives:                                 [ chunk 1 ][ chunk 2 ][ chunk 3 ]
-```
+![Sequence diagram of the buffered response path: the client sends a request, the Lambda Java runtime invokes the handler, the handler writes chunk 1, 2 and 3 into the runtime's in-memory buffer while the client has received nothing, and only after the handler returns does the runtime send all three chunks to the client as one response.](./buffered-response.png)
 
 To measure it rather than infer it, I joined handler timing lines to an API Gateway access log
 carrying `$context.integration.timeToAllHeaders`, `timeToFirstContent` and `latency`, matched per
@@ -81,28 +77,10 @@ and showed nothing until 8599 ms. A buffer releasing at 100 KB, 1 MB, 6 MB or 10
 obvious in those runs.
 
 That is why padding cannot work here: the volume written has no bearing on when the response is
-submitted, so bigger events only lengthen the eventual download. Both diagnoses can hold at once. The
-Lambda Web Adapter path genuinely streams, so a coalescing buffer is plausible there; on the managed
-JVM runtime the response has not reached that layer yet.
+submitted, so bigger events only lengthen the eventual download.
 
-## A correction to my previous article
-
-This changes something I wrote the first time, and the distinction is worth stating plainly.
-
-**Large responses work.** `streaming-core` with a streaming API Gateway integration does carry
-payloads past the 6 MB Lambda limit [2] and API Gateway's 10 MB buffered limit [3]. A 12 MB S3 object
-reaches the client in full. That part holds.
-
-**It is not progressive, and memory is not bounded.** What I got wrong was describing those bytes as
-leaving while the handler ran. They do not: the client's first byte arrives after the handler returns,
-and the body transfers from there. I also claimed memory stays bounded for large objects, which the
-measurements contradict. `Max Memory Used` over five consecutive 12 MB S3 requests in one environment
-went 205, 217, 229, 241, 253 MB, and three consecutive 18 MB Bedrock requests went 283, 330, 345 MB.
-The library's 1 MiB copy buffer bounds its own loop; it cannot bound the runtime's accumulator behind
-it. `Max Memory Used` is a high-water mark, so treat that as a strong pattern rather than a closed
-case.
-
-For a file download none of this matters much. For Server-Sent Events it is the entire feature.
+For a large file download, a response that starts after the handler returns is fine. For Server-Sent
+Events it defeats the purpose, so the bytes have to take a path that does not go through that buffer.
 
 ## Posting the response myself
 
@@ -296,17 +274,12 @@ server-side join on the example stack, so read those as the mechanism's numbers.
 
 The standard response-streaming limitations still apply [2], and this approach adds its own.
 
-- **Undocumented behaviour.** Posting the invocation response from handler code, and the runtime
-  method the agent patches, are not part of any AWS contract. Pin your runtime version and keep a
-  post-deploy check.
-- **You are patching the runtime.** One method, fails safe, everything else untouched, but it is
-  still instrumentation of AWS internals and should be a deliberate choice.
 - **API Gateway REST only.** `ResponseTransferMode: RESPONSE_STREAM` in SAM [4], `STREAM` at the
   integration level [3]. HTTP APIs and Lambda Function URLs are not supported.
 - **Standard Lambda only.** Not tested on Lambda Managed Instances.
 - **Billing is unchanged.** You are billed for the whole handler duration, including the time spent
   waiting for the model.
-- **The client buffers too.** Without `-N`, curl holds its output and a correctly streaming endpoint
+- **The client can buffer too.** Without `-N`, curl holds its output and a correctly streaming endpoint
   looks buffered; the troubleshooting guide recommends the same flag [8].
 
 ## The Bedrock example
@@ -321,10 +294,10 @@ account.
 ## Conclusion
 
 `aws-lambda-streaming-core` does what I built it for: large objects, an S3 download, a CSV export, a
-generated report, framed correctly and carried well past the buffered limits. What I did not realise
-when I wrote about it is that on the managed JVM runtime none of those bytes leave while the handler
-is running, because the stream it writes to is an in-memory buffer. For a download that is a detail.
-For Server-Sent Events it is the whole point.
+generated report, framed correctly and carried well past the buffered limits. On the managed JVM
+runtime, though, the stream a handler writes to is an in-memory buffer, so none of those bytes leave
+while the handler is running. For a download that is a detail. For Server-Sent Events it is the whole
+point.
 
 Progressive delivery needed a different mechanism: post the response to the Lambda Runtime API as it
 is produced, and stop AWS's invocation loop from posting a second one. That is
