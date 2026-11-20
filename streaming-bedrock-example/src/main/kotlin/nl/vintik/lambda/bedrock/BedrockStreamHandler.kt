@@ -6,104 +6,121 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
 import nl.vintik.lambda.streaming.ResponseMetadata
 import nl.vintik.lambda.streaming.ResponseWriter
-import nl.vintik.lambda.streaming.sse.PaddedSseWriter
+import nl.vintik.lambda.streaming.sse.SseWriter
+import nl.vintik.lambda.streaming.sse.StreamingResponse
 import java.io.InputStream
 import java.io.OutputStream
 
 private val logger = KotlinLogging.logger {}
 
 /**
- * Orchestrates the Bedrock streaming pipeline, mirroring `streaming-s3-example`'s `StreamHandler`:
- * resolve the typed [PromptRequest], commit the response status once via the `streaming-core`
- * [ResponseWriter], then relay model text deltas as padded SSE events through [PaddedSseWriter].
+ * Relays Amazon Bedrock Nova Lite token deltas to the client as Server-Sent Events that arrive
+ * **token by token**.
  *
- * Collaborators are injected by delegation (`by lazy` fed by factories) so production uses the real
- * defaults while tests substitute mocks, and the Bedrock client is built only on the first real
- * invocation.
+ * ### How the streaming works
+ * The `OutputStream` the Lambda runtime hands a `RequestStreamHandler` is a
+ * `ByteArrayOutputStream`: writes accumulate in memory and are posted only after `handleRequest`
+ * returns, so nothing can reach the client mid-invocation. This handler therefore ignores it and
+ * writes through [StreamingResponse], which posts the response itself as a chunked request to the
+ * Lambda Runtime API and hands back that live stream. Each [SseWriter] event is flushed and leaves
+ * immediately — measured 19–46 ms to API Gateway for a 24-byte event.
  *
- * Ordering guarantees (same head-before-commit principle as the S3 example):
- *  - A request-resolution error writes a metadata-only error response and no body (status 400).
- *  - For a resolved request, the 200 metadata is deferred until the FIRST model delta arrives, so
- *    the status is not committed until the model has actually started producing output. A model
- *    failure BEFORE the first delta is therefore mapped to a 502 error response (status not yet
- *    committed). A successful generation that produces no deltas still returns 200.
- *  - Once the first delta has been written the status is committed; a later failure can only
- *    truncate the body and propagate — it can never rewrite the status.
- *  - Metadata is written exactly once (`Content-Type: text/event-stream`, `Transfer-Encoding:
- *    chunked` — no `Content-Length`, the length is unknown).
- *  - The output stream is flushed and closed by this handler before returning.
+ * Deploying this needs two things beyond the dependency: the function packaged as a zip with the fat
+ * jar under `lib/`, and `-javaagent:/var/task/lib/<jar>` on `JAVA_TOOL_OPTIONS`. See the
+ * `streaming-sse` README; the SAM template in `deployment/aws/sam-bedrock/` has both.
+ *
+ * ### What this replaces
+ * This endpoint used to pad each SSE event with SSE comment lines to defeat a runtime buffer that
+ * does not exist; it only inflated the body, and never streamed. See `docs/log.md`.
+ *
+ * ### Ordering guarantees
+ * - A request-resolution error is answered **buffered**, on the runtime's own stream, with no body
+ *   bytes — nothing has been committed at that point, so the status is still free (400).
+ * - Past that, the status is committed **before the model is called**: [StreamingResponse.send]
+ *   writes the metadata and the delimiter, then runs the body, and the body is what calls Bedrock.
+ * - So a model failure cannot produce a 502 for the client. It gets a 200 with a truncated body,
+ *   empty when the failure lands before the first delta. The 502 written below in that case goes
+ *   onto the runtime's buffered stream, which the client never sees.
+ * - After a delta has been relayed the failure is rethrown, so the invocation is reported as failed
+ *   even though the client received a well-formed 200.
+ * - A successful generation that produces no deltas still returns 200 with just the terminal event.
  */
 class BedrockStreamHandler(
     requestResolver: () -> RequestResolver<PromptRequest>,
     source: () -> TokenStreamSource<PromptRequest>,
     responseWriter: () -> ResponseWriter = ::ResponseWriter,
+    streaming: () -> StreamingResponse = ::StreamingResponse,
 ) : RequestStreamHandler {
 
     private val requestResolver: RequestResolver<PromptRequest> by lazy(requestResolver)
     private val source: TokenStreamSource<PromptRequest> by lazy(source)
     private val responseWriter: ResponseWriter by lazy(responseWriter)
+    private val streaming: StreamingResponse by lazy(streaming)
 
     override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
-        output.use {
-            when (val result = requestResolver.resolve(input)) {
-                is RequestResult.Error -> responseWriter.writeError(output, result.statusCode, result.message)
-                is RequestResult.Resolved -> stream(result.request, output)
+        val timings = StreamTimings(context.awsRequestId.orEmpty())
+        timings.mark("start", "outputClass=${output::class.java.name}")
+
+        when (val result = requestResolver.resolve(input)) {
+            // Pre-commit errors go back on the runtime's own stream: buffered is fine for a short
+            // JSON body, and it keeps the error path independent of the streaming machinery.
+            is RequestResult.Error -> output.use {
+                responseWriter.writeError(output, result.statusCode, result.message)
             }
-            output.flush()
+
+            is RequestResult.Resolved -> stream(result.request, output, context, timings)
         }
+        timings.mark("closed")
     }
 
-    private fun stream(request: PromptRequest, output: OutputStream) {
-        val sse = PaddedSseWriter(request.headPadBytes, request.tailPadBytes, request.headPadEvents)
-        val start = System.currentTimeMillis()
-        var committed = false
+    private fun stream(
+        request: PromptRequest,
+        bufferedOutput: OutputStream,
+        context: Context,
+        timings: StreamTimings,
+    ) {
+        val sse = SseWriter()
+        var firstDeltaSeen = false
 
-        fun commitMetadataOnce() {
-            if (committed) return
-            responseWriter.writeMetadata(
-                output,
-                ResponseMetadata(
-                    statusCode = 200,
-                    headers = mapOf(
-                        "Content-Type" to "text/event-stream; charset=utf-8",
-                        "Cache-Control" to "no-cache",
-                        "Transfer-Encoding" to "chunked",
-                    ),
-                ),
-            )
-            committed = true
-        }
-
-        // Metadata is deferred until the first delta: the model must actually start producing
-        // output before the 200 status is committed, so a pre-first-delta failure can still be a 502.
         val outcome = runCatching {
-            runBlocking {
-                source.stream(request) { delta ->
-                    commitMetadataOnce()
-                    sse.writeEvent(output, delta)
-                    logger.debug { "event=${sse.eventsWritten()} elapsedMs=${System.currentTimeMillis() - start}" }
+            streaming.send(context.awsRequestId, sseMetadata()) { live ->
+                timings.timed("metadataCommitted") { }
+                runBlocking {
+                    source.stream(request) { delta ->
+                        timings.onDelta()
+                        firstDeltaSeen = true
+                        timings.timeEventWrite(sse.eventsWritten() + 1) { sse.writeEvent(live, delta) }
+                    }
                 }
+                sse.writeEnd(live)
+                timings.streamEnd(sse.eventsWritten())
             }
-        }
+        }.rethrowFatal()
 
         outcome.fold(
-            onSuccess = {
-                // A successful generation with zero deltas still returns 200.
-                commitMetadataOnce()
-                sse.writeEnd(output)
-                logger.info { "stream complete events=${sse.eventsWritten()}" }
-            },
+            onSuccess = { logger.info { "stream complete events=${sse.eventsWritten()}" } },
             onFailure = { e ->
-                if (!committed) {
-                    // Failure before any delta: status not yet committed, so return a 502.
+                if (!firstDeltaSeen) {
+                    // Nothing was delivered, so the status is still free: answer buffered with 502.
                     logger.warn(e) { "Bedrock stream failed before the first delta; responding 502" }
-                    responseWriter.writeError(output, 502, "Model streaming failed.")
+                    bufferedOutput.use {
+                        responseWriter.writeError(bufferedOutput, 502, "Model streaming failed.")
+                    }
                 } else {
-                    // Status already committed: a failure can only truncate the body and propagate.
                     logger.error(e) { "Bedrock relay failed after status commit; body truncated at event=${sse.eventsWritten()}" }
                     throw e
                 }
             },
         )
     }
+
+    /** SSE response metadata. No `Content-Length`: the answer's length is unknown up front. */
+    private fun sseMetadata() = ResponseMetadata(
+        statusCode = 200,
+        headers = mapOf(
+            "Content-Type" to "text/event-stream; charset=utf-8",
+            "Cache-Control" to "no-cache",
+            "Transfer-Encoding" to "chunked",
+        ),
+    )
 }

@@ -60,10 +60,29 @@ tasks.shadowJar {
     archiveFileName.set("bedrock-streaming-endpoint.jar")
     destinationDirectory.set(file("${rootDir}/build/dist"))
     mergeServiceFiles()
+    // Makes this same fat jar usable as the streaming Java agent, so deployment needs a dependency
+    // and one JAVA_TOOL_OPTIONS flag rather than a wrapper script or a Lambda layer. Without the
+    // agent, AWS's invocation loop posts a second response for an invocation the handler already
+    // streamed, and the runtime dies with Runtime.ExitError. See the streaming-sse README.
+    manifest {
+        attributes(
+            "Premain-Class" to "nl.vintik.lambda.streaming.sse.StreamingAgent",
+            "Can-Retransform-Classes" to "true",
+        )
+    }
+}
+
+// The deployment package is a ZIP, not a bare jar: -javaagent needs a real jar FILE on disk, and
+// Lambda extracts a bare-jar CodeUri's *contents* loose into /var/task, leaving nothing to point
+// at. lib/<jar> is the standard Java Lambda zip layout and the CustomerClassLoader picks it up.
+val lambdaZip = tasks.register<Zip>("lambdaZip") {
+    archiveFileName.set("bedrock-streaming-endpoint.zip")
+    destinationDirectory.set(file("${rootDir}/build/dist"))
+    from(tasks.shadowJar) { into("lib") }
 }
 
 tasks.build {
-    dependsOn(tasks.shadowJar)
+    dependsOn(tasks.shadowJar, lambdaZip)
 }
 
 // ---- Coverage gate: 80% via koverVerify (matches streaming-s3-example) ----------------------

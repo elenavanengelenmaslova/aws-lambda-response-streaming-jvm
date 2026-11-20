@@ -265,7 +265,7 @@ test_streaming_progressive_delivery() {
   timing_output=$(curl --silent --show-error --max-time 120 --http1.1 --no-buffer \
     --header "x-api-key: $API_KEY" \
     --output /dev/null \
-    --write-out 'ttfb=%{time_starttransfer}\ntotal=%{time_total}\n' \
+    --write-out 'ttfb=%{time_starttransfer}\ntotal=%{time_total}\nrequest_id=%header{x-amzn-requestid}\n' \
     "$url") || fail "endpoint unreachable during timing test"
 
   local ttfb_seconds total_seconds
@@ -276,6 +276,7 @@ test_streaming_progressive_delivery() {
   ttfb_ms=$(python3 -c "print(int(float('$ttfb_seconds') * 1000))")
   total_ms=$(python3 -c "print(int(float('$total_seconds') * 1000))")
 
+  info "  API request id: $(echo "$timing_output" | grep "^request_id=" | cut -d= -f2)"
   info "  TTFB: ${ttfb_ms}ms"
   info "  Total: ${total_ms}ms"
 

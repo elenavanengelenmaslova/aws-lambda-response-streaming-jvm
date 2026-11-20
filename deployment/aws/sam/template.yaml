@@ -57,6 +57,19 @@ Resources:
       StageName: prod
       EndpointConfiguration:
         Type: REGIONAL
+      # Access log with the response-streaming timing variables, to see when API Gateway receives
+      # the first bytes from Lambda (timeToFirstContent) versus when the client does.
+      # integrationRequestId is the Lambda request id logged by the handler's timing lines.
+      AccessLogSetting:
+        DestinationArn: !GetAtt StreamingApiAccessLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","integrationRequestId":"$context.integration.requestId",
+          "requestTimeEpoch":"$context.requestTimeEpoch","status":"$context.status",
+          "transferMode":"$context.integration.responseTransferMode",
+          "timeToAllHeaders":"$context.integration.timeToAllHeaders",
+          "timeToFirstContent":"$context.integration.timeToFirstContent",
+          "integrationLatency":"$context.integration.latency",
+          "responseLatency":"$context.responseLatency","responseLength":"$context.responseLength"}
       Auth:
         ApiKeyRequired: true
         UsagePlan:
@@ -110,6 +123,11 @@ Resources:
   # CloudWatch log group with a finite 7-day retention. The name matches the
   # alias-published function so SnapStart invocations log here too.
   # ---------------------------------------------------------------------------
+  StreamingApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
   StreamingFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

@@ -11,6 +11,17 @@
 # with "Unable to find a supported build workflow for runtime 'java25'". `sam deploy`
 # packages the referenced jar directly. See docs/log.md.
 #
+# PREREQUISITE - API Gateway account-level CloudWatch role (once per account and Region).
+# The template's stage has an AccessLogSetting, and a REST API can only write CloudWatch logs
+# when the account's cloudwatchRoleArn is set in the target Region. Check it with:
+#
+#   aws apigateway get-account --region <region> --query cloudwatchRoleArn
+#
+# If that is empty, create an IAM role trusted by apigateway.amazonaws.com, attach the
+# AmazonAPIGatewayPushToCloudWatchLogs managed policy, and set its ARN as the account's
+# cloudwatchRoleArn (console: API Gateway > Settings; or `aws apigateway update-account`).
+# Without it the deploy can fail on the stage, or succeed with no access log written.
+#
 # Configuration (stack name, region, capabilities) comes from samconfig.toml in this
 # directory. Extra args are forwarded to `sam deploy`, e.g.:
 #   ./deployment/aws/sam-bedrock/deploy.sh --guided

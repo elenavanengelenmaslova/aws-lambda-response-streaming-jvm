@@ -1,31 +1,63 @@
-public final class nl/vintik/lambda/streaming/sse/PacedSseEmitter {
-	public static final field Companion Lnl/vintik/lambda/streaming/sse/PacedSseEmitter$Companion;
-	public static final field MAX_DELAY_MILLIS I
-	public static final field MIN_DELAY_MILLIS I
-	public static final field NO_DELAY I
-	public fun <init> (Lnl/vintik/lambda/streaming/sse/PaddedSseWriter;ILkotlin/jvm/functions/Function1;)V
-	public synthetic fun <init> (Lnl/vintik/lambda/streaming/sse/PaddedSseWriter;ILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun emit (Ljava/io/OutputStream;Ljava/lang/String;)I
-	public final fun end (Ljava/io/OutputStream;)V
-	public final fun eventsWritten ()I
+public abstract interface class nl/vintik/lambda/streaming/sse/ResponseChannel {
+	public abstract fun complete ()I
+	public abstract fun getOutput ()Ljava/io/OutputStream;
 }
 
-public final class nl/vintik/lambda/streaming/sse/PacedSseEmitter$Companion {
+public abstract interface class nl/vintik/lambda/streaming/sse/ResponseChannelFactory {
+	public abstract fun open (Ljava/lang/String;)Lnl/vintik/lambda/streaming/sse/ResponseChannel;
 }
 
-public final class nl/vintik/lambda/streaming/sse/PaddedSseWriter {
-	public static final field Companion Lnl/vintik/lambda/streaming/sse/PaddedSseWriter$Companion;
-	public static final field DEFAULT_HEAD_PAD_BYTES I
-	public static final field DEFAULT_HEAD_PAD_EVENTS I
-	public static final field DEFAULT_TAIL_PAD_BYTES I
+public final class nl/vintik/lambda/streaming/sse/ResponseChannelKt {
+	public static final field RUNTIME_API_ACCEPTED I
+}
+
+public final class nl/vintik/lambda/streaming/sse/RuntimeApiChannelFactory : nl/vintik/lambda/streaming/sse/ResponseChannelFactory {
+	public static final field Companion Lnl/vintik/lambda/streaming/sse/RuntimeApiChannelFactory$Companion;
+	public static final field RUNTIME_API_ENV Ljava/lang/String;
 	public fun <init> ()V
-	public fun <init> (III)V
-	public final fun eventsWritten ()I
-	public final fun hasPadding ()Z
-	public final fun writeEnd (Ljava/io/OutputStream;)V
-	public final fun writeEvent (Ljava/io/OutputStream;Ljava/lang/String;)I
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;I)V
+	public fun <init> (Ljava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun open (Ljava/lang/String;)Lnl/vintik/lambda/streaming/sse/ResponseChannel;
 }
 
-public final class nl/vintik/lambda/streaming/sse/PaddedSseWriter$Companion {
+public final class nl/vintik/lambda/streaming/sse/RuntimeApiChannelFactory$Companion {
+}
+
+public final class nl/vintik/lambda/streaming/sse/SseWriter {
+	public static final field Companion Lnl/vintik/lambda/streaming/sse/SseWriter$Companion;
+	public static final field DONE_SENTINEL Ljava/lang/String;
+	public static final field END_EVENT_NAME Ljava/lang/String;
+	public fun <init> ()V
+	public final fun eventsWritten ()I
+	public final fun writeEnd (Ljava/io/OutputStream;)I
+	public final fun writeEvent (Ljava/io/OutputStream;Ljava/lang/String;)I
+	public final fun writeNamedEvent (Ljava/io/OutputStream;Ljava/lang/String;Ljava/lang/String;)I
+}
+
+public final class nl/vintik/lambda/streaming/sse/SseWriter$Companion {
+}
+
+public final class nl/vintik/lambda/streaming/sse/StreamingAgent {
+	public static final field INSTANCE Lnl/vintik/lambda/streaming/sse/StreamingAgent;
+	public static final fun isPatched ()Z
+	public static final fun premain (Ljava/lang/String;Ljava/lang/instrument/Instrumentation;)V
+}
+
+public final class nl/vintik/lambda/streaming/sse/StreamingResponse {
+	public fun <init> ()V
+	public fun <init> (Lnl/vintik/lambda/streaming/ResponseWriter;)V
+	public fun <init> (Lnl/vintik/lambda/streaming/ResponseWriter;Lnl/vintik/lambda/streaming/sse/ResponseChannelFactory;)V
+	public fun <init> (Lnl/vintik/lambda/streaming/ResponseWriter;Lnl/vintik/lambda/streaming/sse/ResponseChannelFactory;Z)V
+	public synthetic fun <init> (Lnl/vintik/lambda/streaming/ResponseWriter;Lnl/vintik/lambda/streaming/sse/ResponseChannelFactory;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun send (Ljava/lang/String;Lnl/vintik/lambda/streaming/ResponseMetadata;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
+}
+
+public final class nl/vintik/lambda/streaming/sse/StreamingState {
+	public static final field INSTANCE Lnl/vintik/lambda/streaming/sse/StreamingState;
+	public static final fun alreadyAnswered ()Z
+	public static final fun markAnswered ()V
+	public static final fun reset ()V
 }
 
