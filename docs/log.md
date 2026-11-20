@@ -696,9 +696,9 @@ Each entry uses the form:
      The project's *own* published version, derived from the git tag by the publish
      workflow. Out of scope for the catalog; "migrating" it would break the rule that the
      tag is the single source of truth.
-  4. **All three modules** — `junit-platform-launcher`, a **versionless** catalog entry.
+  4. **Every module with tests** — `junit-platform-launcher`, a **versionless** catalog entry.
      Its version is constrained by `junit-jupiter`; pinning it separately invites a split.
-  5. **The Java example** — `aws-sdk-java-s3`, also **versionless**. The version comes from
+  5. **The Java S3 example** — `aws-sdk-java-s3`, also **versionless**. The version comes from
      `platform(libs.aws.sdk.java.bom)`.
   Both versionless entries carry an inline comment in `gradle/libs.versions.toml` naming
   where the version comes from, so the omission reads as intentional.
@@ -3164,3 +3164,139 @@ That framing is what makes it likely to become the article people find when they
 - **Resolution / status:** items 1, 3, 4, 5 and 6 fixed (documentation only, no behaviour change).
   Item 2 is **open** and needs a code decision plus a failure-path test against the deployed
   endpoint.
+
+## Codecov showed 0% because the Gradle build cache served a JaCoCo report older than Codecov's 12h age limit
+
+- **Symptom:** after the PR #37 merge, the Codecov dashboard read **0.00%** for `main` with a
+  `-85.63%` change, the badge went to 0%, and no Codecov commit status was posted. The commit page
+  said *"There is an error processing the coverage reports"*, **1 errored upload**, and named the
+  reason: *"Upload exceeds the max age of 12h."*
+
+- **What was NOT wrong**, checked before changing anything:
+  - the upload itself succeeded — `==> Token set from input`, `Found 2 coverage files to report`,
+    both paths listed, `Sending upload (41922 bytes) to storage`,
+    `Upload queued for processing complete`;
+  - the aggregate report was healthy — 497 covered lines against 45 missed (~91.7%), all three
+    Kotlin packages present;
+  - path resolution was fine. The Kover aggregate names files only as package + filename with no
+    module prefix, and `nl/vintik/lambda/streaming` now exists in three modules, so path ambiguity
+    looked like the obvious culprit. Testing all 34 source entries against the repo tree gave
+    **0 unresolvable, 0 ambiguous, 34 uniquely resolvable**. Hypothesis dead;
+  - the `check_coverage_paths` quality-signal failure is a **stale check**, not a real defect: it
+    greps for `codecov/codecov-action@v5` while the workflow is on `@v7`, where the `files:` input
+    is present and correct.
+
+- **Root cause:** the JaCoCo agent stamps its execution data with wall-clock
+  `<sessioninfo start=… dump=…>` times, and `jacocoTestReport` copies them into the XML. The CI log
+  shows `:streaming-s3-example-java:test FROM-CACHE` and `:streaming-s3-example-java:jacocoTestReport
+  FROM-CACHE` — this module's inputs had not changed, so Gradle restored both from the build cache
+  and the XML carried session timestamps from whenever the tests had last actually run. Locally the
+  same thing was visible: file mtime `2026-11-18 21:20`, `sessioninfo` `2026-11-17 21:39`. Codecov
+  rejects a report older than 12 hours, and because **both reports travel in a single upload** (one
+  `upload-coverage` call with two `--file` flags) the healthy Kotlin aggregate was discarded along
+  with the expired Java report. Hence 0%, not a partial number.
+
+- **Why it appeared now:** nothing about the Java module changed, which is exactly the condition for
+  a cache hit. A branch that touches Java sources invalidates the cache and uploads a fresh report,
+  which is why this had not bitten before.
+
+- **Fix:** opt `:streaming-s3-example-java:test` out of both up-to-date skipping and the build cache,
+  so the exec data is always produced in the run that uploads it:
+  ```kotlin
+  outputs.upToDateWhen { false }
+  outputs.cacheIf { false }   // required: upToDateWhen alone still allows a FROM-CACHE restore
+  ```
+  `upToDateWhen` on its own is not enough — a cacheable task with up-to-date checks disabled is
+  still restored from the cache. Verified: two consecutive runs both execute `test`, and
+  `sessioninfo` now matches the run (`18:16:50` for a run started at `18:16:42`). The coverage gates
+  are unaffected: all six reports still validate, 158 covered lines in this module.
+
+- **Turning off Codecov's age check** (the "expired reports" toggle the error message offers) was
+  rejected as the fix: it would silence a real staleness signal and keep uploading reports that
+  describe a different commit's test run.
+
+- **Note on recovery:** Codecov states the errored commit page "will not reflect the latest results,
+  even if you have re-run all jobs successfully". Re-running CI on the merge commit does not repair
+  it; the dashboard recovers on the next commit that uploads a fresh report.
+
+- **Resolution / status:** **Fixed** in `streaming-s3-example-java/build.gradle.kts`. The Kover
+  reports were never affected — Kover emits no `sessioninfo`, so there is nothing for the age check
+  to reject.
+
+## Java Bedrock example: SDK callback names (task 6.1)
+
+- **Question:** are the callback names in the design (`Visitor.builder().onChunk(...)`, handler
+  `.subscriber(visitor)`, `.onComplete(Runnable)`, `.onError(Consumer<Throwable>)`) correct for
+  `InvokeModelWithResponseStreamResponseHandler` in the BOM-pinned AWS SDK for Java v2?
+- **Result:** yes. `BedrockAsyncSource` compiled on the first attempt with exactly those names, so
+  no correction was needed. `onChunk` receives a `PayloadPart`; `part.bytes().asUtf8String()` gives
+  the Nova event JSON.
+- **Design choices:** the client is built lazily on first `stream` call (after SnapStart restore) with
+  `NettyNioAsyncHttpClient.builder().readTimeout(60s)` via `httpClientBuilder`. `MODEL_ID` defaults to
+  `eu.amazon.nova-lite-v1:0` and is never logged. A package-private constructor takes
+  `Supplier`s for the client and model id so task 6.2 can inject a Mockito mock.
+- **Visitor safety:** the chunk callback catches `RuntimeException`, logs only the exception type and
+  never touches the live stream; all writes stay on the invocation thread inside `DeltaBridge.drain`.
+## Java Bedrock example: testing the SDK glue with Mockito (task 6.2)
+- **Approach:** the full design approach worked, so no "keep it thin" trade-off was needed.
+  `BedrockAsyncSourceTest` stubs a Mockito mock of `BedrockRuntimeAsyncClient` with `thenAnswer`,
+  grabs the `InvokeModelWithResponseStreamResponseHandler` argument, and drives it directly:
+  `handler.onEventStream(publisher)`, then `handler.complete()` or `handler.exceptionOccurred(e)`.
+  The returned `CompletableFuture` is completed, failed or left pending per scenario. Covered:
+  chunks in order then done, the request carrying model id and Nova body, non-text and malformed
+  chunks skipped, error before any chunk, error after some chunks, a failed call future alone, a
+  stalled stream timing out and cancelling the call, and lazy single client construction.
+- **Gotcha 1: `PayloadPart.builder()` parts are invisible to the visitor.** The first run delivered
+  zero deltas with no error. `PayloadPart.accept(Visitor)` throws `UnsupportedOperationException`;
+  only the event-stream subtype (`responsestream.DefaultChunk`, built via
+  `ResponseStream.chunkBuilder()`) dispatches to `visitChunk` / `onChunk`. The SDK's own unmarshaller
+  produces the subtype, so production is unaffected, but test fixtures must use `chunkBuilder()`.
+- **Publisher choice (precaution, not an observed bug):** a tiny synchronous `Publisher` test double
+  (emits every part inside `request(n)`) is used instead of `SdkPublisher.fromIterable`, so every
+  chunk is provably offered to `DeltaBridge` before the test calls `handler.complete()`; with an
+  asynchronous publisher `Done` could in principle win and the bridge's first-terminal-wins rule
+  would drop later deltas. The swap was made before gotcha 1 was found, so it did not by itself fix
+  the empty-delta symptom.
+- **Resolution / status:** 8 tests passing in
+  `streaming-bedrock-example-java/src/test/java/nl/vintik/streaming/bedrock/BedrockAsyncSourceTest.java`.
+  No production code changed.
+## Java Bedrock example: async client footprint and the HTTP client exclusion (task 6.3)
+- **Baseline:** `:streaming-bedrock-example-java:shadowJar` produced `build/libs/streaming-bedrock-example-java-all.jar`
+  at 17,998,650 bytes (about 17.2 MiB) with the Netty async client and no exclusions.
+- **Surprise: `apache-client` is not on the classpath.** With the BOM-pinned SDK (2.59.0) the default
+  synchronous HTTP client is `software.amazon.awssdk:apache5-client` (Apache HttpClient 5), pulled in
+  transitively by the service module. Excluding only `apache-client`, as the task says, would have been a
+  silent no-op. The exclusion now covers both module names (`apache-client` and `apache5-client`) in
+  `streaming-bedrock-example-java/build.gradle.kts` via `configurations.configureEach { exclude(...) }`.
+- **After exclusion:** 15,638,628 bytes (about 14.9 MiB), 2,360,022 bytes (13.1%) smaller. The fat jar
+  has no `org/apache/...` classes left.
+- **Tests:** `./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration` is BUILD SUCCESSFUL,
+  178 tests, 0 failures, 0 skipped. The exclusion is kept. Unit tests never touch a synchronous client,
+  so this does not prove the real runtime path; task 13.1 confirms it on the deployed endpoint. If the
+  default credentials chain ever needs a sync client (for example container, IMDS or SSO credentials),
+  Lambda environment credentials do not, but that is the thing to watch there.
+- **Netty cost (size):** `io/netty/**` plus the SDK's `http/nio` classes are about 9.1 MB uncompressed
+  inside the fat jar, the largest single dependency block. The cold-start half is measured in task 13.2.
+
+## Java Bedrock example: Java-from-Kotlin friction, `SseWriter` has no `@Throws` (task 8.2, Req 1.5)
+- **Call site:** `BedrockStreamHandler.writeErrorEvent` and `relay` in
+  `streaming-bedrock-example-java/src/main/java/nl/vintik/streaming/bedrock/BedrockStreamHandler.java`
+  call `SseWriter.writeNamedEvent`, `writeEvent` and `writeEnd`.
+- **Symptom:** `catch (IOException e)` around a call that only invokes `SseWriter` does not compile:
+  `exception IOException is never thrown in body of corresponding try statement`. Kotlin has no checked
+  exceptions, so without `@Throws(IOException::class)` the generated signatures declare nothing, and
+  javac refuses a catch clause for a checked exception the body cannot throw.
+- **The trap:** the methods still throw `IOException` at runtime, because they write to an
+  `OutputStream`. Java sees a signature that says they cannot. A Java caller cannot narrowly handle
+  write failures on these calls, and `throws IOException` on the caller is only legal when something
+  else in the body declares it.
+- **Workaround in the example:** the best-effort error-event write catches `Exception` instead of
+  `IOException`, with a comment saying why. In `relay`, `catch (IOException | RuntimeException e)` is
+  legal only because the `TokenStream.stream` call declares `IOException`.
+- **Library implication:** `SseWriter.writeEvent`, `writeNamedEvent` and `writeEnd` should carry
+  `@Throws(IOException::class)`, as `StreamingResponse.stream` and `ResponseBody.write` already do. It
+  is additive for Java callers and source-compatible for Kotlin, though it does change the generated
+  signature, so run `apiCheck` and treat it as a follow-up library change, not part of this task.
+  This is evidence for Req 2: consuming the library from plain Java exposes it.
+- **Tests:** `BedrockStreamHandlerTest` covers the write-failure path (an `IOException` from the live
+  stream propagates, the best-effort error event is swallowed, one status stays on the wire).

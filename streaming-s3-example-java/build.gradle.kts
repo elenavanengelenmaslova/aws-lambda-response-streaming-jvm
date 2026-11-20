@@ -72,6 +72,19 @@ tasks.test {
     // Emulator image pin for the integration tests: the image name stays here, the tag comes from
     // gradle/libs.versions.toml (a Docker tag, so Dependabot cannot bump it — see docs/log.md).
     systemProperty("floci.image", "floci/floci:${libs.versions.flociImage.get()}")
+
+    // Never reuse a cached run for THIS task, deliberately, and not for test correctness: the
+    // JaCoCo agent stamps its execution data with wall-clock `sessioninfo start`/`dump` times, the
+    // report carries them into the XML, and Codecov rejects an upload whose report is more than 12
+    // hours old ("Upload exceeds the max age of 12h"). A cache hit on `test` restores exec data
+    // from whenever it was first produced — days earlier when this module's inputs have not changed
+    // — so the upload was rejected, and because both reports travel in ONE upload the Kotlin
+    // aggregate was discarded with it. That is what left the dashboard at 0%. See docs/log.md.
+    //
+    // `upToDateWhen` alone is not enough: a cacheable task with up-to-date checks disabled is still
+    // restored FROM-CACHE, so the cache has to be opted out of as well.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
 }
 
 // ---- Fat jar for Lambda deployment (Shadow) -------------------------------------------------

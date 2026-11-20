@@ -3,20 +3,21 @@
 # check_catalog — the version catalog is the single source of truth for external versions.
 # Task 15.5; Requirements 9.x, 9.8 for the allow-list.
 #
-# Artefacts: gradle/libs.versions.toml plus the four build files
+# Artefacts: gradle/libs.versions.toml plus the five build files
 #
 #   build.gradle.kts
 #   streaming-core/build.gradle.kts
 #   streaming-s3-example/build.gradle.kts
 #   streaming-s3-example-java/build.gradle.kts
+#   streaming-bedrock-example-java/build.gradle.kts
 #
 # Four invariants:
 #
-#   1. No `extra["…"]` / `rootProject.extra[…]` version holder in any of the four build
+#   1. No `extra["…"]` / `rootProject.extra[…]` version holder in any of the five build
 #      files. Dependabot's Gradle parser does not evaluate Kotlin-DSL map lookups, so a
 #      version parked in `extra` is a version nothing bumps (docs/log.md) — which is the
 #      reason the catalog exists at all.
-#   2. No inline version literal in a dependency coordinate in those four files: every
+#   2. No inline version literal in a dependency coordinate in those five files: every
 #      external dependency is declared through a `libs.` accessor, every internal one
 #      through `project(...)`. Asserted from both sides — a coordinate-shaped literal is a
 #      failure, and a configuration line whose argument is not a `libs.` accessor is too.
@@ -55,6 +56,7 @@ check_catalog() {
         "streaming-core/build.gradle.kts"
         "streaming-s3-example/build.gradle.kts"
         "streaming-s3-example-java/build.gradle.kts"
+        "streaming-bedrock-example-java/build.gradle.kts"
     )
 
     # key | files (';'-separated, '-' when the artefact is the catalog itself)
@@ -280,7 +282,7 @@ check_catalog() {
             done
         fi
 
-        # --- Invariants 1 and 2, over the four build files ------------------------------
+        # --- Invariants 1 and 2, over the five build files ------------------------------
         local -a candidates=() violations=() bad_deps=() exempted=()
         local seen_lines="" arg dep_count
         for file in "${catalog_build_files[@]}"; do
@@ -369,7 +371,7 @@ check_catalog() {
         local dump
         dump="$(_catalog_toml_dump "$catalog")"
         if [[ -z "$dump" ]]; then
-            report_fail "$catalog" "catalog is empty or contains no declaration; every libs. accessor in the four build files resolves through it"
+            report_fail "$catalog" "catalog is empty or contains no declaration; every libs. accessor in the five build files resolves through it"
             return 0
         fi
 

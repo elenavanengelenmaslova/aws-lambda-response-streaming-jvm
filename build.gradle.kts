@@ -132,6 +132,7 @@ val validationReports = mapOf(
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
+    ":streaming-bedrock-example-java" to "streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     // The root aggregate is the report actually uploaded to Codecov, so it must pass the same
     // exists/parses/covered-lines checks as the modules — otherwise a silently empty or broken
     // aggregate would upload and reproduce the 0% dashboard this change set out to fix. The four
@@ -142,6 +143,7 @@ val validationReports = mapOf(
 val uploadReports = listOf(
     "build/reports/kover/report.xml",
     "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
+    "streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
 )
 
 tasks.register("verifyCoverageReports") {
@@ -155,6 +157,7 @@ tasks.register("verifyCoverageReports") {
         ":streaming-s3-example:koverXmlReport",
         ":streaming-s3-example-java:jacocoTestReport",
         ":streaming-bedrock-example:koverXmlReport",
+        ":streaming-bedrock-example-java:jacocoTestReport",
     )
 
     // Captured at configuration time so the task action touches no Project state (configuration

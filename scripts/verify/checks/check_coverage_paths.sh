@@ -11,7 +11,7 @@
 #   1. build/reports/coverage-report-paths.txt   authoritative; written by the root
 #                                                `verifyCoverageReports` Gradle task.
 #   2. .github/workflows/workflow-build.yml      the `files:` input of the
-#                                                codecov/codecov-action@v5 step.
+#                                                codecov/codecov-action@v7 step.
 #   3. .github/workflows/workflow-build.yml      the `for f in …` loop of the
 #                                                `Determine coverage-upload eligibility`
 #                                                step (`id: cov`).
@@ -112,16 +112,16 @@ check_coverage_paths() {
     files_raw="$(yaml_eval "$workflow" '
         doc["jobs"].to_h.values
             .flat_map { |job| (job["steps"] || []) }
-            .select { |step| step["uses"].to_s.start_with?("codecov/codecov-action@v5") }
+            .select { |step| step["uses"].to_s.start_with?("codecov/codecov-action@v7") }
             .map { |step| (step["with"] || {})["files"].to_s }
     ')" || rc=$?
 
     if (( rc != 0 )); then
-        report_fail "${workflow} codecov/codecov-action@v5 files:" "could not parse the workflow as YAML"
+        report_fail "${workflow} codecov/codecov-action@v7 files:" "could not parse the workflow as YAML"
     elif [[ -z "$(_coverage_paths_trim "$files_raw")" ]]; then
-        report_fail "${workflow} codecov/codecov-action@v5 files:" "no codecov/codecov-action@v5 step with a files: input found; the upload would default to auto-discovery instead of the three reports in ${COVERAGE_PATHS_FILE}"
+        report_fail "${workflow} codecov/codecov-action@v7 files:" "no codecov/codecov-action@v7 step with a files: input found; the upload would default to auto-discovery instead of the three reports in ${COVERAGE_PATHS_FILE}"
     elif (( $(printf '%s\n' "$files_raw" | grep -c . | tr -d ' ') > 1 )); then
-        report_fail "${workflow} codecov/codecov-action@v5 files:" "more than one codecov/codecov-action@v5 step declares files:; exactly one upload step is expected so the comparison against ${COVERAGE_PATHS_FILE} is unambiguous"
+        report_fail "${workflow} codecov/codecov-action@v7 files:" "more than one codecov/codecov-action@v7 step declares files:; exactly one upload step is expected so the comparison against ${COVERAGE_PATHS_FILE} is unambiguous"
     else
         _coverage_paths_compare \
             "$COVERAGE_PATHS_FILE" "$authoritative" \

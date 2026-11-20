@@ -1,12 +1,15 @@
 # Contributing
 
-Thanks for taking the time to work on this repository. It holds one published library and two runnable examples:
+Thanks for taking the time to work on this repository. It holds two published libraries and runnable examples:
 
 | Module | Language | Toolchain | Role |
 |---|---|---|---|
 | `:streaming-core` | Kotlin | Java 21 | The published library (`nl.vintik:aws-lambda-streaming-core`). Public API is explicit and checked. |
+| `:streaming-sse` | Kotlin | Java 21 | The published SSE streaming library. Public API is explicit and checked. |
 | `:streaming-s3-example` | Kotlin | Java 25 | Kotlin example Lambda streaming an S3 object. |
 | `:streaming-s3-example-java` | Java | Java 25 | Pure-Java example Lambda, proving the library is usable without Kotlin. |
+| `:streaming-bedrock-example` | Kotlin | Java 25 | Kotlin example Lambda streaming Bedrock output as SSE. |
+| `:streaming-bedrock-example-java` | Java | Java 25 | Pure-Java example Lambda streaming Bedrock output as SSE. |
 
 ## Prerequisites
 
@@ -65,10 +68,13 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="/var/run/docker.sock"
 | Module | Tool | Line gate | Local command |
 |---|---|---|---|
 | `:streaming-core` | Kover | **90%** | `./gradlew :streaming-core:koverVerify` |
+| `:streaming-sse` | Kover | **90%** | `./gradlew :streaming-sse:koverVerify` |
 | `:streaming-s3-example` | Kover | **80%** | `./gradlew :streaming-s3-example:koverVerify` |
 | `:streaming-s3-example-java` | JaCoCo (behind `koverVerify`/`koverHtmlReport` aliases) | **80%** | `./gradlew :streaming-s3-example-java:koverVerify` |
+| `:streaming-bedrock-example` | Kover | **80%** | `./gradlew :streaming-bedrock-example:koverVerify` |
+| `:streaming-bedrock-example-java` | JaCoCo (behind `koverVerify`/`koverHtmlReport` aliases) | **80%** | `./gradlew :streaming-bedrock-example-java:koverVerify` |
 
-Repo-wide, `./gradlew build -PexcludeTags=integration` runs all three gates. `./gradlew koverHtmlReport` per module writes the browsable HTML report. A gate failure names the module and its measured percentage.
+Repo-wide, `./gradlew build -PexcludeTags=integration` runs all the gates. `./gradlew koverHtmlReport` per module writes the browsable HTML report. A gate failure names the module and its measured percentage.
 
 ## Public API changes (`:streaming-core` only)
 

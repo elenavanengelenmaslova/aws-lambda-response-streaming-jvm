@@ -33,6 +33,10 @@
 # Rendering goes through agg either way: cast -> GIF -> H.264. Keep the cast (OUT_CAST) and you can
 # re-render at any size or frame rate without invoking Bedrock again.
 #
+# Verified-recording gate: after the alias check and the secret scan pass, record mode stamps
+# "streaming_verified": true into the cast header. An MP4 is only produced from a cast carrying that
+# marker, so a CAST_IN re-render of an unmarked cast can still make a GIF but never a video.
+#
 # Secret hygiene: the command shown on screen contains the literal strings $ENDPOINT_URL and
 # $API_KEY, never their values, and the finished cast is scanned for the real key and the
 # execute-api host before rendering. Rendering aborts if either appears.
@@ -84,9 +88,25 @@ stack_output() {
     --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text 2>/dev/null
 }
 
+# True only when the first line of the cast is a JSON header with "streaming_verified": true.
+cast_is_verified() {
+  python3 - "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        header = json.loads(f.readline())
+    sys.exit(0 if isinstance(header, dict) and header.get("streaming_verified") is True else 1)
+except (OSError, ValueError):
+    sys.exit(1)
+PY
+}
+
 if [[ -n "$CAST_IN" ]]; then
   [[ -s "$CAST_IN" ]] || fail "CAST_IN does not exist or is empty: $CAST_IN"
   CAST="$CAST_IN"
+  if [[ -n "$OUT_MP4" ]] && ! cast_is_verified "$CAST_IN"; then
+    fail "CAST_IN has no streaming_verified marker: refusing to produce an MP4 (set OUT_MP4=\"\" for a GIF only, or re-record against a deployed endpoint)"
+  fi
   info "re-rendering $CAST_IN (no endpoint call)"
 else
 
@@ -105,6 +125,7 @@ info "endpoint and API key resolved (masked)"
 
 # Confirm the deployed alias actually streams, so a buffered endpoint is never recorded as if it
 # streamed. A missing -javaagent means the response is correct but sent only after the handler ends.
+alias_verified=false
 function_name="$(stack_output FunctionName)"
 if [[ -n "$function_name" && "$function_name" != "None" ]]; then
   version="$(aws lambda get-alias --function-name "$function_name" --name live \
@@ -113,7 +134,13 @@ if [[ -n "$function_name" && "$function_name" != "None" ]]; then
     "${region_args[@]}" --query 'Environment.Variables.JAVA_TOOL_OPTIONS' --output text 2>/dev/null || true)"
   [[ "$options" == *"-javaagent"* ]] \
     || fail "alias 'live' (version $version) has no -javaagent: this endpoint would NOT stream"
+  alias_verified=true
   info "alias 'live' is version $version with the streaming agent"
+fi
+# No video without a passed agent check: fail before spending a Bedrock call on a recording that
+# could never be rendered to MP4.
+if [[ "$alias_verified" != "true" && -n "$OUT_MP4" ]]; then
+  fail "alias verification did not run (no FunctionName output); refusing to record for an MP4 (set OUT_MP4=\"\" for a GIF only)"
 fi
 
 info "warmup request (discarded, keeps a cold start out of the recording)"
@@ -198,6 +225,21 @@ host="${ENDPOINT_URL#https://}"; host="${host%%/*}"
 if grep -qF "$API_KEY" "$CAST"; then fail "the API key appears in the cast; refusing to render"; fi
 if grep -qF "$host" "$CAST"; then fail "the execute-api host appears in the cast; refusing to render"; fi
 info "secret scan clean (no API key, no execute-api host in the cast)"
+
+# Stamp the marker only now, after the alias check and the secret scan have both passed.
+if [[ "$alias_verified" == "true" ]]; then
+  python3 - "$CAST" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    header = json.loads(f.readline())
+    rest = f.read()
+header["streaming_verified"] = True
+with open(path, "w", encoding="utf-8") as f:
+    f.write(json.dumps(header) + "\n" + rest)
+PY
+  info "cast stamped streaming_verified"
+fi
 
 fi  # end of record-vs-reuse
 

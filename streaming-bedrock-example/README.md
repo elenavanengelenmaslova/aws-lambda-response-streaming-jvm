@@ -4,6 +4,12 @@ A deployable Kotlin Lambda that relays Amazon Bedrock Nova Lite token deltas to 
 Server-Sent Events, **arriving token by token** — behind API Gateway REST, on the **managed**
 `java25` runtime, with no Lambda layer, no custom runtime and no wrapper script.
 
+<p align="center">
+  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens from this deployed example as Server-Sent Events, the answer appearing progressively while the model is still generating" width="760">
+</p>
+
+<p align="center"><em>This example, deployed: the first token lands 0.4 s in and the rest arrive over the following 4.7 s, while Nova Lite is still generating. <a href="../docs/bedrock-streaming-demo.mp4">MP4 version</a>.</em></p>
+
 ## What it does
 
 `POST /stream` with `{"prompt": "...", "maxTokens": 2000}` and the response is a

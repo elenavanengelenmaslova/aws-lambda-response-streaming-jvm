@@ -14,8 +14,11 @@ reviews:
   path_filters:
     # include
     - "streaming-core/**"
+    - "streaming-sse/**"
     - "streaming-s3-example/**"
     - "streaming-s3-example-java/**"
+    - "streaming-bedrock-example/**"
+    - "streaming-bedrock-example-java/**"
     - "deployment/**"
     - "build.gradle.kts"
     - "settings.gradle.kts"
@@ -30,19 +33,19 @@ reviews:
     - "!**/*.class"
 
   path_instructions:
-    - path: "streaming-core/**"
+    - path: "{streaming-core,streaming-sse}/**"
       instructions: >-
-        This is the published library module and its public API is a contract.
+        These are the published library modules and their public API is a contract.
         Review for public-API stability and `explicitApi()` compliance: every
         public declaration must state its visibility and its return type
         explicitly. Any change to a public declaration requires a matching
         `apiDump` — flag a public-API change that does not come with an updated
-        `streaming-core/api/streaming-core.api`. Treat a removal or a
+        `<module>/api/<module>.api`. Treat a removal or a
         signature change of an existing public declaration as breaking unless
         the pull request says otherwise.
-    # One entry for both example modules: `streaming-s3-example/**` and
-    # `streaming-s3-example-java/**` share the same review focus.
-    - path: "{streaming-s3-example,streaming-s3-example-java}/**"
+    # One entry for all four example modules (S3 and Bedrock, Kotlin and Java)
+    # share the same review focus.
+    - path: "{streaming-s3-example,streaming-s3-example-java,streaming-bedrock-example,streaming-bedrock-example-java}/**"
       instructions: >-
         These are the example modules: AWS integration glue plus the API
         Gateway streaming-response protocol. Review for protocol correctness.
@@ -57,5 +60,5 @@ reviews:
         Test names use Given-When-Then phrasing in backticks, for example
         `` `Given a 15MB S3 object When streamed Then body is byte-identical` ``.
         Check that new or changed code stays inside the coverage gates: 90% for
-        `streaming-core`, 80% for each example module. Flag production changes
+        `streaming-core` and `streaming-sse`, 80% for each example module. Flag production changes
         that arrive without the tests needed to hold those gates.

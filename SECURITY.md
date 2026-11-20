@@ -16,7 +16,7 @@ This route depends on GitHub's private vulnerability reporting being enabled in 
 
 ### What to include
 
-- The affected module (`streaming-core`, `streaming-s3-example`, `streaming-s3-example-java`) and the version or commit SHA.
+- The affected module (`streaming-core`, `streaming-sse`, `streaming-s3-example`, `streaming-s3-example-java`, `streaming-bedrock-example`, `streaming-bedrock-example-java`) and the version or commit SHA.
 - What an attacker can do, and what access they need to do it.
 - Reproduction steps, ideally a minimal test or request sequence.
 - Any known workaround.

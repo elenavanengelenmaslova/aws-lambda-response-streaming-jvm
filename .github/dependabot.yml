@@ -39,8 +39,11 @@ updates:
     directories:
       - "/"
       - "/streaming-core"
+      - "/streaming-sse"
       - "/streaming-s3-example"
       - "/streaming-s3-example-java"
+      - "/streaming-bedrock-example"
+      - "/streaming-bedrock-example-java"
     multi-ecosystem-group: all-dependencies
     labels: [dependencies, gradle]
     patterns: ["*"]

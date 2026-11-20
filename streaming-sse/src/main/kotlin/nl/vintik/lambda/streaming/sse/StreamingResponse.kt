@@ -2,6 +2,7 @@ package nl.vintik.lambda.streaming.sse
 
 import nl.vintik.lambda.streaming.ResponseMetadata
 import nl.vintik.lambda.streaming.ResponseWriter
+import java.io.IOException
 import java.io.OutputStream
 
 /**
@@ -114,5 +115,16 @@ public class StreamingResponse @JvmOverloads constructor(
         // Only now: AWS's loop must skip its own post for this invocation.
         StreamingState.markAnswered()
         return result
+    }
+
+    /**
+     * Java-friendly entry point: identical to [send], including the agent check, the committed
+     * status ordering and completion handling, but takes a [ResponseBody] and returns nothing.
+     * It is deliberately not an overload of [send], so existing Kotlin trailing-lambda callers
+     * cannot become ambiguous.
+     */
+    @Throws(IOException::class)
+    public fun stream(requestId: String, metadata: ResponseMetadata, body: ResponseBody) {
+        send(requestId, metadata) { out -> body.write(out) }
     }
 }
