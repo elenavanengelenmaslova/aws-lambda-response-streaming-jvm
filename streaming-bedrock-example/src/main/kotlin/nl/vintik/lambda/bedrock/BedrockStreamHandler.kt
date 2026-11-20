@@ -36,9 +36,13 @@ private val logger = KotlinLogging.logger {}
  * ### Ordering guarantees
  * - A request-resolution error is answered **buffered**, on the runtime's own stream, with no body
  *   bytes — nothing has been committed at that point, so the status is still free (400).
- * - A model failure before the first delta is likewise answered buffered as a 502.
- * - The 200 is committed only when the first delta arrives, by which point the model has actually
- *   started producing output. After that a failure can only truncate the body.
+ * - Past that, the status is committed **before the model is called**: [StreamingResponse.send]
+ *   writes the metadata and the delimiter, then runs the body, and the body is what calls Bedrock.
+ * - So a model failure cannot produce a 502 for the client. It gets a 200 with a truncated body,
+ *   empty when the failure lands before the first delta. The 502 written below in that case goes
+ *   onto the runtime's buffered stream, which the client never sees.
+ * - After a delta has been relayed the failure is rethrown, so the invocation is reported as failed
+ *   even though the client received a well-formed 200.
  * - A successful generation that produces no deltas still returns 200 with just the terminal event.
  */
 class BedrockStreamHandler(

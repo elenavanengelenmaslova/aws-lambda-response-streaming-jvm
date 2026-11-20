@@ -67,6 +67,18 @@ sam validate --template-file deployment/aws/sam-bedrock/template.yaml
 
 ### Deploy
 
+One prerequisite, once per account and Region: the stage has an access log, and a REST API can only
+write CloudWatch logs when the account's CloudWatch role is configured in the deploy Region.
+
+```bash
+aws apigateway get-account --region <region> --query cloudwatchRoleArn
+```
+
+If that comes back empty, create an IAM role trusted by `apigateway.amazonaws.com`, attach the
+`AmazonAPIGatewayPushToCloudWatchLogs` managed policy, and set its ARN as the account's
+`cloudwatchRoleArn` (API Gateway → Settings, or `aws apigateway update-account`). Without it the
+deploy can fail on the stage, or succeed and write no access log.
+
 ```bash
 ./deployment/aws/sam-bedrock/deploy.sh
 ```
@@ -124,13 +136,18 @@ src/main/kotlin/nl/vintik/lambda/bedrock/
 
 ## Status ordering
 
-The status is committed the moment the metadata and the 8-byte delimiter reach the wire:
+A request-resolution error never reaches the streaming path, so a bad request is answered **400** on
+the runtime's buffered stream with no body bytes.
 
-- a request-resolution error answers **400** on the runtime's buffered stream, no body bytes;
-- a model failure **before** the first delta answers **502** the same way;
-- the **200** is committed when the first delta arrives, so a later failure can only truncate the
-  body;
-- a successful generation with zero deltas still returns 200 with just the terminal event.
+Past that point the status is committed early. `StreamingResponse.send` writes the metadata and the
+8-byte delimiter before it runs the body, and the body is what calls Bedrock, so the **200 is on the
+wire before the model is invoked**. A model failure cannot turn that into a 502: the client gets a
+200 whose body is truncated, or empty when the failure lands before the first delta. The handler
+still writes a 502 onto the runtime's buffered stream in that case, but the client has already been
+given the 200, so it never sees it. After a delta has been relayed the handler rethrows, so the
+invocation is reported as failed even though the client received a well-formed HTTP 200.
+
+A successful generation with zero deltas returns 200 with just the terminal event.
 
 ## Licence
 

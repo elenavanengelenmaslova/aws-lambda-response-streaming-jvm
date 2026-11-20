@@ -3090,3 +3090,77 @@ That framing is what makes it likely to become the article people find when they
 
 - **Resolution / status:** **Removed.** No stack was left deployed; the probe stack had already been
   deleted after its final run.
+
+## Review pass on the article and READMEs: four documented behaviours that the code does not have
+
+- **Symptom:** a pre-merge review flagged inconsistencies between the written docs and the
+  implementation. Each one was checked against the current code rather than taken at face value;
+  four were real, one was worth escalating beyond a doc fix.
+
+- **1. The 200 is committed before the model is called, not at the first delta.** Three documents
+  (the article, `streaming-bedrock-example/README.md`, and `BedrockStreamHandler`'s own KDoc)
+  claimed the status was committed when the first Bedrock delta arrived, and that a model failure
+  before that point was answered as a 502. `StreamingResponse.send` writes the metadata and the
+  8-byte delimiter, flushes, and *then* runs the body — and the body is what calls Bedrock:
+  ```kotlin
+  val channel = channels.open(requestId)
+  responseWriter.writeMetadata(channel.output, metadata)   // 200 committed here
+  channel.output.flush()
+  body(channel.output)                                     // Bedrock is invoked in here
+  ```
+  So the client has a 200 before the model is touched, and no model failure can change it. All
+  three documents now say so.
+
+- **2. Consequence worth fixing in code, not just docs (OPEN).** The 502 branch in
+  `BedrockStreamHandler.stream` is unreachable from the client's point of view, and writing it is
+  worse than doing nothing. On that path `StreamingState.markAnswered()` is never called — `send`
+  only sets it after `channel.complete()` returns 202 — so the handler writes a 502 onto the
+  runtime's buffered stream and returns normally, and AWS's loop then posts **a second response for
+  an invocation the Runtime API has already accepted**. That is exactly the condition this log
+  records as producing `Runtime.ExitError`. The same reasoning applies to the post-first-delta
+  rethrow, which reaches the unpatched `reportInvocationError`. **Not reproduced against the
+  deployed endpoint** — no failure-path test has been run — so it is recorded as a strong inference,
+  not a measurement. Fixing it properly is a design choice (defer the prelude until the first body
+  write so the "commit at first delta" contract becomes real, mark answered on the failure path, or
+  drop the dead branch), and it changes the article's guidance, so it is left for a follow-up.
+
+- **3. A `-javaagent` path that does not match the jar is fatal, not a graceful degradation.**
+  `streaming-sse/README.md` said a divergence between `archiveFileName` and the `-javaagent` flag
+  meant "the agent silently does not load". It does not load at all — the JVM refuses to start:
+  ```
+  Error opening zip file or JAR manifest missing : /tmp/does-not-exist.jar
+  Error occurred during initialization of VM
+  agent library failed Agent_OnLoad: instrument
+  ```
+  (verified locally with `java -javaagent:/tmp/does-not-exist.jar -version`). On Lambda that is an
+  init failure on every invocation. The graceful path is a different failure: the agent loads but
+  cannot resolve a jar to append, or the target method has changed, which leaves `isPatched()` false
+  and makes `send` throw.
+
+- **4. "It fails safe" was read as "it fails over".** The agent failing to patch leaves AWS's loop
+  intact, so the buffered path still works — but a handler built on `StreamingResponse` does not
+  benefit: `send` checks `isPatched()` and throws `IllegalStateException` before opening a channel.
+  There is no automatic fallback, and the README's `ChatHandler` example lets that propagate. The
+  README and the article now say this, with recovery steps (check `JAVA_TOOL_OPTIONS` and `CodeUri`,
+  grep the `[streaming-sse-agent]` log lines, roll back the published version).
+
+- **5. A Gradle `Zip` task does not write to `build/dist`.** Both doc snippets showed a `lambdaZip`
+  task with only `archiveFileName` set, next to a `CodeUri: build/dist/my-function.zip`. The base
+  plugin's default `destinationDirectory` for a `Zip` is `build/distributions`, so a clean build
+  following the docs produced an archive the template could not find. The real
+  `streaming-bedrock-example/build.gradle.kts` sets `destinationDirectory` explicitly; the snippets
+  now do the same.
+
+- **6. API Gateway access logging has an undocumented account-level prerequisite.** The
+  `sam-bedrock` stage carries an `AccessLogSetting`, which a REST API can only honour when the
+  account's `cloudwatchRoleArn` is set **per Region**. It was set in this account already
+  (`aws apigateway get-account --region eu-west-1 --query cloudwatchRoleArn` returns a role), which
+  is why every deploy here worked and why the requirement was invisible. A fresh account can fail on
+  the stage, or deploy and write no access log. Now documented in
+  `deployment/aws/sam-bedrock/deploy.sh` and the example's Quick Start: create a role trusted by
+  `apigateway.amazonaws.com`, attach `AmazonAPIGatewayPushToCloudWatchLogs`, set it as the account's
+  CloudWatch role.
+
+- **Resolution / status:** items 1, 3, 4, 5 and 6 fixed (documentation only, no behaviour change).
+  Item 2 is **open** and needs a code decision plus a failure-path test against the deployed
+  endpoint.

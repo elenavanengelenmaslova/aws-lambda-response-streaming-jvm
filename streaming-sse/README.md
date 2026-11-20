@@ -61,9 +61,14 @@ tasks.shadowJar {
 
 tasks.register<Zip>("lambdaZip") {
     archiveFileName.set("my-function.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("dist"))   // ← must match CodeUri
     from(tasks.shadowJar) { into("lib") }         // ← puts the jar at lib/ inside the zip
 }
 ```
+
+A `Zip` task writes to `build/distributions` unless you say otherwise, so set
+`destinationDirectory` to whatever path the template's `CodeUri` uses, or point `CodeUri` at
+`build/distributions`. The two have to name the same file.
 
 `my-function.jar` is not a convention — it is whatever you set as the shadow jar's
 `archiveFileName`. Lambda unpacks the deployment package into `/var/task`, so the layout above gives
@@ -75,8 +80,10 @@ build/dist/my-function.zip          →  CodeUri
 ```
 
 So the jar name appears in two places that must agree: `archiveFileName` in the build, and the
-`-javaagent` flag in the template. If they diverge the agent silently does not load, and
-`StreamingResponse` will refuse to stream rather than fail per request.
+`-javaagent` flag in the template. Get that wrong and the failure is loud, not silent: a
+`-javaagent` path that does not resolve to a jar with a `Premain-Class` aborts JVM startup
+(`Error opening zip file or JAR manifest missing`, then `agent library failed Agent_OnLoad`), so
+the function fails to initialise on every invocation. Fix the path so it matches the jar name.
 
 ### 3. Point the runtime at the agent
 
@@ -136,7 +143,10 @@ class ChatHandler : RequestStreamHandler {
 }
 ```
 
-The `output` the runtime handed you is deliberately left untouched.
+The `output` the runtime handed you is deliberately left untouched. Note that this handler lets
+anything `send` raises propagate, which is the right default: if the agent is missing, the
+invocation fails loudly with the message above instead of quietly serving buffered responses. Wrap
+the `send` call yourself if you would rather degrade to a buffered reply.
 
 `send` takes the request id as a `String` rather than a `Context`, so this module depends on no AWS
 artifact and adds nothing to your classpath beyond `streaming-core`.
@@ -164,11 +174,20 @@ hook, error reporting and the CRaC coordination AWS's loop performs. That restra
 earlier approach replaced the whole invocation loop and silently stopped CRaC `beforeCheckpoint`
 hooks from firing, so SnapStart priming stopped running with no error anywhere.
 
-**It fails safe.** If the jar cannot be appended to the class loader search, or the runtime class has
-changed, nothing is patched and your function keeps working on AWS's normal buffered path.
-`StreamingAgent.isPatched()` reports the truth, and `StreamingResponse.send` refuses to stream when
-the patch is absent — so a runtime change surfaces as one clear error instead of a failed invocation
-per request. Assert `isPatched()` in a post-deploy check if you want that verified on every deploy.
+**It fails safe, but it does not fail over.** If the jar cannot be appended to the class loader
+search, or the runtime class has changed, the agent patches nothing and leaves AWS's loop intact, so
+the buffered path still works for handlers that use it. A handler built on `StreamingResponse` is a
+different matter: `send` checks `StreamingAgent.isPatched()` and throws
+`IllegalStateException` before opening a channel, so every invocation fails with that message until
+you act. There is no automatic fallback to a buffered response — if you want one, catch the
+exception and write your response to the `OutputStream` the runtime gave you, which is still
+untouched at that point.
+
+Recovery is to restore the agent, not to wait it out: check `JAVA_TOOL_OPTIONS` carries
+`-javaagent` and that `CodeUri` is the zip rather than a bare jar, look for the
+`[streaming-sse-agent]` lines in the function's logs, and roll back to the previous published
+version if a runtime update broke the patch. Assert `isPatched()` in a post-deploy check so this
+surfaces at deploy time rather than on live traffic.
 
 ## Limitations
 - **API Gateway REST only.** HTTP APIs and Lambda Function URLs are not supported.
