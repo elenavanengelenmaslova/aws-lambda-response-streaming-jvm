@@ -156,6 +156,7 @@ The standard lambda response streaming limitations still apply; additionally, th
 - **2 MB/s throughput after 6 MB.** The first 6 MB is uncapped; subsequent data is throttled to 2 MB/s, regardless of Lambda memory or buffer size.
 - **Billing after client disconnect.** Lambda continues running and billing until the invocation finishes or times out, even if the client disconnects.
 - **API Gateway only.** This library supports response streaming through API Gateway REST APIs, not Lambda Function URLs. For Function URLs, AWS recommends using a custom runtime or Lambda Web Adapter.
+- **Standard Lambda only.** Not tested on Lambda Managed Instances.
 
 ## Example modules
 
@@ -164,7 +165,7 @@ The standard lambda response streaming limitations still apply; additionally, th
 | [`streaming-s3-example`](streaming-s3-example/) | Kotlin | Streams S3 files via the Kotlin AWS SDK (coroutines) |
 | [`streaming-s3-example-java`](streaming-s3-example-java/) | Java | Same functionality using AWS SDK for Java v2 (sync) — proves the library is consumable from plain Java |
 
-The [`streaming-bedrock-example`](streaming-bedrock-example/) shows the workaround: pad each Server-Sent Event past the buffer threshold with an SSE comment line (`:` … — silently ignored by clients), tiered as ~100 KB on the first few events then ~10 KB after, so tokens are delivered as they are generated. The trade-off is bandwidth (the padding inflates the response); the module README has the measured numbers and cites the AWS Builder Center write-up of the same behaviour.
+The [`streaming-bedrock-example`](streaming-bedrock-example/) streams Amazon Bedrock tokens as Server-Sent Events, which takes more than this module. On the managed JVM runtime the `OutputStream` a `RequestStreamHandler` receives is an in-memory buffer, so for a token trickle nothing reaches the client until the handler returns — the whole answer arrives in one burst at the end. [`streaming-sse`](streaming-sse/) sends the response to the Lambda Runtime API as it is produced, and ships a Java agent that keeps AWS's invocation loop from sending a second one, so each token leaves while the model is still generating. [`docs/bedrock-sse-streaming.md`](docs/bedrock-sse-streaming.md) walks through the mechanism and the measurements behind it.
 
 ![Bedrock Nova Lite streaming demo](docs/bedrock-streaming-demo.gif)
 

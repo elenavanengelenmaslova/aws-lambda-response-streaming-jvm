@@ -9,23 +9,19 @@ import java.io.InputStream
 
 private val logger = KotlinLogging.logger {}
 
-/** Defaults chosen to make the padding workaround visible out of the box (see module README). */
+/** Defaults chosen so an empty request body still produces a long enough answer to watch it stream. */
 internal const val DEFAULT_PROMPT =
     "Explain in flowing prose why HTTP response streaming matters for serverless applications."
-internal const val DEFAULT_HEAD_PAD_BYTES = 100 * 1024 // break the initial ~100 KB runtime buffer
-internal const val DEFAULT_TAIL_PAD_BYTES = 10 * 1024  // keep the stream flowing afterwards
-internal const val DEFAULT_HEAD_PAD_EVENTS = 3
 internal const val DEFAULT_MAX_TOKENS = 1000
 
-/** Upper bounds so a request cannot ask for an unboundedly expensive generation or payload. */
+/** Upper bounds so a request cannot ask for an unboundedly expensive generation. */
 internal const val MAX_PROMPT_LEN = 8_000
 internal const val MAX_TOKENS_CEILING = 5_000
-internal const val MAX_PAD_BYTES = 1_048_576
 
 /**
  * [RequestResolver] for the Bedrock streaming endpoint. Parses the API Gateway proxy event, reads
  * the client payload from its `body` field (itself JSON: `{"prompt":..., "maxTokens":..., ...}`),
- * validates the prompt, and clamps the padding/token knobs to safe bounds.
+ * validates the prompt, and clamps the token count to safe bounds.
  *
  * A missing or blank prompt falls back to [DEFAULT_PROMPT] so the endpoint is demoable with an
  * empty body. A prompt longer than [MAX_PROMPT_LEN] is rejected with HTTP 400 and no model call.
@@ -35,7 +31,11 @@ class PromptResolver(
 ) : RequestResolver<PromptRequest> {
 
     override fun resolve(input: InputStream): RequestResult<PromptRequest> {
-        val raw = runCatching { input.readBytes().decodeToString() }.getOrElse { "" }.trim()
+        val raw = runCatching { input.readBytes().decodeToString() }
+            .rethrowFatal()
+            .onFailure { e -> logger.warn(e) { "Could not read the request; using defaults" } }
+            .getOrElse { "" }
+            .trim()
         val body = parseBody(raw)
 
         val prompt = (body?.get("prompt")?.jsonPrimitive?.content ?: DEFAULT_PROMPT)
@@ -46,16 +46,13 @@ class PromptResolver(
         }
 
         fun clampedInt(key: String, default: Int, min: Int, max: Int): Int {
-            val v = body?.get(key)?.jsonPrimitive?.intOrNull() ?: default
+            val v = body?.get(key)?.jsonPrimitive?.intOrNull(key) ?: default
             return v.coerceIn(min, max)
         }
 
         return RequestResult.Resolved(
             PromptRequest(
                 prompt = prompt,
-                headPadBytes = clampedInt("headPadBytes", DEFAULT_HEAD_PAD_BYTES, 0, MAX_PAD_BYTES),
-                tailPadBytes = clampedInt("tailPadBytes", DEFAULT_TAIL_PAD_BYTES, 0, MAX_PAD_BYTES),
-                headPadEvents = clampedInt("headPadEvents", DEFAULT_HEAD_PAD_EVENTS, 0, 100),
                 maxTokens = clampedInt("maxTokens", DEFAULT_MAX_TOKENS, 1, MAX_TOKENS_CEILING),
             ),
         )
@@ -72,9 +69,18 @@ class PromptResolver(
             val root = json.parseToJsonElement(raw).jsonObject
             val bodyStr = root["body"]?.jsonPrimitive?.content
             if (bodyStr != null) json.parseToJsonElement(bodyStr).jsonObject else root
-        }.getOrNull()
+        }.rethrowFatal()
+            .onFailure { e ->
+                // Only the exception type is logged: the decoder's message echoes the input, which
+                // contains the prompt.
+                logger.warn { "Request body is not a JSON object (${e::class.simpleName}); using defaults" }
+            }
+            .getOrNull()
     }
 
-    private fun kotlinx.serialization.json.JsonPrimitive.intOrNull(): Int? =
-        runCatching { this.int }.getOrNull()
+    private fun kotlinx.serialization.json.JsonPrimitive.intOrNull(key: String): Int? =
+        runCatching { this.int }
+            .rethrowFatal()
+            .onFailure { e -> logger.warn { "Ignoring non-integer '$key' (${e::class.simpleName}); using default" } }
+            .getOrNull()
 }

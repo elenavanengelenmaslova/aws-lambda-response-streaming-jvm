@@ -4,7 +4,7 @@ import aws.sdk.kotlin.services.bedrockruntime.BedrockRuntimeClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import nl.vintik.lambda.streaming.ResponseMetadata
 import nl.vintik.lambda.streaming.ResponseWriter
-import nl.vintik.lambda.streaming.sse.PaddedSseWriter
+import nl.vintik.lambda.streaming.sse.SseWriter
 import org.crac.Core
 import org.crac.Resource
 import java.io.ByteArrayInputStream
@@ -19,7 +19,7 @@ private val logger = KotlinLogging.logger {}
  * the snapshot is created, leaving the restored snapshot warm.
  *
  * [beforeCheckpoint] exercises the local critical paths in one pass — Bedrock client construction,
- * request resolution (JSON parsing), SSE padding encoding, and metadata serialization — WITHOUT
+ * request resolution (JSON parsing), SSE event encoding, and metadata serialization — WITHOUT
  * invoking the model (no network, no cost). Failures propagate so a broken snapshot is never
  * published.
  */
@@ -43,9 +43,10 @@ class Priming(
         val primed = """{"body":"{\"prompt\":\"prime\",\"maxTokens\":16}"}"""
         resolverFactory().resolve(ByteArrayInputStream(primed.toByteArray(Charsets.UTF_8)))
 
-        // 3. SSE padding encoding + metadata serialization.
-        PaddedSseWriter(headPadBytes = 1024, tailPadBytes = 256, headPadEvents = 1)
-            .writeEvent(OutputStream.nullOutputStream(), "prime")
+        // 3. SSE encoding + metadata serialization. The streaming transport itself cannot be
+        // primed: opening a Runtime API response requires a real invocation id, and there is none
+        // during the snapshot phase. Warming the encoder and the serializer is what is available.
+        SseWriter().writeEvent(OutputStream.nullOutputStream(), "prime")
         responseWriterFactory().writeMetadata(
             OutputStream.nullOutputStream(),
             ResponseMetadata(200, mapOf("Content-Type" to "text/event-stream; charset=utf-8")),

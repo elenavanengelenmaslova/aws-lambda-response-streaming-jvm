@@ -36,7 +36,7 @@ on:
       max-tokens:
         required: false
         type: string
-        default: '2000'
+        default: '5000'
         description: 'Bedrock generation length (maxTokens) for the Bedrock streaming test'
     secrets:
       AWS_ACCOUNT_ID:
@@ -68,5 +68,5 @@ jobs:
           # Bedrock test cost guard: the Bedrock script is a no-op unless this is "true".
           # Ignored by the S3 scripts.
           BEDROCK_TEST_ENABLED: ${{ inputs.bedrock-test-enabled || 'false' }}
-          MAX_TOKENS: ${{ inputs.max-tokens || '2000' }}
+          MAX_TOKENS: ${{ inputs.max-tokens || '5000' }}
         run: ./"$TEST_SCRIPT"

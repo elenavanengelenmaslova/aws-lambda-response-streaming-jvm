@@ -23,6 +23,16 @@ permissions:
   id-token: write
   contents: read
 
+# Shares ONE concurrency group with ci-feature-build.yml, deliberately without the ref in the name:
+# the stack names are fixed per account and region, so a push-triggered run and an on-demand
+# dispatch update the same CloudFormation stacks whatever branch they come from. With
+# cancel-in-progress false the second run waits instead of racing, which is what previously
+# produced "Stack ... is in UPDATE_IN_PROGRESS state and can not be updated". Keep this group
+# identical in ci-feature-build.yml.
+concurrency:
+  group: aws-stack-deploy
+  cancel-in-progress: false
+
 jobs:
   test:
     uses: ./.github/workflows/workflow-build.yml
@@ -46,7 +56,10 @@ jobs:
           - sam-dir: deployment/aws/sam-bedrock
             stack-name: bedrock-streaming-endpoint
             build-task: ':streaming-bedrock-example:build'
-            jar-name: bedrock-streaming-endpoint.jar
+            # The ZIP, not the jar: this endpoint streams for real, which needs the fat jar loaded
+            # as a -javaagent, which needs a real jar FILE inside the package. The jar is still
+            # built, so naming it here would let a missing zip reach SAM unnoticed.
+            jar-name: bedrock-streaming-endpoint.zip
     uses: ./.github/workflows/workflow-deploy-aws.yml
     with:
       environment: default
@@ -61,6 +74,14 @@ jobs:
 
   streaming-tests:
     needs: deploy
+    # GitHub Actions cannot express "this test leg needs only its own stack's deploy leg": `needs`
+    # on a matrix job waits for every leg, and a single failed leg would otherwise skip ALL tests.
+    # That happened once — an unrelated S3 deploy failure skipped the Bedrock test that had been
+    # explicitly requested with run-bedrock-test=true. `!cancelled()` runs the tests anyway, so
+    # each stack is judged on its own result. A test against a stack whose deploy did fail then
+    # fails loudly, which is the useful outcome; cancelled runs stay excluded so a cancellation
+    # cannot trigger the paid Bedrock test.
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:

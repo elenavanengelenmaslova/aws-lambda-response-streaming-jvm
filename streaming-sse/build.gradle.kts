@@ -23,10 +23,18 @@ version = providers.gradleProperty("releaseVersion").getOrElse("2.0.0-SNAPSHOT")
 
 dependencies {
     // --- Streaming core ---
-    // The only non-test project dependency. api-scoped so consumers of streaming-sse receive
+    // The only project dependency. api-scoped so consumers of streaming-sse receive
     // streaming-core (and its transitive kotlinx-serialization-json) on their compile and runtime
-    // classpath without declaring it. No AWS artifacts flow through here.
+    // classpath without declaring it. No AWS artifacts flow through here: StreamingResponse takes
+    // the request id as a String rather than a Lambda Context for exactly that reason.
     api(project(":streaming-core"))
+
+    // --- Bytecode, for the Java agent ---
+    // The agent patches one method of the Lambda runtime interface client. The JDK's own
+    // Class-File API would avoid this dependency but is Java 24+, and this module targets Java 21
+    // so it stays usable on the java21 Lambda runtime. implementation, not api: ASM is an
+    // implementation detail consumers never touch.
+    implementation(libs.asm)
 
     // --- Testing ---
     testImplementation(libs.junit.jupiter)
@@ -85,7 +93,7 @@ mavenPublishing {
 
     pom {
         name = "AWS Lambda Streaming SSE"
-        description = "Reusable SSE padding and dribble extension for the AWS Lambda / API Gateway streaming response protocol. PaddedSseWriter emits SSE data events with tiered SSE-comment padding (large head padding to break the runtime's internal buffer, smaller tail padding to keep the stream flowing) so small chunks reach the client progressively; an optional inter-chunk delay paces delivery. Depends only on streaming-core — no AWS artifacts."
+        description = "Real HTTP response streaming and Server-Sent Events for Kotlin and Java Lambda functions on the MANAGED JVM runtime, with no Lambda layer, no custom runtime and no wrapper script. The managed runtime hands a handler a ByteArrayOutputStream and posts it only after the handler returns, so nothing can reach the client mid-invocation. StreamingResponse posts the response itself as a chunked request to the Lambda Runtime API and hands the handler that live stream; a small Java agent (StreamingAgent) stops the runtime loop from posting a duplicate, leaving SnapStart, CRaC priming hooks and warm reuse intact. SseWriter emits spec-compliant SSE events, including multi-line data. Depends only on streaming-core — no AWS artifacts."
         url = "https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm"
         licenses {
             // MIT, matching the repository LICENSE file — the authoritative source for the

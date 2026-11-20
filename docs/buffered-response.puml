@@ -1,0 +1,23 @@
+@startuml buffered-response
+skinparam dpi 150
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 30
+hide footbox
+
+participant "Client" as C
+participant "Lambda Java runtime\n(in-memory buffer)" as R
+participant "Handler\nhandleRequest()" as H
+
+C -> R : request
+R -> H : invoke
+
+H -> R : write chunk 1
+H -> R : write chunk 2
+H -> R : write chunk 3
+note over C : nothing received yet
+
+H --> R : return
+R -> C : chunk 1 + chunk 2 + chunk 3\n(one response)
+@enduml
