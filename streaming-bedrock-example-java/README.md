@@ -9,6 +9,10 @@ Its production sources are Java only, and it drives the published
 [`streaming-sse`](../streaming-sse/README.md) library from Java source. That is the point: it shows
 on a deployed endpoint that the streaming mechanism is not Kotlin-specific.
 
+<p align="center">
+  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens as Server-Sent Events from the deployed Lambda, the answer appearing progressively while the model is still generating" width="760">
+</p>
+
 ## What it does
 
 `POST /stream` with `{"prompt": "...", "maxTokens": 2000}` returns a `text/event-stream` whose

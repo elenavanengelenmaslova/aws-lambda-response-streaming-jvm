@@ -10,6 +10,10 @@ SnapStart, CRaC priming hooks and warm reuse all keep working.
 implementation("nl.vintik:aws-lambda-streaming-sse:<version>")
 ```
 
+<p align="center">
+  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens as Server-Sent Events from the deployed Lambda, the answer appearing progressively while the model is still generating" width="760">
+</p>
+
 ## The problem this solves
 
 On the managed JVM runtime the `OutputStream` a `RequestStreamHandler` receives is a
