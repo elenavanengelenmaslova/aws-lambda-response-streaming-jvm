@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# record-streaming-demo.sh — records the Bedrock SSE demo GIF from the REAL deployed endpoint.
+# record-streaming-demo.sh — records the Bedrock SSE demo from the REAL deployed endpoint, as a GIF
+# for the repository and an MP4 for AWS Builder Center / YouTube.
 #
 # Why this exists rather than `asciinema rec --command '<curl | sed | awk>'`: under a long single
 # pipeline the PTY capture coalesced the output timing, so the recording showed one burst even
@@ -16,9 +17,21 @@
 #   AWS_REGION            region                          (optional; uses CLI default)
 #   PROMPT                prompt text                     (default: a short SSE question)
 #   MAX_TOKENS            generation length               (default: 400, keeps the GIF short)
-#   OUT_GIF               output path                      (default: docs/bedrock-streaming-demo-new.gif)
+#   OUT_GIF               GIF output path, "" to skip      (default: docs/bedrock-streaming-demo-new.gif)
+#   OUT_MP4               MP4 output path, "" to skip      (default: docs/bedrock-streaming-demo.mp4)
+#   OUT_CAST              keep the asciicast here          (optional; lets you re-render for free)
+#   CAST_IN               re-render this cast instead of recording (no Bedrock call, no AWS calls)
 #   COLS / ROWS           terminal size for the render     (default: 100 / 20)
+#   FONT_SIZE             agg font size, drives pixel size (default: 16)
+#   VIDEO_HEIGHT          MP4 height; width pads to 16:9   (default: 1080)
+#   PAD_COLOR             MP4 letterbox colour             (default: 0x282A36, agg's dracula bg)
 #   SPEED                 agg playback speed               (default: 1)
+#   IDLE_LIMIT            agg idle-time cap, seconds       (default: 1)
+#   LAST_FRAME            how long the final frame holds   (default: 1.5)
+#
+# The MP4 is what AWS Builder Center and YouTube need, since Builder Center does not take a GIF.
+# Rendering goes through agg either way: cast -> GIF -> H.264. Keep the cast (OUT_CAST) and you can
+# re-render at any size or frame rate without invoking Bedrock again.
 #
 # Secret hygiene: the command shown on screen contains the literal strings $ENDPOINT_URL and
 # $API_KEY, never their values, and the finished cast is scanned for the real key and the
@@ -30,10 +43,18 @@ STACK_NAME="${STACK_NAME:-bedrock-streaming-endpoint}"
 BEDROCK_TEST_ENABLED="${BEDROCK_TEST_ENABLED:-}"
 PROMPT="${PROMPT:-Explain in three sentences why Server-Sent Events suit streaming LLM output.}"
 MAX_TOKENS="${MAX_TOKENS:-400}"
-OUT_GIF="${OUT_GIF:-docs/bedrock-streaming-demo-new.gif}"
+OUT_GIF="${OUT_GIF-docs/bedrock-streaming-demo-new.gif}"
+OUT_MP4="${OUT_MP4-docs/bedrock-streaming-demo.mp4}"
+OUT_CAST="${OUT_CAST-}"
+CAST_IN="${CAST_IN-}"
 COLS="${COLS:-100}"
 ROWS="${ROWS:-20}"
+FONT_SIZE="${FONT_SIZE:-16}"
+VIDEO_HEIGHT="${VIDEO_HEIGHT:-1080}"
+PAD_COLOR="${PAD_COLOR:-0x282A36}"
 SPEED="${SPEED:-1}"
+IDLE_LIMIT="${IDLE_LIMIT:-1}"
+LAST_FRAME="${LAST_FRAME:-1.5}"
 
 AWS_REGION="${AWS_REGION:-}"
 region_args=()
@@ -42,14 +63,18 @@ region_args=()
 info() { printf '[record] %s\n' "$*"; }
 fail() { printf '[record] ERROR: %s\n' "$*" >&2; exit 1; }
 
-if [[ "$BEDROCK_TEST_ENABLED" != "true" ]]; then
+# Re-rendering an existing cast touches neither Bedrock nor AWS, so the cost guard does not apply.
+if [[ -z "$CAST_IN" && "$BEDROCK_TEST_ENABLED" != "true" ]]; then
   info 'BEDROCK_TEST_ENABLED is not "true"; skipping (recording invokes paid Bedrock).'
   exit 0
 fi
 
+[[ -n "$OUT_GIF" || -n "$OUT_MP4" ]] || fail "nothing to render: set OUT_GIF and/or OUT_MP4"
+
 for tool in curl aws python3 agg; do
   command -v "$tool" >/dev/null 2>&1 || fail "missing required tool: $tool"
 done
+[[ -z "$OUT_MP4" ]] || command -v ffmpeg >/dev/null 2>&1 || fail "OUT_MP4 needs ffmpeg on PATH"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -58,6 +83,12 @@ stack_output() {
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" "${region_args[@]}" \
     --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text 2>/dev/null
 }
+
+if [[ -n "$CAST_IN" ]]; then
+  [[ -s "$CAST_IN" ]] || fail "CAST_IN does not exist or is empty: $CAST_IN"
+  CAST="$CAST_IN"
+  info "re-rendering $CAST_IN (no endpoint call)"
+else
 
 ENDPOINT_URL="${ENDPOINT_URL:-$(stack_output StreamingEndpointUrl)}"
 [[ -n "${ENDPOINT_URL:-}" && "$ENDPOINT_URL" == https://* ]] \
@@ -168,9 +199,48 @@ if grep -qF "$API_KEY" "$CAST"; then fail "the API key appears in the cast; refu
 if grep -qF "$host" "$CAST"; then fail "the execute-api host appears in the cast; refusing to render"; fi
 info "secret scan clean (no API key, no execute-api host in the cast)"
 
-mkdir -p "$(dirname "$OUT_GIF")"
-info "rendering $OUT_GIF with agg (speed=$SPEED)"
-agg --speed "$SPEED" --idle-time-limit 2 --font-size 16 --cols "$COLS" --rows "$ROWS" \
-  "$CAST" "$OUT_GIF" >/dev/null 2>&1 || fail "agg failed to render"
+fi  # end of record-vs-reuse
 
-info "done: $OUT_GIF ($(du -h "$OUT_GIF" | cut -f1))"
+if [[ -n "$OUT_CAST" && "$OUT_CAST" != "$CAST" ]]; then
+  mkdir -p "$(dirname "$OUT_CAST")"
+  cp "$CAST" "$OUT_CAST"
+  info "cast kept at $OUT_CAST (re-render from it without calling Bedrock again)"
+fi
+
+# agg is the only renderer, so the GIF is always produced; the MP4 is encoded from it. 30 fps is
+# agg's cap and plenty for a terminal, and it keeps the token arrivals distinguishable.
+RENDERED_GIF="$WORK_DIR/demo.gif"
+info "rendering with agg (font-size=$FONT_SIZE, ${COLS}x${ROWS}, speed=$SPEED)"
+agg --speed "$SPEED" --idle-time-limit "$IDLE_LIMIT" --last-frame-duration "$LAST_FRAME" \
+  --fps-cap 30 --font-size "$FONT_SIZE" --cols "$COLS" --rows "$ROWS" \
+  "$CAST" "$RENDERED_GIF" >/dev/null 2>&1 \
+  || fail "agg failed to render"
+
+frames="$(ffprobe -v error -count_frames -select_streams v:0 \
+  -show_entries stream=nb_read_frames -of csv=p=0 "$RENDERED_GIF" 2>/dev/null || echo '?')"
+info "rendered $frames frames at $(ffprobe -v error -select_streams v:0 \
+  -show_entries stream=width,height -of csv=p=0:s=x "$RENDERED_GIF" 2>/dev/null || echo '?')"
+
+if [[ -n "$OUT_GIF" ]]; then
+  mkdir -p "$(dirname "$OUT_GIF")"
+  cp "$RENDERED_GIF" "$OUT_GIF"
+  info "wrote $OUT_GIF ($(du -h "$OUT_GIF" | cut -f1 | tr -d ' '))"
+fi
+
+if [[ -n "$OUT_MP4" ]]; then
+  mkdir -p "$(dirname "$OUT_MP4")"
+  # Scaled to VIDEO_HEIGHT and padded to 16:9 in the terminal's own background colour, so YouTube
+  # gets a standard frame instead of letterboxing it in black. yuv420p + faststart for players that
+  # will not touch anything else.
+  info "encoding $OUT_MP4 (H.264, ${VIDEO_HEIGHT}p, 16:9)"
+  ffmpeg -y -hide_banner -loglevel error -i "$RENDERED_GIF" \
+    -vf "fps=30,scale=-2:${VIDEO_HEIGHT}:flags=lanczos,pad=ceil(ih*16/9/2)*2:ih:(ow-iw)/2:0:color=${PAD_COLOR}" \
+    -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 18 -preset slow \
+    -movflags +faststart -an "$OUT_MP4" \
+    || fail "ffmpeg failed to encode $OUT_MP4"
+  info "wrote $OUT_MP4 ($(du -h "$OUT_MP4" | cut -f1 | tr -d ' '), $(ffprobe -v error \
+    -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$OUT_MP4"), \
+$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT_MP4")s)"
+fi
+
+info "done"
