@@ -41,6 +41,11 @@ private val logger = KotlinLogging.logger {}
  * - So a model failure cannot produce a 502 for the client. It gets a 200 with a truncated body,
  *   empty when the failure lands before the first delta. The 502 written below in that case goes
  *   onto the runtime's buffered stream, which the client never sees.
+ * - That branch is **unreachable in effect and harmful**: measured on the deployed stack, it ends the
+ *   invocation as `Runtime.ExitError` (~60 s billed) and loses the execution environment. It is kept
+ *   only as a documented example of what not to do; see `docs/log.md`, "MEASURED: the Kotlin
+ *   pre-first-delta 502 path kills the execution environment". Follow-up: guard `reportInvocationError`
+ *   in the agent.
  * - After a delta has been relayed the failure is rethrown, so the invocation is reported as failed
  *   even though the client received a well-formed 200.
  * - A successful generation that produces no deltas still returns 200 with just the terminal event.
@@ -101,7 +106,12 @@ class BedrockStreamHandler(
             onSuccess = { logger.info { "stream complete events=${sse.eventsWritten()}" } },
             onFailure = { e ->
                 if (!firstDeltaSeen) {
-                    // Nothing was delivered, so the status is still free: answer buffered with 502.
+                    // UNREACHABLE IN EFFECT: the 200 is already committed, so the client never sees this
+                    // 502, and returning normally here makes AWS's loop post a second response, which
+                    // kills the execution environment (Runtime.ExitError, ~60 s billed). Measured in
+                    // docs/log.md, "MEASURED: the Kotlin pre-first-delta 502 path kills the execution
+                    // environment". Kept deliberately (task 13.4); do not copy it. Follow-up: make the
+                    // agent guard reportInvocationError.
                     logger.warn(e) { "Bedrock stream failed before the first delta; responding 502" }
                     bufferedOutput.use {
                         responseWriter.writeError(bufferedOutput, 502, "Model streaming failed.")

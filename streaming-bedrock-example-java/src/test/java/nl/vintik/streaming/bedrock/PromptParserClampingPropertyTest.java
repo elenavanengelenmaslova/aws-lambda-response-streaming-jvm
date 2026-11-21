@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -51,6 +52,7 @@ class PromptParserClampingPropertyTest {
     @Tag("property")
     @ParameterizedTest(name = "{0}")
     @MethodSource("payloads")
+    @DisplayName("`Given any maxTokens value When parsed Then the resolved value stays within bounds (Property 4)`")
     void resolvedMaxTokensStaysWithinBounds(String description, String json) {
         PromptResult result = parser.resolve(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
 

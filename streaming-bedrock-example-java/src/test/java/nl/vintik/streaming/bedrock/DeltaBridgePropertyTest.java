@@ -146,6 +146,46 @@ class DeltaBridgePropertyTest {
     }
 
     @Test
+    @DisplayName("`Given a throwing sink and a pending model call When a delta is drained Then the call is cancelled and the original exception propagates`")
+    void throwingSinkCancelsTheModelCallAndPropagatesTheOriginalException() {
+        DeltaBridge bridge = new DeltaBridge();
+        bridge.offerDelta("first");
+        bridge.offerDelta("second");
+        AtomicInteger cancels = new AtomicInteger();
+        IOException writeFailure = new IOException("client gone");
+        List<String> attempted = new ArrayList<>();
+        IOException thrown = assertThrows(IOException.class, () -> bridge.drain(Deadline.after(GENEROUS), text -> {
+            attempted.add(text);
+            throw writeFailure;
+        }, cancels::incrementAndGet));
+        assertSame(writeFailure, thrown);
+        assertEquals(1, cancels.get(), "the pending call is cancelled once");
+        assertEquals(List.of("first"), attempted, "nothing is written after the failed write");
+    }
+
+    @Test
+    @DisplayName("`Given a queued backlog and a first write that crosses the deadline When drained Then the next signal is not consumed and the call times out`")
+    void expiredDeadlineStopsConsumingAQueuedBacklog() {
+        DeltaBridge bridge = new DeltaBridge();
+        bridge.offerDelta("first");
+        bridge.offerDelta("second");
+        bridge.offerDone();
+        AtomicInteger cancels = new AtomicInteger();
+        List<String> written = new ArrayList<>();
+        Deadline deadline = Deadline.after(Duration.ofMillis(150));
+        assertThrows(ModelStreamTimeoutException.class, () -> bridge.drain(deadline, text -> {
+            written.add(text);
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, cancels::incrementAndGet));
+        assertEquals(List.of("first"), written, "the second queued delta is not consumed after expiry");
+        assertEquals(1, cancels.get());
+    }
+
+    @Test
     @DisplayName("Feature: java-bedrock-sse-streaming-endpoint, Property 5: a failing sink surfaces its IOException")
     void sinkFailurePropagates() {
         DeltaBridge bridge = new DeltaBridge();

@@ -80,7 +80,7 @@ public final class BedrockStreamHandler implements RequestStreamHandler {
         SseWriter sse = new SseWriter();
         try {
             tokens.stream(request, deadline, delta -> {
-                sse.writeEvent(live, delta);
+                sse.writeEvent(live, normalizeLineEndings(delta));
                 timings.onDelta();
             });
             sse.writeEnd(live);
@@ -90,6 +90,16 @@ public final class BedrockStreamHandler implements RequestStreamHandler {
             writeErrorEvent(sse, live);
             throw e;
         }
+    }
+
+    /**
+     * SSE treats a lone CR and CRLF as line terminators as well as LF, but {@link SseWriter} splits
+     * on LF only. A CR inside a model delta would therefore end the {@code data:} line early and
+     * let the rest be read as another field. Contract: line endings in model text are normalised
+     * to LF, which a client reassembles as a newline.
+     */
+    static String normalizeLineEndings(String text) {
+        return text.indexOf('\r') < 0 ? text : text.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static void writeErrorEvent(SseWriter sse, OutputStream live) {

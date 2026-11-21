@@ -25,9 +25,8 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 14
-    MinValue: 14
-    MaxValue: 30
-    Description: CloudWatch log retention in days (finite, 14-30).
+    AllowedValues: [14, 30]
+    Description: CloudWatch log retention in days (finite; CloudWatch Logs supports only 14 or 30 in this range).
   NovaLiteProfileId:
     Type: String
     Default: eu.amazon.nova-lite-v1:0

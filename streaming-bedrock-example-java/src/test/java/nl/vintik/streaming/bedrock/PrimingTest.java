@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -80,6 +81,7 @@ class PrimingTest {
 
     @ParameterizedTest(name = "{0} checkpoint(s) invoke every path exactly {0} time(s)")
     @ValueSource(ints = {1, 2, 3, 5, 10})
+    @DisplayName("`Given N checkpoints When beforeCheckpoint runs Then every path runs exactly once per checkpoint (Property 7)`")
     void eachPathRunsExactlyOncePerCheckpoint(int checkpoints) throws Exception {
         var counters = new Counters();
         var priming = counters.priming();
@@ -97,6 +99,7 @@ class PrimingTest {
 
     @ParameterizedTest(name = "path {0} throwing propagates")
     @ValueSource(ints = {0, 1, 2, 3})
+    @DisplayName("`Given a throwing path When beforeCheckpoint runs Then the exception propagates unchanged`")
     void aThrowingPathPropagatesUnchanged(int failingPath) {
         var counters = new Counters();
         counters.failingPath = failingPath;
@@ -122,6 +125,7 @@ class PrimingTest {
 
     @ParameterizedTest(name = "afterRestore with {0} prior checkpoint(s) runs nothing")
     @ValueSource(ints = {0, 1, 2})
+    @DisplayName("`Given prior checkpoints When afterRestore runs Then no path is exercised`")
     void afterRestoreExercisesNoPath(int priorCheckpoints) throws Exception {
         var counters = new Counters();
         var priming = counters.priming();

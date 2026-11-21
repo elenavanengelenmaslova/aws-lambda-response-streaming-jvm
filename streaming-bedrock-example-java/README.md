@@ -10,8 +10,10 @@ Its production sources are Java only, and it drives the published
 on a deployed endpoint that the streaming mechanism is not Kotlin-specific.
 
 <p align="center">
-  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens as Server-Sent Events from the deployed Lambda, the answer appearing progressively while the model is still generating" width="760">
+  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens as Server-Sent Events from the deployed Kotlin example Lambda" width="760">
 </p>
+
+<p align="center"><em>Demo recorded against the Kotlin example (<code>streaming-bedrock-example</code>). It was not recorded against this Java endpoint; the Java measurements are in the table below.</em></p>
 
 ## What it does
 
@@ -79,8 +81,11 @@ The function's own fat jar is also the agent.
 # Unit + property tests (no AWS, no Docker)
 ./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration
 
-# Full build: tests, fat jar, zip, zip check, coverage gate (80%)
+# Full build: tests, fat jar, zip, zip check (does not run the coverage gate)
 ./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration
+
+# Coverage gate (80% line coverage), run explicitly
+./gradlew :streaming-bedrock-example-java:jacocoTestCoverageVerification -PexcludeTags=integration
 
 # Validate the SAM template
 sam validate --template-file deployment/aws/sam-bedrock-java/template.yaml
@@ -155,11 +160,38 @@ account-level API Gateway CloudWatch role.
 
 ## Measured result (deployed endpoint)
 
-**Pending.** The Java endpoint has not been deployed and measured yet, so this README states no
-numbers. They come from the deployed post-deploy test (client TTFB, TTFB as a fraction of total,
-distinct time buckets, bytes on the wire against answer size, terminal event) and from CloudWatch
-`REPORT` lines for the cold-start comparison with the Kotlin function. Neither the Kotlin example's
-figures nor any estimate stands in for them. This section is updated once those runs exist.
+**Cold start (measured from CloudWatch `REPORT` lines, eu-west-1, CD run window).** Both functions
+are java25, arm64, 1024 MB with SnapStart.
+
+| | This example | Kotlin example |
+|---|---|---|
+| Init Duration (snapshot creation, `INIT_REPORT`) | n=6: mean 4304 ms (4154 to 4432) | n=6: mean 1640 ms (1529 to 1768) |
+| Restore Duration (cold request) | n=1: 663 ms | n=1: 660 ms (15 restores over all deploys: 283 to 791 ms) |
+| Deployed package | 13,980,145 bytes | 12,114,140 bytes |
+
+The sample sizes are small, and the two functions differ in more than the HTTP client (SDK, Netty
+async client, `DeltaBridge`, `-javaagent`, priming code), so these figures describe the two examples,
+not Netty alone. Init runs when the snapshot is taken, so it is not paid per request; a cold request
+pays the restore. Details are in [`docs/log.md`](../docs/log.md) (task 13.2).
+
+**Streaming behaviour (post-deploy test, CD run 44801738573).** One measured request per example,
+sent after a discarded warm-up request, with `maxTokens=5000`.
+
+| | This example | Kotlin example |
+|---|---|---|
+| Tokens received | 784 | 807 |
+| Client time to first byte | 0.318 s | 0.390 s |
+| Total time | 7.865 s | 7.514 s |
+| TTFB as a fraction of total | 4.0% | 5.2% |
+| Distinct time buckets with tokens | 15 | 14 |
+| Bytes on the wire | 15,051 (about 1.7x the answer's own size) | 15,549 |
+| Terminal `[DONE]` event | received | received |
+
+These are single post-warm-up requests from one run, not benchmarks. Token counts differ because the
+model's answers differ, so total time and byte counts are not comparable between the two columns
+beyond showing that both stream. What the run shows is that the first byte arrives in a small
+fraction of the total time and the tokens spread over many time buckets, so the response is not
+buffered.
 
 ## How the Java port differs from the Kotlin example
 
@@ -201,8 +233,10 @@ The Kotlin handler contains a branch that writes a 502 after the stream has open
 never see it, and it is worse than useless: on that path the invocation is not marked answered, so
 the handler returns normally and AWS's loop can post a second response for an invocation the
 Runtime API has already accepted. That is the condition the Dev_Log records as producing
-`Runtime.ExitError`. This is a strong inference and has **not** been measured against a deployed
-endpoint yet; the measurement is pending. This module has no error path that tries to change the
+`Runtime.ExitError`, and it is **measured**, not inferred: against the deployed Kotlin stack a model
+failure before the first delta gave the client an empty 200, and the invocation ended
+`Runtime.ExitError` with about 60 s billed and the execution environment lost (the next request
+restored a new one). See [the measurement](../docs/log.md#measured-the-kotlin-pre-first-delta-502-path-kills-the-execution-environment-runtimeexiterror). This module has no error path that tries to change the
 status after the stream opens. Read the record before porting the Kotlin handler:
 [`docs/log.md`, "Review pass on the article and READMEs", item 2](../docs/log.md#review-pass-on-the-article-and-readmes-four-documented-behaviours-that-the-code-does-not-have).
 

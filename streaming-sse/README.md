@@ -194,7 +194,8 @@ caller uses `send`, which needs a `return null;` in the body lambda, and passes 
 it, so existing Kotlin trailing-lambda callers are unaffected.
 
 A runnable Java handler built on this is [`streaming-bedrock-example-java`](../streaming-bedrock-example-java/).
-Measured results from a deployed Java endpoint are pending and are not claimed here.
+Its measured results from a deployed run (one post-warm-up request, not a benchmark: first byte at
+0.318 s of 7.865 s total, tokens spread over 15 time buckets) are in that module's README.
 
 The `output` the runtime handed you is deliberately left untouched. Note that this handler lets
 anything `send` raises propagate, which is the right default: if the agent is missing, the

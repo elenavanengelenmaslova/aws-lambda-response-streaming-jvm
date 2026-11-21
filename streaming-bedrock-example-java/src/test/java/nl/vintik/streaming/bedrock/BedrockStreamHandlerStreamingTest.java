@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import nl.vintik.lambda.streaming.ResponseWriter;
 import nl.vintik.lambda.streaming.sse.RuntimeApiChannelFactory;
 import nl.vintik.lambda.streaming.sse.StreamingResponse;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,7 @@ class BedrockStreamHandlerStreamingTest {
     }
 
     @Test
+    @DisplayName("`Given a sleeping token source When handled Then the first chunk arrives while the source is still producing`")
     void givenSleepingTokenSourceWhenHandledThenFirstChunkArrivesWhileSourceStillProducing() throws Exception {
         AtomicLong sourceFinishedNanos = new AtomicLong();
         TokenStream sleepingSource = (request, deadline, sink) -> {

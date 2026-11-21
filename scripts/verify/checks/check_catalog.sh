@@ -71,6 +71,7 @@ check_catalog() {
         'release-version|streaming-core/build.gradle.kts|^[[:space:]]*version[[:space:]]*=.*releaseVersion|providers.gradleProperty("releaseVersion")|:streaming-core its own published version, taken from -PreleaseVersion so the git tag stays the single source of truth'
         'junit-platform-launcher|-|-|junit-platform-launcher|the versionless junit-platform-launcher catalog entry, constrained by junit-jupiter'
         'aws-sdk-java-s3|-|-|aws-sdk-java-s3|the versionless aws-sdk-java-s3 catalog entry, whose version comes from the AWS SDK for Java BOM'
+        'freemarker-constraint|build.gradle.kts|org[.]freemarker:freemarker:|org.freemarker:freemarker|the FreeMarker security constraint in the root buildscript block, which cannot read the version catalog'
     )
 
     # Candidate patterns for invariant 2, in the order they are scanned.

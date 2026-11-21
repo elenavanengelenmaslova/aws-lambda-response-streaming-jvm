@@ -871,6 +871,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199015905
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204069454
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178032
       }
     ],
     "12.5 Register the module in repository configuration": [
@@ -912,6 +922,11 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016030
+      },
+      {
+        "executionId": "5e49ccd3-f711-491c-b74d-af86ec4ad43e",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795203885654
       }
     ],
     "13.2 Measure the cold-start cost of the async client": [
@@ -919,6 +934,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016074
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204069578
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204252528
       }
     ],
     "13.3 Measure the failure path on the existing Kotlin stack": [
@@ -926,6 +951,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016127
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795240833371
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241088653
       }
     ],
     "13.4 Apply the decision rule to the Kotlin handler": [
@@ -933,6 +968,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016191
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241092388
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241143812
       }
     ],
     "13.5 Checkpoint - confirm the CD run is green for all three streaming tests, the Java and Kotlin results are recorded, and no stack from the failure experiment was left in a failing configuration. Ask the user if questions arise.": [
@@ -940,6 +985,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016267
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241144495
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241147854
       }
     ],
     "14.1 Write `streaming-bedrock-example-java/README.md`": [
@@ -998,6 +1053,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016464
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241148019
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241228752
       }
     ],
     "14.5 Optionally add a short paragraph to the published article": [
@@ -1005,6 +1070,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016516
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204070073
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178219
       }
     ],
     "15.1 Run the complete gate": [
@@ -1012,6 +1087,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016567
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241232376
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241306523
       }
     ],
     "15.2 Confirm the release outcome before merging": [
@@ -1019,6 +1104,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016622
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241307247
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241338084
       }
     ],
     "15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.": [
@@ -1026,6 +1121,16 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795199016682
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241338212
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241384558
       }
     ],
     "10. Coverage gate and registration": [
@@ -1103,6 +1208,34 @@
         "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
         "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
         "timestamp": 1795201195166
+      }
+    ],
+    "12. Wire the module into CI": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178160
+      }
+    ],
+    "13. Deploy, measure and settle the failure path (**user-run**; needs the pipeline and a paid model call)": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241147955
+      }
+    ],
+    "14. Documentation and demo assets": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241228809
+      }
+    ],
+    "15. Final verification and release hygiene": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241384604
       }
     ]
   }

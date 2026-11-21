@@ -50,13 +50,19 @@ final class DeltaBridge {
     /**
      * Relays deltas to {@code sink} until a terminal signal arrives.
      *
-     * @param cancelAction run once if the deadline passes or the thread is interrupted
+     * @param cancelAction run once if the deadline passes, the thread is interrupted or the sink fails
      * @throws ModelStreamException on a model failure or interrupt
      * @throws ModelStreamTimeoutException when no terminal signal arrives before the deadline
      * @throws IOException when the sink fails to write
      */
     void drain(Deadline deadline, DeltaSink sink, Runnable cancelAction) throws IOException {
         while (true) {
+            // Check before consuming, so a backlog already in the queue cannot keep a stream alive
+            // past the deadline: poll() would return a queued signal even with no time left.
+            if (deadline.isExpired()) {
+                cancelAction.run();
+                throw new ModelStreamTimeoutException("The model stream did not finish before the deadline");
+            }
             Signal signal;
             try {
                 signal = queue.poll(Math.max(0, deadline.remainingNanos()), TimeUnit.NANOSECONDS);
@@ -70,7 +76,16 @@ final class DeltaBridge {
                 throw new ModelStreamTimeoutException("The model stream did not finish before the deadline");
             }
             switch (signal) {
-                case Delta delta -> sink.accept(delta.text());
+                case Delta delta -> {
+                    try {
+                        sink.accept(delta.text());
+                    } catch (IOException | RuntimeException e) {
+                        // The client is gone or the write failed: stop the model call rather than
+                        // leave it generating (and billing) into a queue nobody drains.
+                        cancelAction.run();
+                        throw e;
+                    }
+                }
                 case Done done -> {
                     return;
                 }

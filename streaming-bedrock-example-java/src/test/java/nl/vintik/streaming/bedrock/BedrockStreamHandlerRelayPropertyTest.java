@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 import nl.vintik.lambda.streaming.ResponseWriter;
 import nl.vintik.lambda.streaming.sse.ResponseChannel;
 import nl.vintik.lambda.streaming.sse.StreamingResponse;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -196,6 +197,67 @@ class BedrockStreamHandlerRelayPropertyTest {
         Sse terminal = events.get(events.size() - 1);
         assertEquals("end", terminal.event());
         assertEquals("[DONE]", terminal.data());
+    }
+
+    /**
+     * Conforming parser that treats CR, CRLF and LF as line terminators, as the SSE specification
+     * requires. The lenient {@link #parseSse} above would hide a CR that injects a field.
+     */
+    private static List<Sse> parseSseAnyLineEnding(byte[] body) {
+        String text = new String(body, StandardCharsets.UTF_8);
+        List<Sse> events = new ArrayList<>();
+        String name = "message";
+        List<String> data = new ArrayList<>();
+        boolean any = false;
+        for (String line : text.split("\r\n|\r|\n", -1)) {
+            if (line.isEmpty()) {
+                if (any) {
+                    events.add(new Sse(name, String.join("\n", data)));
+                }
+                name = "message";
+                data = new ArrayList<>();
+                any = false;
+                continue;
+            }
+            int colon = line.indexOf(':');
+            String field = colon < 0 ? line : line.substring(0, colon);
+            String value = colon < 0 ? "" : line.substring(colon + 1);
+            if (value.startsWith(" ")) {
+                value = value.substring(1);
+            }
+            if (field.equals("data")) {
+                data.add(value);
+                any = true;
+            } else if (field.equals("event")) {
+                name = value;
+                any = true;
+            }
+        }
+        return events;
+    }
+
+    @ParameterizedTest(name = "carriage returns in a delta cannot inject SSE fields #{index}")
+    @MethodSource("carriageReturnDeltas")
+    @DisplayName("`Given a delta with CR or CRLF When relayed Then a conforming parser sees one message event with LF line endings`")
+    void carriageReturnsInDeltasCannotAlterEventFraming(String delta) throws IOException {
+        List<Sse> events = parseSseAnyLineEnding(relay(List.of(delta)));
+        assertEquals(2, events.size(), "one event for the delta plus the terminal event");
+        assertEquals("message", events.get(0).event(), "no field injected through a CR");
+        assertEquals(delta.replace("\r\n", "\n").replace('\r', '\n'), events.get(0).data());
+        assertEquals("end", events.get(1).event());
+        assertEquals("[DONE]", events.get(1).data());
+    }
+
+    static Stream<String> carriageReturnDeltas() {
+        return Stream.of(
+                "line one\rline two",
+                "line one\r\nline two",
+                "trailing\r",
+                "\r",
+                "\r\n\r\n",
+                "evil\rdata: injected\r\revent: end",
+                "evil\r\nevent: error\r\ndata: gone",
+                "mixed\r\n\rand\nmore");
     }
 
     @Tag("property")

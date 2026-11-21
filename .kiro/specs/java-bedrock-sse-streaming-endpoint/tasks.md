@@ -204,7 +204,7 @@ Constraints that apply throughout:
     - _Requirements: 13.2_
   - [x] 11.5 Checkpoint - run `./scripts/verify-quality-signals.sh --offline` and compare with the baseline recorded in the PR #37 description. Confirm no failure was introduced; the seven pre-existing ones may remain unless fixed by 10.3. Ask the user if questions arise.
 
-- [ ] 12. Wire the module into CI
+- [x] 12. Wire the module into CI
   - [x] 12.1 Make log retention a deploy-workflow input
     - In `workflow-deploy-aws.yml` add a `log-retention-days` input defaulting to `7` and replace the hardcoded `LogRetentionDays=7` with the input, using the file's existing `${INPUT:-default}` fallback so an empty matrix value still deploys.
     - This is a prerequisite: the new template's parameter has `MinValue: 14`, so the current hardcoded `7` would fail the deploy.
@@ -216,7 +216,7 @@ Constraints that apply throughout:
   - [x] 12.3 Validate every SAM template in the build workflow
     - Add `sam validate` steps for `sam-bedrock` and `sam-bedrock-java` to `validate-sam` in `workflow-build.yml`, closing the gap where only two of the four templates were validated.
     - _Requirements: 13.2_
-  - [~] 12.4 Verify the OIDC roles need no change
+  - [x] 12.4 Verify the OIDC roles need no change
     - The CloudFormation execution role is already wildcard-scoped and the Kotlin Bedrock stack deploys under it. Confirm by deploying (task 13.1). Extend `github-oidc-role.yaml` only if a real permission gap appears, and then record it and soften Requirement 13.4's wording to match.
     - _Requirements: 13.3, 13.4_
   - [x] 12.5 Register the module in repository configuration
@@ -225,27 +225,27 @@ Constraints that apply throughout:
     - _Requirements: 13.9, 14.3, 15.1_
   - [x] 12.6 Checkpoint - run `actionlint` on the changed workflows if installed, `./scripts/verify-quality-signals.sh --offline`, and `./gradlew build apiCheck -PexcludeTags=integration`. Ask the user if questions arise.
 
-- [ ] 13. Deploy, measure and settle the failure path (**user-run**; needs the pipeline and a paid model call)
-  - [~] 13.1 Deploy and run the post-deploy test
+- [x] 13. Deploy, measure and settle the failure path (**user-run**; needs the pipeline and a paid model call)
+  - [x] 13.1 Deploy and run the post-deploy test
     - Dispatch **CD - Deploy On Demand** on the branch with `run-bedrock-test = true`. Confirm all legs deploy, the Java alias reports `-javaagent` in `JAVA_TOOL_OPTIONS` (the script prints it), and the Java leg passes the four assertions. Record client TTFB, ratio, buckets, bytes and inflation.
     - This also settles task 12.4 and task 6.3's exclusion on the real runtime.
     - _Requirements: 6.4, 7.1, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 13.3, 13.6_
-  - [~] 13.2 Measure the cold-start cost of the async client
+  - [x] 13.2 Measure the cold-start cost of the async client
     - From CloudWatch `REPORT` lines compare init and restore durations and package size for the Java and Kotlin Bedrock functions, on cold starts. Record Netty's cost in the Dev_Log. State plainly that the two functions differ in more than the HTTP client, so the numbers describe the examples, not Netty alone.
     - _Requirements: 4.8, 4.9_
-  - [~] 13.3 Measure the failure path on the existing Kotlin stack
+  - [x] 13.3 Measure the failure path on the existing Kotlin stack
     - Make the model call fail before the first delta (for example point `NovaLiteProfileId` at a nonexistent profile). Per Requirement 7.7, confirm the `live` alias version actually carries the change, because a config-only deploy does not publish a new version.
     - Invoke it and record: what the client receives, whether the invocation reports an error, whether `Runtime.ExitError` appears, and whether the next invocation reuses the environment. Restore the parameter afterwards and re-verify the alias.
     - Write the result to `docs/log.md` under the open entry on the unreachable 502 path, as a measurement and not an inference.
     - _Requirements: 5.4, 5.6_
-  - [~] 13.4 Apply the decision rule to the Kotlin handler
+  - [x] 13.4 Apply the decision rule to the Kotlin handler
     - If the failure is harmless or log-only: remove the unreachable pre-first-delta 502 branch from `BedrockStreamHandler`, update its KDoc and tests, and redeploy to confirm the Kotlin test still passes.
     - If it kills the execution environment: keep the branch, mark it unreachable with a comment citing the log entry, and record a follow-up to make the agent guard `reportInvocationError`. Do not widen this spec to patch a second runtime method.
     - Either way, the invariant of Requirement 5.6 holds for both modules afterwards.
     - _Requirements: 5.5, 5.6, 5.7_
-  - [~] 13.5 Checkpoint - confirm the CD run is green for all three streaming tests, the Java and Kotlin results are recorded, and no stack from the failure experiment was left in a failing configuration. Ask the user if questions arise.
+  - [x] 13.5 Checkpoint - confirm the CD run is green for all three streaming tests, the Java and Kotlin results are recorded, and no stack from the failure experiment was left in a failing configuration. Ask the user if questions arise.
 
-- [ ] 14. Documentation and demo assets
+- [x] 14. Documentation and demo assets
   - [x] 14.1 Write `streaming-bedrock-example-java/README.md`
     - Cover what it does, why it needs `streaming-sse`, the packaging and `-javaagent` steps (and that a wrong path aborts JVM startup rather than degrading), a quick start that builds, deploys and resolves the URL and API key, the CloudWatch role prerequisite, the measured result from task 13.1, a teardown step, and the differences from the Kotlin port: the asynchronous client, the delta bridge, explicit `null`-free metadata construction, and the stricter parameter handling. Link the Dev_Log entry on the unreachable path.
     - _Requirements: 3.7, 5.7, 10.6, 15.2, 15.3_
@@ -257,22 +257,22 @@ Constraints that apply throughout:
     - In `scripts/record-streaming-demo.sh` stamp a `streaming_verified` marker into the cast header at record time, after the alias check and the secret scan have passed. Make a `CAST_IN` render that produces an MP4 refuse a cast without the marker.
     - Test: re-render the existing committed cast (record a fresh one first if it predates the marker) and confirm an unmarked cast is refused.
     - _Requirements: 16.2, 16.3, 16.4, 16.6, 16.7_
-  - [~] 14.4 Append `docs/log.md` entries
+  - [x] 14.4 Append `docs/log.md` entries
     - One entry per gotcha, bug or fix hit during this work, in the existing title / symptom / resolution form, with no secrets: the `LogRetentionDays` hardcode, any `@JvmOverloads` or SDK-callback surprises, the measured Netty cost, and the failure-path measurement.
     - _Requirements: 1.5, 4.5, 15.5, 15.6_
-  - [~] 14.5 Optionally add a short paragraph to the published article
+  - [x] 14.5 Optionally add a short paragraph to the published article
     - Mention the Java example as evidence that the mechanism is not Kotlin-specific, only with claims verifiable from the deployed Java endpoint.
     - _Requirements: 15.7_
 
-- [ ] 15. Final verification and release hygiene
-  - [~] 15.1 Run the complete gate
+- [x] 15. Final verification and release hygiene
+  - [x] 15.1 Run the complete gate
     - `./gradlew clean build apiCheck -PexcludeTags=integration`, `./gradlew verifyCoverageReports koverVerify koverHtmlReport -PexcludeTags=integration --continue`, `sam validate` on all four templates, and `./scripts/verify-quality-signals.sh`. Paste the quality-signals output into the PR description as the template asks.
     - _Requirements: 12.5, 12.6, 13.1, 13.2_
-  - [~] 15.2 Confirm the release outcome before merging
+  - [x] 15.2 Confirm the release outcome before merging
     - Run `scripts/release/compute-version.sh` on the branch's merge result and confirm `bump=minor`. The library commits must be `feat:` and no commit may carry `!` or `BREAKING CHANGE:`. If the PR is squash-merged, the PR title must start with `feat:`, because only the title is classified.
     - Confirm the release trigger filter is unchanged and that both published modules still share one version.
     - _Requirements: 2.5, 13.9, 14.1, 14.2, 14.3, 14.4, 14.5_
-  - [~] 15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.
+  - [x] 15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.
 
 ## Notes
 

@@ -74,7 +74,7 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="/var/run/docker.sock"
 | `:streaming-bedrock-example` | Kover | **80%** | `./gradlew :streaming-bedrock-example:koverVerify` |
 | `:streaming-bedrock-example-java` | JaCoCo (behind `koverVerify`/`koverHtmlReport` aliases) | **80%** | `./gradlew :streaming-bedrock-example-java:koverVerify` |
 
-Repo-wide, `./gradlew build -PexcludeTags=integration` runs all the gates. `./gradlew koverHtmlReport` per module writes the browsable HTML report. A gate failure names the module and its measured percentage.
+Repo-wide, `./gradlew build koverVerify -PexcludeTags=integration` runs all the gates. `build` alone does not run the JaCoCo gate of the two pure-Java modules (`koverVerify` is an alias for it there). `./gradlew koverHtmlReport` per module writes the browsable HTML report. A gate failure names the module and its measured percentage.
 
 ## Public API changes (`:streaming-core` only)
 

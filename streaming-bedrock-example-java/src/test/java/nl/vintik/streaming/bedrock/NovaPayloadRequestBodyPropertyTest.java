@@ -48,7 +48,7 @@ class NovaPayloadRequestBodyPropertyTest {
     @Tag("property")
     @ParameterizedTest(name = "{0}")
     @MethodSource("prompts")
-    @DisplayName("Feature: java-bedrock-sse-streaming-endpoint, Property 3: the Nova request body preserves the prompt exactly")
+    @DisplayName("`Given any prompt When the request body is built Then the prompt is preserved exactly (Property 3)`")
     void requestBodyPreservesPromptExactly(String label, String prompt, int maxTokens) throws IOException {
         String body = NovaPayload.requestBody(prompt, maxTokens);
 

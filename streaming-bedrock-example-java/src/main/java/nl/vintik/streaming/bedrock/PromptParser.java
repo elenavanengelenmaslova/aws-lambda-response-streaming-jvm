@@ -1,6 +1,7 @@
 package nl.vintik.streaming.bedrock;
 
 import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -21,7 +22,10 @@ import org.slf4j.LoggerFactory;
 final class PromptParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(PromptParser.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    // Reject anything but whitespace after the JSON object, so `{"prompt":"a"} {"x":1}` is a 400,
+    // not silently the first object.
+    private static final ObjectMapper MAPPER =
+            new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final Set<String> SUPPORTED = Set.of("prompt", "maxTokens");
     private static final int MAX_NAME_LEN = 64;
 

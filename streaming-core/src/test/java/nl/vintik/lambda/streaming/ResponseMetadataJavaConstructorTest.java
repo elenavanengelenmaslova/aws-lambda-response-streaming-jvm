@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json;
 import kotlinx.serialization.json.JsonElement;
 import kotlinx.serialization.json.JsonObject;
 import kotlinx.serialization.json.JsonPrimitive;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -25,6 +26,7 @@ class ResponseMetadataJavaConstructorTest {
     private static final int DELIMITER_LEN = 8;
 
     @Test
+    @DisplayName("`Given the two argument constructor When written through ResponseWriter Then status and headers round trip without cookies`")
     void givenTwoArgConstructorWhenWrittenThroughResponseWriterThenStatusAndHeadersRoundTripWithoutCookies()
             throws IOException {
         Map<String, String> headers = Map.of("Content-Type", "text/event-stream");
@@ -50,7 +52,8 @@ class ResponseMetadataJavaConstructorTest {
     }
 
     @Test
-    void givenTwoArgConstructorThenCookiesDefaultsToNull() {
+    @DisplayName("`Given the two argument constructor When cookies are read Then they are null`")
+    void givenTwoArgConstructorWhenCookiesReadThenNull() {
         ResponseMetadata metadata = new ResponseMetadata(204, Map.of());
 
         assertEquals(204, metadata.getStatusCode());

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -30,22 +31,24 @@ class PromptParserUnsupportedParamPropertyTest {
 
     private final PromptParser parser = new PromptParser();
 
-    @ParameterizedTest(name = "bare payload with member [{0}]")
+    @ParameterizedTest(name = "Given member [{0}] on a bare payload When parsed Then it is rejected")
     @ValueSource(strings = {
         "headPadBytes", "tailPadBytes", "headPadEvents", "temperature", "model", "modelId",
         "topP", "stream", "system", "stopSequences", "Prompt", "MAXTOKENS", "max_tokens",
         "prompt ", " maxTokens", "body2", "__proto__", "\u30D1\u30E9\u30E1\u30FC\u30BF", "a"
     })
+    @DisplayName("`Given an unsupported member on a bare payload When parsed Then it is rejected naming the member (Property 6)`")
     void bareTopLevelUnsupportedMemberIsRejectedByName(String member) throws JsonProcessingException {
         String payload = payloadWith(member);
 
         assertRejectedNaming(member, parser.resolve(stream(payload)));
     }
 
-    @ParameterizedTest(name = "proxy event with member [{0}]")
+    @ParameterizedTest(name = "Given member [{0}] in a proxy body When parsed Then it is rejected")
     @ValueSource(strings = {
         "headPadBytes", "tailPadBytes", "headPadEvents", "temperature", "modelId", "stream", "Prompt", "max_tokens"
     })
+    @DisplayName("`Given an unsupported member in a proxy body When parsed Then it is rejected naming the member (Property 6)`")
     void unsupportedMemberInsideProxyEventBodyIsRejectedByName(String member) throws JsonProcessingException {
         ObjectNode event = MAPPER.createObjectNode();
         event.put("body", payloadWith(member));
