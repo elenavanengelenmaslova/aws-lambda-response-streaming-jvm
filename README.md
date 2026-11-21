@@ -18,7 +18,28 @@ A JVM library that implements the **AWS Lambda / API Gateway HTTP response strea
 
 ![Solution design: the client sends an HTTP request to API Gateway, which invokes the Lambda; the Lambda requests data from a source such as S3 or Bedrock and streams it back through API Gateway to the client](docs/SolutionDesign.png)
 
-AWS provides Node.js helpers (`HttpResponseStream.from()`) that hide the wire format. On the JVM there is no equivalent — you write the protocol by hand or use this library.
+## Why this library?
+
+AWS provides built-in response streaming helpers for the managed Node.js Lambda runtime, but there is no equivalent for Java or Kotlin.
+
+AWS documents two alternatives: a custom runtime or the Lambda Web Adapter. A custom runtime introduces additional maintenance, while the Lambda Web Adapter requires running an HTTP server inside the Lambda.
+
+This library takes a different approach:
+
+- Retain the managed Java runtime and AWS-managed runtime updates.
+- Keep the standard `RequestStreamHandler` with minimal changes to existing application logic.
+- Continue using SnapStart and CRaC priming.
+- Avoid introducing an embedded HTTP server or an additional Lambda layer.
+- Integrate response streaming through a Maven Central dependency.
+
+The library consists of two modules:
+
+| Module | Purpose |
+|---|---|
+| `aws-lambda-streaming-core` | Return large responses through API Gateway, beyond the standard 6 MB buffered Lambda response limit. |
+| [`aws-lambda-streaming-sse`](streaming-sse/) | Stream responses progressively while the Lambda handler is still running, including AI-generated tokens and Server-Sent Events (SSE). |
+
+The SSE module uses a Java agent to instrument the managed runtime. This relies on undocumented runtime internals and is therefore experimental.
 
 For the background and a walkthrough of the library, read the article [AWS Lambda Response Streaming for Kotlin and Java](https://medium.com/aws-in-plain-english/aws-lambda-response-streaming-for-kotlin-and-java-646d8c51f7a0) on Medium.
 
