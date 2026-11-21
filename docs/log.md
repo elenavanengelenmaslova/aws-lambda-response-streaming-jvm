@@ -681,7 +681,7 @@ Each entry uses the form:
   verification script reads **this list** as its allow-list, so a literal that is *not*
   recorded here fails the check. An incomplete list produces false failures; a vague one
   lets a genuinely unmanaged version through.
-- **Resolution / status:** **RESOLVED — the allow-list is exactly these five, and is
+- **Resolution / status:** **RESOLVED — the allow-list is exactly these six, and is
   complete:**
   1. **`settings.gradle.kts`** — `id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"`.
      Settings scripts are evaluated before the catalog exists and have no generated
@@ -696,10 +696,15 @@ Each entry uses the form:
      The project's *own* published version, derived from the git tag by the publish
      workflow. Out of scope for the catalog; "migrating" it would break the rule that the
      tag is the single source of truth.
-  4. **All three modules** — `junit-platform-launcher`, a **versionless** catalog entry.
+  4. **Every module with tests** — `junit-platform-launcher`, a **versionless** catalog entry.
      Its version is constrained by `junit-jupiter`; pinning it separately invites a split.
-  5. **The Java example** — `aws-sdk-java-s3`, also **versionless**. The version comes from
+  5. **The Java S3 example** — `aws-sdk-java-s3`, also **versionless**. The version comes from
      `platform(libs.aws.sdk.java.bom)`.
+  6. **Root `build.gradle.kts`** — `classpath("org.freemarker:freemarker:2.3.35")` in the
+     `buildscript { constraints }` block. It lifts the FreeMarker that Kover pulls onto the build
+     classpath to the patched release (Dependabot alert, path traversal). A `buildscript` block is
+     evaluated before the catalog accessors exist, so it cannot use `libs.`. Build tooling only;
+     nothing reaches the Lambda zip. Remove it once Kover ships a fixed FreeMarker.
   Both versionless entries carry an inline comment in `gradle/libs.versions.toml` naming
   where the version comes from, so the omission reads as intentional.
 
@@ -3119,8 +3124,8 @@ That framing is what makes it likely to become the article people find when they
   an invocation the Runtime API has already accepted**. That is exactly the condition this log
   records as producing `Runtime.ExitError`. The same reasoning applies to the post-first-delta
   rethrow, which reaches the unpatched `reportInvocationError`. **Not reproduced against the
-  deployed endpoint** — no failure-path test has been run — so it is recorded as a strong inference,
-  not a measurement. Fixing it properly is a design choice (defer the prelude until the first body
+  deployed endpoint** at the time of writing; it has since been **measured and confirmed** (see
+  "MEASURED: the Kotlin pre-first-delta 502 path kills the execution environment" at the end of this log). Fixing it properly is a design choice (defer the prelude until the first body
   write so the "commit at first delta" contract becomes real, mark answered on the failure path, or
   drop the dead branch), and it changes the article's guidance, so it is left for a follow-up.
 
@@ -3164,3 +3169,340 @@ That framing is what makes it likely to become the article people find when they
 - **Resolution / status:** items 1, 3, 4, 5 and 6 fixed (documentation only, no behaviour change).
   Item 2 is **open** and needs a code decision plus a failure-path test against the deployed
   endpoint.
+
+## Codecov showed 0% because the Gradle build cache served a JaCoCo report older than Codecov's 12h age limit
+
+- **Symptom:** after the PR #37 merge, the Codecov dashboard read **0.00%** for `main` with a
+  `-85.63%` change, the badge went to 0%, and no Codecov commit status was posted. The commit page
+  said *"There is an error processing the coverage reports"*, **1 errored upload**, and named the
+  reason: *"Upload exceeds the max age of 12h."*
+
+- **What was NOT wrong**, checked before changing anything:
+  - the upload itself succeeded — `==> Token set from input`, `Found 2 coverage files to report`,
+    both paths listed, `Sending upload (41922 bytes) to storage`,
+    `Upload queued for processing complete`;
+  - the aggregate report was healthy — 497 covered lines against 45 missed (~91.7%), all three
+    Kotlin packages present;
+  - path resolution was fine. The Kover aggregate names files only as package + filename with no
+    module prefix, and `nl/vintik/lambda/streaming` now exists in three modules, so path ambiguity
+    looked like the obvious culprit. Testing all 34 source entries against the repo tree gave
+    **0 unresolvable, 0 ambiguous, 34 uniquely resolvable**. Hypothesis dead;
+  - the `check_coverage_paths` quality-signal failure is a **stale check**, not a real defect: it
+    greps for `codecov/codecov-action@v5` while the workflow is on `@v7`, where the `files:` input
+    is present and correct.
+
+- **Root cause:** the JaCoCo agent stamps its execution data with wall-clock
+  `<sessioninfo start=… dump=…>` times, and `jacocoTestReport` copies them into the XML. The CI log
+  shows `:streaming-s3-example-java:test FROM-CACHE` and `:streaming-s3-example-java:jacocoTestReport
+  FROM-CACHE` — this module's inputs had not changed, so Gradle restored both from the build cache
+  and the XML carried session timestamps from whenever the tests had last actually run. Locally the
+  same thing was visible: file mtime `2026-11-18 21:20`, `sessioninfo` `2026-11-17 21:39`. Codecov
+  rejects a report older than 12 hours, and because **both reports travel in a single upload** (one
+  `upload-coverage` call with two `--file` flags) the healthy Kotlin aggregate was discarded along
+  with the expired Java report. Hence 0%, not a partial number.
+
+- **Why it appeared now:** nothing about the Java module changed, which is exactly the condition for
+  a cache hit. A branch that touches Java sources invalidates the cache and uploads a fresh report,
+  which is why this had not bitten before.
+
+- **Fix:** opt `:streaming-s3-example-java:test` out of both up-to-date skipping and the build cache,
+  so the exec data is always produced in the run that uploads it:
+  ```kotlin
+  outputs.upToDateWhen { false }
+  outputs.cacheIf { false }   // required: upToDateWhen alone still allows a FROM-CACHE restore
+  ```
+  `upToDateWhen` on its own is not enough — a cacheable task with up-to-date checks disabled is
+  still restored from the cache. Verified: two consecutive runs both execute `test`, and
+  `sessioninfo` now matches the run (`18:16:50` for a run started at `18:16:42`). The coverage gates
+  are unaffected: all six reports still validate, 158 covered lines in this module.
+
+- **Turning off Codecov's age check** (the "expired reports" toggle the error message offers) was
+  rejected as the fix: it would silence a real staleness signal and keep uploading reports that
+  describe a different commit's test run.
+
+- **Note on recovery:** Codecov states the errored commit page "will not reflect the latest results,
+  even if you have re-run all jobs successfully". Re-running CI on the merge commit does not repair
+  it; the dashboard recovers on the next commit that uploads a fresh report.
+
+- **Resolution / status:** **Fixed** in `streaming-s3-example-java/build.gradle.kts`. The Kover
+  reports were never affected — Kover emits no `sessioninfo`, so there is nothing for the age check
+  to reject.
+
+## Java Bedrock example: SDK callback names (task 6.1)
+
+- **Question:** are the callback names in the design (`Visitor.builder().onChunk(...)`, handler
+  `.subscriber(visitor)`, `.onComplete(Runnable)`, `.onError(Consumer<Throwable>)`) correct for
+  `InvokeModelWithResponseStreamResponseHandler` in the BOM-pinned AWS SDK for Java v2?
+- **Result:** yes. `BedrockAsyncSource` compiled on the first attempt with exactly those names, so
+  no correction was needed. `onChunk` receives a `PayloadPart`; `part.bytes().asUtf8String()` gives
+  the Nova event JSON.
+- **Design choices:** the client is built lazily on first `stream` call (after SnapStart restore) with
+  `NettyNioAsyncHttpClient.builder().readTimeout(60s)` via `httpClientBuilder`. `MODEL_ID` defaults to
+  `eu.amazon.nova-lite-v1:0` and is never logged. A package-private constructor takes
+  `Supplier`s for the client and model id so task 6.2 can inject a Mockito mock.
+- **Visitor safety:** the chunk callback catches `RuntimeException`, logs only the exception type and
+  never touches the live stream; all writes stay on the invocation thread inside `DeltaBridge.drain`.
+## Java Bedrock example: testing the SDK glue with Mockito (task 6.2)
+- **Approach:** the full design approach worked, so no "keep it thin" trade-off was needed.
+  `BedrockAsyncSourceTest` stubs a Mockito mock of `BedrockRuntimeAsyncClient` with `thenAnswer`,
+  grabs the `InvokeModelWithResponseStreamResponseHandler` argument, and drives it directly:
+  `handler.onEventStream(publisher)`, then `handler.complete()` or `handler.exceptionOccurred(e)`.
+  The returned `CompletableFuture` is completed, failed or left pending per scenario. Covered:
+  chunks in order then done, the request carrying model id and Nova body, non-text and malformed
+  chunks skipped, error before any chunk, error after some chunks, a failed call future alone, a
+  stalled stream timing out and cancelling the call, and lazy single client construction.
+- **Gotcha 1: `PayloadPart.builder()` parts are invisible to the visitor.** The first run delivered
+  zero deltas with no error. `PayloadPart.accept(Visitor)` throws `UnsupportedOperationException`;
+  only the event-stream subtype (`responsestream.DefaultChunk`, built via
+  `ResponseStream.chunkBuilder()`) dispatches to `visitChunk` / `onChunk`. The SDK's own unmarshaller
+  produces the subtype, so production is unaffected, but test fixtures must use `chunkBuilder()`.
+- **Publisher choice (precaution, not an observed bug):** a tiny synchronous `Publisher` test double
+  (emits every part inside `request(n)`) is used instead of `SdkPublisher.fromIterable`, so every
+  chunk is provably offered to `DeltaBridge` before the test calls `handler.complete()`; with an
+  asynchronous publisher `Done` could in principle win and the bridge's first-terminal-wins rule
+  would drop later deltas. The swap was made before gotcha 1 was found, so it did not by itself fix
+  the empty-delta symptom.
+- **Resolution / status:** 8 tests passing in
+  `streaming-bedrock-example-java/src/test/java/nl/vintik/streaming/bedrock/BedrockAsyncSourceTest.java`.
+  No production code changed.
+## Java Bedrock example: async client footprint and the HTTP client exclusion (task 6.3)
+- **Baseline:** `:streaming-bedrock-example-java:shadowJar` produced `build/libs/streaming-bedrock-example-java-all.jar`
+  at 17,998,650 bytes (about 17.2 MiB) with the Netty async client and no exclusions.
+- **Surprise: `apache-client` is not on the classpath.** With the BOM-pinned SDK (2.59.0) the default
+  synchronous HTTP client is `software.amazon.awssdk:apache5-client` (Apache HttpClient 5), pulled in
+  transitively by the service module. Excluding only `apache-client`, as the task says, would have been a
+  silent no-op. The exclusion now covers both module names (`apache-client` and `apache5-client`) in
+  `streaming-bedrock-example-java/build.gradle.kts` via `configurations.configureEach { exclude(...) }`.
+- **After exclusion:** 15,638,628 bytes (about 14.9 MiB), 2,360,022 bytes (13.1%) smaller. The fat jar
+  has no `org/apache/...` classes left.
+- **Tests:** `./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration` is BUILD SUCCESSFUL,
+  178 tests, 0 failures, 0 skipped. The exclusion is kept. Unit tests never touch a synchronous client,
+  so this does not prove the real runtime path; task 13.1 confirms it on the deployed endpoint. If the
+  default credentials chain ever needs a sync client (for example container, IMDS or SSO credentials),
+  Lambda environment credentials do not, but that is the thing to watch there.
+- **Netty cost (size):** `io/netty/**` plus the SDK's `http/nio` classes are about 9.1 MB uncompressed
+  inside the fat jar, the largest single dependency block. The cold-start half is measured in task 13.2.
+
+## Java Bedrock example: Java-from-Kotlin friction, `SseWriter` has no `@Throws` (task 8.2, Req 1.5)
+- **Call site:** `BedrockStreamHandler.writeErrorEvent` and `relay` in
+  `streaming-bedrock-example-java/src/main/java/nl/vintik/streaming/bedrock/BedrockStreamHandler.java`
+  call `SseWriter.writeNamedEvent`, `writeEvent` and `writeEnd`.
+- **Symptom:** `catch (IOException e)` around a call that only invokes `SseWriter` does not compile:
+  `exception IOException is never thrown in body of corresponding try statement`. Kotlin has no checked
+  exceptions, so without `@Throws(IOException::class)` the generated signatures declare nothing, and
+  javac refuses a catch clause for a checked exception the body cannot throw.
+- **The trap:** the methods still throw `IOException` at runtime, because they write to an
+  `OutputStream`. Java sees a signature that says they cannot. A Java caller cannot narrowly handle
+  write failures on these calls, and `throws IOException` on the caller is only legal when something
+  else in the body declares it.
+- **Workaround in the example:** the best-effort error-event write catches `Exception` instead of
+  `IOException`, with a comment saying why. In `relay`, `catch (IOException | RuntimeException e)` is
+  legal only because the `TokenStream.stream` call declares `IOException`.
+- **Library implication:** `SseWriter.writeEvent`, `writeNamedEvent` and `writeEnd` should carry
+  `@Throws(IOException::class)`, as `StreamingResponse.stream` and `ResponseBody.write` already do. It
+  is additive for Java callers and source-compatible for Kotlin, though it does change the generated
+  signature, so run `apiCheck` and treat it as a follow-up library change, not part of this task.
+  This is evidence for Req 2: consuming the library from plain Java exposes it.
+- **Tests:** `BedrockStreamHandlerTest` covers the write-failure path (an `IOException` from the live
+  stream propagates, the best-effort error event is swallowed, one status stays on the wire).
+
+## Task 13.2: cold-start cost of the async client (measured, read-only CloudWatch Logs)
+
+- **Method:** `aws logs filter-log-events --filter-pattern '"REPORT"'` on `/aws/lambda/bedrock-streaming-endpoint-java`
+  and `/aws/lambda/bedrock-streaming-endpoint` (eu-west-1; physical ids resolved with
+  `cloudformation describe-stack-resources`). Only `INIT_REPORT`, `RESTORE_REPORT` and `REPORT` lines
+  were read. No Bedrock call and no AWS change was made. Both functions: java25, arm64, 1024 MB, SnapStart
+  on published versions.
+- **SnapStart note:** with SnapStart, `Init Duration` is the init phase run when the version is
+  published and the snapshot is taken (`INIT_REPORT`), not a per-request cost. What a cold request pays
+  is `Restore Duration`. Both are reported.
+- **Window: the CD run's invocations** (same publish, minutes apart, both stacks):
+
+  | | Java (`...-java`) | Kotlin (`bedrock-streaming-endpoint`) |
+  |---|---|---|
+  | Init Duration (snapshot creation) | n=6: mean 4304 ms, range 4154 to 4432 ms | n=6: mean 1640 ms, range 1529 to 1768 ms |
+  | Restore Duration (cold request) | n=1: 662.71 ms | n=1: 660.06 ms |
+  | Max Memory Used on that request | 170 MB | 141 MB |
+  | Deployed package (`CodeSize`) | 13,980,145 bytes | 12,114,140 bytes |
+
+- **All history for context:** Java log group has only that one publish and one restore. The Kotlin log
+  group has 15 restores over earlier deploys: mean 572 ms, range 283 to 791 ms. Kotlin Init Duration
+  differs by code version (about 0.4 to 0.6 s on older versions, about 1.5 to 2.3 s on later ones), so
+  only the CD-window row above is a like-for-like comparison.
+- **Reading:** the Java function's snapshot-time init is about 2.6x the Kotlin one (about 2.7 s more).
+  The one Java restore (663 ms) sits inside the Kotlin range (283 to 791 ms), so there is no evidence of
+  a restore-time cost from the async client; n=1 for Java cannot show more than that. Package is about
+  1.9 MB (15%) larger. Request `Duration` (about 10.8 s vs 10.9 s) is dominated by Bedrock generation
+  and was not used for comparison.
+- **Caveat:** the two functions differ in more than the HTTP client (Kotlin AWS SDK vs AWS SDK for Java
+  v2, Netty NIO async client, `DeltaBridge`, the `-javaagent`, different priming code). These numbers
+  describe the two examples, not Netty alone. Netty's own cost was not isolated.
+- **Earlier run 44801738573:** its log carried no `REPORT` lines; the `ls -h` sizes (14M vs 12M) agree
+  with the exact `CodeSize` above.
+
+## Java Bedrock example: OIDC roles verification (task 12.4, Req 13.3, 13.4)
+
+- **Evidence (read-only, `gh run view`):** CD - Deploy On Demand run `44801738573`
+  (head `7b10be5`) concluded `success`. All 10 jobs passed, including `bedrock-streaming-endpoint-java`
+  (deploy + `scripts/bedrock-streaming-test.sh`). Deploy jobs authenticated via OIDC as session
+  `StreamingExampleDeployment`, test jobs as `StreamingExampleTest`. No `AccessDenied` / `not authorized`
+  lines were found for the Java leg. No AWS calls were made for this check.
+- **Repo comparison (`deployment/aws/oidc/github-oidc-role.yaml`):**
+  - Trust policy: `sub` patterns cover `main`, `feature/*`, `dependabot/*` and `environment:*` under the
+    immutable `SubjectPrefix`. Nothing is stack-specific, so the new stack needs no trust change.
+  - Execution role: `Lambda` is `function:*`, API Gateway `/*`, logs account-wide, IAM role actions on
+    `*`. A new function named `bedrock-streaming-endpoint-java*` is already covered. No new service type
+    was added by the Java template (Function, Api, two LogGroups, one IAM role with
+    `bedrock:InvokeModelWithResponseStream`, same as the Kotlin stack).
+- **Caveat 1, the run did not exercise the CloudFormation execution role.** Every deploy leg, Java
+  included, printed `No changes to deploy. Stack is up to date - skipping.` So run 44801738573 proves OIDC
+  trust, artifact-bucket access and changeset creation, but no resource was created or updated under
+  `StreamingCloudFormationExecutionRole`. The stack was created by an earlier deploy, and the earlier
+  matrix runs (44772687065 and older) contain no Java Bedrock leg, so that creation is not visible in CD
+  history. The "stack deploys under the execution role" claim rests on the template's wildcard scoping
+  and on the stack existing, not on a create observed here.
+- **Caveat 2 (corrected), the test does not need `lambda:GetAlias` / `lambda:GetFunctionConfiguration`.**
+  An earlier version of this entry inferred that the live role was wider than the template because the
+  test passed. That inference was wrong. `report_agent_config` in `scripts/bedrock-streaming-test.sh`
+  runs both reads with `2>/dev/null || true` and returns early when the alias lookup is empty, so a
+  denied call is swallowed. The CI log of run 44801738573 confirms it: neither Bedrock leg printed the
+  `alias 'live' is version ... with the streaming agent configured` line, so the diagnostic was skipped
+  silently and the test passed without it. The template's test role (`StreamingDeploymentPolicy`) grants
+  `cloudformation:DescribeStacks` and `apigateway:GET` on `/apikeys/*`, which is everything the
+  assertions need. Nothing here shows the live role differs from the template.
+- **Conclusion (one position):** no OIDC role change is needed for the Java Bedrock stack. The template
+  stays as it is for the test to pass. Optional follow-up, only if you want the agent-configuration
+  diagnostic to run in CI: add `lambda:GetAlias` and `lambda:GetFunctionConfiguration` to the test role,
+  scoped to the Bedrock functions. Separately, caveat 1 stands: this run did not exercise
+  `StreamingCloudFormationExecutionRole`, so the first create in a fresh account or a rebuilt stack is the
+  real test of that role. Requirement 13.4's "extended" wording can be softened to "verified to need no
+  change", with caveat 1 noted.
+## MEASURED: the Kotlin pre-first-delta 502 path kills the execution environment (`Runtime.ExitError`)
+
+- **What this is:** task 13.3 of `java-bedrock-sse-streaming-endpoint`. It settles item 2 of
+  "Review pass on the article and READMEs" (above), which was recorded as a strong inference. It is now
+  a **measurement** against the live Kotlin stack `bedrock-streaming-endpoint` (eu-west-1), 2026-11-21,
+  alias `live` = version 20 throughout. Run with the user's explicit approval to break that stack.
+
+- **How the failure was injected, and a correction to the plan.** `NovaLiteProfileId` is *not* passed to
+  the function. The handler uses the hard-coded constant `NOVA_LITE_PROFILE_ID`, and the parameter only
+  appears in the IAM policy `Resource` (`...:inference-profile/${NovaLiteProfileId}`). So pointing it at
+  a nonexistent profile (`eu.amazon.nova-lite-v1-nonexistent:0`) did **not** publish a new version and
+  did **not** change the function configuration: `live` stayed at version 20, same
+  `JAVA_TOOL_OPTIONS`, SnapStart `PublishedVersions`/`On`. The change lives only in the shared execution
+  role (a role-policy change applies to every version at once). Requirement 7.7's concern (a config-only
+  deploy leaves the alias on the old version) therefore applied in its mirror form: the alias was
+  *correctly* unchanged, and the experiment still worked because IAM is not versioned. The effect was
+  that Bedrock answered `AccessDeniedException` on `InvokeModelWithResponseStream`, which is a failure
+  before the first delta, as intended. The role policy was read back to confirm the nonexistent
+  profile was in place before invoking (about 50 s after the update, no IAM propagation delay seen).
+  A real "bad profile id" would instead be a `ValidationException` from Bedrock; the handler treats both
+  the same way (any exception before the first delta), so the code path is the same.
+
+- **What the client received (2 invocations):** HTTP **200**, `text/event-stream`, **0 body bytes**,
+  total 0.16 s and 1.9 s. No 502, no error event. The 200 is committed before the model is called, so the
+  502 the handler tries to write is never seen.
+
+- **Whether the invocation reports an error: yes, and it is the expensive kind.** Both invocations
+  ended `Status: error  Error Type: Runtime.ExitError` in the platform `REPORT` line. They billed
+  **60.4 s and 61.7 s** (the handler itself finished in about 66 ms; the rest is the platform waiting
+  on a runtime that had died). The CloudWatch `Errors` metric counted 2. Sequence in the log of each:
+  the handler logs `Bedrock stream failed before the first delta; responding 502`, writes the 502 to the
+  buffered output, returns normally, and AWS's loop then tries to post a second response:
+  `Failed to post handler success response. Http response code: 403 ... State transition from
+  RuntimeResponseSentState to InvocationResponse failed ... InvalidStateTransition`. The loop then
+  calls `reportInvocationError`, which also gets a 403 and throws
+  `LambdaRuntimeClientException`, uncaught on the `main` thread, so the JVM exits.
+
+- **Whether the next invocation reuses the environment: no.** The failing invocation ran in the warm
+  environment that had served the baseline request seconds earlier (same log stream, `904b38c6...`).
+  The second failing request landed in a **new** log stream (`b73ee553...`) with `RESTORE_START` and a
+  402 ms SnapStart restore. So each failure costs the environment, and the next request pays a restore.
+  A third environment was not needed: the post-restore request in `b73ee553...` also died the same way.
+
+- **Cost of the failure to a caller:** an empty 200 (no signal that anything went wrong) plus a
+  roughly 60 s billed invocation and a lost warm environment per failure. A burst of model failures
+  (for example throttling before the first delta) would therefore thrash environments.
+
+- **Restoration.** Parameter set back to `eu.amazon.nova-lite-v1:0` by a second `update-stack` with
+  the previous template (stack `UPDATE_COMPLETE`), role policy read back as the original profile ARN,
+  alias `live` still version 20, a normal request (`maxTokens=20`) streamed 160 bytes of SSE ending in
+  `event: end`/`[DONE]`. The Java stack and every other stack were not touched. No secrets were printed:
+  the API key was read into a shell variable only.
+
+- **Implication (task 13.4's decision rule):** the failure is **not** harmless, so the rule says keep
+  the branch, mark it unreachable with a comment citing this entry, and record a follow-up to make the
+  agent guard `reportInvocationError`. Note the measured trigger is the pre-first-delta path
+  (`markAnswered()` never called), exactly as inferred. The post-first-delta rethrow path was **not**
+  measured here.
+
+- **Gotchas worth keeping:** (1) `REPORT` and `Runtime.ExitError` lines appear in the log group a few
+  seconds after the invocation, so a first filter right after the call finds nothing; (2) filtering the
+  `REPORT` pattern needs the quoted `"REPORT RequestId"` form to match; (3) experiment cleanup left no
+  stack in a failing configuration.
+
+### Decision applied (task 13.4) and follow-up
+
+- **Decision:** because the failure kills the execution environment (see the measurement above), the
+  second branch of the rule applies. The pre-first-delta 502 branch in the Kotlin `BedrockStreamHandler`
+  is **kept**, and its KDoc and the branch comment now mark it unreachable in effect and cite this
+  entry. No behaviour, test or API change; nothing was redeployed.
+- **Java module invariant (Req 5.6) holds:** `streaming-bedrock-example-java/src/main` has no 502
+  branch, and `BedrockStreamHandlerTest` asserts no `"statusCode":502` on the wire.
+- **Follow-up (open, out of this spec's scope):** make the agent guard `reportInvocationError` (and
+  the success post) so a response already sent for an invocation does not trigger a second post, a 403
+  and an uncaught `LambdaRuntimeClientException`. Alternatives: defer the prelude until the first body
+  write, mark the invocation answered on the failure path, or drop the dead branch. Needs its own spec.
+
+## Deploy workflow hardcoded `LogRetentionDays=7`, below the template's `MinValue: 14` (task 12.1)
+
+- **Symptom:** the deploy of a stack whose template declares `LogRetentionDays` with `MinValue: 14`
+  (`sam-bedrock`, `sam-bedrock-java`) fails at CloudFormation parameter validation if the workflow passes
+  `7`. `workflow-deploy-aws.yml` had `LogRetentionDays=7` baked into `--parameter-overrides` (commit
+  `8d36bc1`, "fix pipeline with retention days"), a value that fit only the older templates. The new Java
+  stack would have inherited it.
+- **Resolution / status:** **Fixed in task 12.1.** The workflow now takes a `log-retention-days` input and
+  passes `LogRetentionDays=$LOG_RETENTION_DAYS`. The Bedrock matrix entries in `cd-deploy-on-demand.yml` and
+  `ci-feature-build.yml` pass `'14'` with a comment naming the `MinValue`. **Residual trap:** the
+  workflow still falls back to `7` when a caller passes an empty value, so any new caller of a template with
+  a higher minimum must pass the input explicitly.
+
+## `@JvmOverloads`: no surprise in task 1.1
+
+- **Result:** adding the two-argument `ResponseMetadata` constructor needed no workaround. `@JvmOverloads`
+  produced the overload Java needs, the existing Kotlin call sites compiled unchanged, and `apiDump`
+  showed additions only (see the `apiCheck` step in task 1.5). Recorded so a later reader does not look
+  for a gotcha that was never there. The Java-side friction that did appear is the missing `@Throws` on
+  `SseWriter` (task 8.2, above).
+
+## Demo video gate: only a verified recording may become an MP4 (task 14.3)
+
+- **Problem:** `CAST_IN` re-rendering turns any cast into a publishable MP4, including one recorded against
+  a non-streaming or unverified endpoint, which would show a demo that proves nothing.
+- **Resolution / status:** **Fixed** in `scripts/record-streaming-demo.sh`. Record mode stamps
+  `"streaming_verified": true` into the cast header only after the alias check and the secret scan pass.
+  A `CAST_IN` render with `OUT_MP4` set refuses a cast without the marker (`cast_is_verified` reads the
+  header line). `OUT_MP4=""` still allows a GIF-only render. A cast recorded before the marker exists
+  must be recorded again; there is deliberately no override.
+- **Related ffmpeg pad failure (reproduced, not fixed here):** the MP4 filter
+  `scale=-2:H,pad=ceil(ih*16/9/2)*2:ih:...` fails with `Padded dimensions cannot be smaller than input
+  dimensions` when the rendered GIF is wider than 16:9 (checked with a synthetic 2400x400 input). `pad`
+  can only add border, never crop. A terminal that renders wider than 16:9 needs a narrower terminal
+  or a `scale` that fits inside the 16:9 box first. I found no git evidence of which cast triggered it
+  originally, so treat this as a known limit of the script rather than a closed bug.
+
+## Dependabot alerts on build tooling: FreeMarker and Bouncy Castle (nothing ships in the Lambda zip)
+
+- **Symptom:** open advisories on `org.freemarker:freemarker` (path traversal in template loading, pulled
+  in by Kover) and on `org.bouncycastle` 1.84 (pulled in by the Kotlin Gradle plugin). Both live on
+  the build-tooling classpath only.
+- **Resolution / status:** **Fixed** in the root `build.gradle.kts`:
+  - a `buildscript { constraints { classpath("org.freemarker:freemarker:2.3.35") } }` block lifts
+    FreeMarker without changing the Kover version;
+  - a `subprojects` block rewrites `org.bouncycastle` to `1.85` inside `kotlinBouncyCastleConfiguration`
+    only (publishing validation, never a compile or runtime classpath).
+- **Why a literal:** a `buildscript` block runs before the version catalog exists, so it cannot use
+  `libs.`. The FreeMarker literal is item 6 of the Requirement 9.8 allow-list above, and
+  `check_catalog.sh` has a matching `freemarker-constraint` entry. The Bouncy Castle override uses
+  `useVersion` in a resolution strategy and is not a catalog-style literal in a dependency block, so it is not on
+  the allow-list. Remove both once Kover and the Kotlin plugin ship fixed releases.

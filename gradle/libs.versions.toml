@@ -50,6 +50,8 @@ aws-sdk-kotlin-bedrockruntime = { module = "aws.sdk.kotlin:bedrockruntime", vers
 # and Mockito for mocking — none of which the Kotlin modules need.
 aws-sdk-java-bom       = { module = "software.amazon.awssdk:bom", version.ref = "awsSdkJava" }
 aws-sdk-java-s3        = { module = "software.amazon.awssdk:s3" }            # version from the BOM
+aws-sdk-java-bedrockruntime = { module = "software.amazon.awssdk:bedrockruntime" }  # version from the BOM
+aws-sdk-java-netty-nio = { module = "software.amazon.awssdk:netty-nio-client" }     # version from the BOM
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-core    = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test    = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }

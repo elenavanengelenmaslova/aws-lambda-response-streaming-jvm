@@ -111,14 +111,14 @@ CHECK_REGISTRY=(
     "check_badge_block|offline|15.2|README.md badge block"
     "check_badge_sources|offline|15.3|README.md badges vs their sources of truth"
     "check_licence|offline|15.4|LICENSE, the streaming-core POM and the badge label"
-    "check_catalog|offline|15.5|gradle/libs.versions.toml and the four build files"
+    "check_catalog|offline|15.5|gradle/libs.versions.toml and the five build files"
     "check_coverage_paths|offline|15.6|workflow-build.yml files: vs coverage-report-paths.txt"
     "check_permissions|offline|15.7|the permissions maps under .github/workflows"
     "check_workflows|offline|15.8|.github/workflows YAML and uses: refs"
     "check_dependabot_isolation|offline|15.9|ci-dependabot-validation.yml and workflow-build.yml"
     "check_config_paths|offline|15.10|.snyk, .coderabbit.yaml, trufflehog-config.yml, codecov.yml, dependabot.yml"
     "check_docs|offline|15.11|README.md, SECURITY.md and CONTRIBUTING.md"
-    "check_sam_templates|offline|15.1|deployment/aws/sam/template.yaml and deployment/aws/sam-java/template.yaml"
+    "check_sam_templates|offline|15.1|deployment/aws/sam/template.yaml, deployment/aws/sam-java/template.yaml, deployment/aws/sam-bedrock/template.yaml and deployment/aws/sam-bedrock-java/template.yaml"
     "check_gradle_build|offline|15.1|./gradlew build -PexcludeTags=integration and the three coverage reports"
     "check_badge_urls|network|15.12|the badge image and target URLs"
 )
@@ -135,12 +135,14 @@ COVERAGE_PATHS_FILE="build/reports/coverage-report-paths.txt"
 COVERAGE_REPORTS_FALLBACK=(
     "build/reports/kover/report.xml"
     "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml"
+    "streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml"
 )
 
 SAM_TEMPLATES=(
     "deployment/aws/sam/template.yaml"
     "deployment/aws/sam-java/template.yaml"
     "deployment/aws/sam-bedrock/template.yaml"
+    "deployment/aws/sam-bedrock-java/template.yaml"
 )
 
 # ---------------------------------------------------------------------------

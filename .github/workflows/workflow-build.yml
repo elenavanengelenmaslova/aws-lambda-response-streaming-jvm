@@ -52,7 +52,8 @@ jobs:
           set -uo pipefail
           missing=0
           for f in build/reports/kover/report.xml \
-                   streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml; do
+                   streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml \
+                   streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml; do
             [ -s "$f" ] || { echo "::error::coverage report missing or empty: $f"; missing=1; }
           done
           if [ -z "${CODECOV_TOKEN:-}" ]; then
@@ -83,7 +84,7 @@ jobs:
           # folded scalar inserted a space (`a.xml, b.xml`), so Codecov received
           # " streaming-s3-example-java/..." with a leading space and reported it not-found,
           # dropping Java coverage. Keep this on one line and un-spaced.
-          files: build/reports/kover/report.xml,streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml
+          files: build/reports/kover/report.xml,streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml,streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml
           fail_ci_if_error: true
 
       - name: Upload coverage reports
@@ -112,3 +113,13 @@ jobs:
         env:
           AWS_DEFAULT_REGION: ${{ inputs.aws-region }}
         run: sam validate --template-file deployment/aws/sam-java/template.yaml --region $AWS_DEFAULT_REGION
+
+      - name: Validate Bedrock SAM template
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws-region }}
+        run: sam validate --template-file deployment/aws/sam-bedrock/template.yaml --region $AWS_DEFAULT_REGION
+
+      - name: Validate Java Bedrock SAM template
+        env:
+          AWS_DEFAULT_REGION: ${{ inputs.aws-region }}
+        run: sam validate --template-file deployment/aws/sam-bedrock-java/template.yaml --region $AWS_DEFAULT_REGION

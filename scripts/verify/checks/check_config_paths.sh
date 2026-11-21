@@ -192,6 +192,7 @@ check_config_paths() {
                 _cfg_assert_listed "$snyk" "iac.include" "${values[@]}" -- \
                     "deployment/aws/sam/template.yaml" \
                     "deployment/aws/sam-java/template.yaml" \
+                    "deployment/aws/sam-bedrock-java/template.yaml" \
                     "deployment/aws/oidc/github-oidc-role.yaml"
             fi
 
@@ -286,7 +287,7 @@ check_config_paths() {
                     fi
                     (( missing > 0 )) || report_pass "$dependabot" "gradle directories: all ${#values[@]} resolve to a directory with a build.gradle.kts, and '/' also covers gradle/libs.versions.toml ($(printf '%s ' "${values[@]}" | sed -E 's/ $//'))"
                     _cfg_assert_listed "$dependabot" "gradle directories" "${values[@]}" -- \
-                        "/" "/streaming-core" "/streaming-s3-example" "/streaming-s3-example-java"
+                        "/" "/streaming-core" "/streaming-sse" "/streaming-s3-example" "/streaming-s3-example-java" "/streaming-bedrock-example" "/streaming-bedrock-example-java"
                 else
                     report_pass "$dependabot" "github-actions directory: all ${#values[@]} resolve to an existing directory ($(printf '%s ' "${values[@]}" | sed -E 's/ $//'))"
                     _cfg_assert_listed "$dependabot" "github-actions directory" "${values[@]}" -- "/"

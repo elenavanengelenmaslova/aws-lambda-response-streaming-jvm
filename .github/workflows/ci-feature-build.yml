@@ -46,6 +46,13 @@ jobs:
             # as a -javaagent, which needs a real jar FILE inside the package. The jar is still
             # built, so naming it here would let a missing zip reach SAM unnoticed.
             jar-name: bedrock-streaming-endpoint.zip
+          - sam-dir: deployment/aws/sam-bedrock-java
+            stack-name: bedrock-streaming-endpoint-java
+            build-task: ':streaming-bedrock-example-java:build'
+            # Same ZIP packaging as the Kotlin Bedrock stack (fat jar loaded as a -javaagent).
+            jar-name: bedrock-streaming-endpoint-java.zip
+            # The template's LogRetentionDays has MinValue 14; the deploy default of 7 would fail.
+            log-retention-days: '14'
     uses: ./.github/workflows/workflow-deploy-aws.yml
     with:
       environment: default
@@ -55,6 +62,7 @@ jobs:
       stack-name: ${{ matrix.stack-name }}
       build-task: ${{ matrix.build-task }}
       jar-name: ${{ matrix.jar-name }}
+      log-retention-days: ${{ matrix.log-retention-days }}
     secrets:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
@@ -82,6 +90,9 @@ jobs:
           # This proves the deploy + test wiring without incurring model cost on each branch;
           # run the paid test on demand via "CD - Deploy On Demand" with run-bedrock-test=true.
           - stack-name: bedrock-streaming-endpoint
+            test-script: scripts/bedrock-streaming-test.sh
+            test-object-key: ''
+          - stack-name: bedrock-streaming-endpoint-java
             test-script: scripts/bedrock-streaming-test.sh
             test-object-key: ''
     uses: ./.github/workflows/workflow-streaming-test.yml

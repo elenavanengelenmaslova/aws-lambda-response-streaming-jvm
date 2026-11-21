@@ -9,6 +9,17 @@ import java.io.StringReader
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
+// Build-tooling classpath only (nothing here ships in the Lambda zip). Kover pulls in FreeMarker at a
+// version with an open advisory; this constraint lifts it to the patched release without changing
+// the Kover version we use. A buildscript block cannot see the version catalog, so the literal is on
+// the docs/log.md Requirement 9.8 allow-list. Remove it once Kover ships a fixed FreeMarker itself.
+buildscript {
+    dependencies {
+        constraints {
+            classpath("org.freemarker:freemarker:2.3.35") { because("path traversal in template loading, fixed in 2.3.35") }
+        }
+    }
+}
 // Root build.gradle.kts — plugin classpath only. All build logic lives in subproject build files.
 // Every dependency and plugin version is declared in `gradle/libs.versions.toml`; bump it there and
 // all modules pick it up through the `libs` catalog accessors.
@@ -25,6 +36,19 @@ plugins {
     // aggregate on top. The pure-Java module reports via JaCoCo (Kover cannot instrument it) and
     // is uploaded to Codecov as a second file. See docs/log.md.
     alias(libs.plugins.kover)
+}
+
+// Kotlin Gradle plugin's internal Bouncy Castle configuration (publishing validation only, never on a
+// compile or runtime classpath) still resolves 1.84, which has open advisories. Lift it to 1.85.
+subprojects {
+    configurations.matching { it.name == "kotlinBouncyCastleConfiguration" }.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "org.bouncycastle") {
+                useVersion("1.85")
+                because("advisories fixed in 1.85; Kotlin plugin internal configuration only")
+            }
+        }
+    }
 }
 
 // ---- resolvedCoordinates: dependency-resolution baseline --------------------------------------
@@ -132,6 +156,7 @@ val validationReports = mapOf(
     ":streaming-s3-example" to "streaming-s3-example/build/reports/kover/report.xml",
     ":streaming-s3-example-java" to "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     ":streaming-bedrock-example" to "streaming-bedrock-example/build/reports/kover/report.xml",
+    ":streaming-bedrock-example-java" to "streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
     // The root aggregate is the report actually uploaded to Codecov, so it must pass the same
     // exists/parses/covered-lines checks as the modules — otherwise a silently empty or broken
     // aggregate would upload and reproduce the 0% dashboard this change set out to fix. The four
@@ -142,6 +167,7 @@ val validationReports = mapOf(
 val uploadReports = listOf(
     "build/reports/kover/report.xml",
     "streaming-s3-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
+    "streaming-bedrock-example-java/build/reports/jacoco/test/jacocoTestReport.xml",
 )
 
 tasks.register("verifyCoverageReports") {
@@ -155,6 +181,7 @@ tasks.register("verifyCoverageReports") {
         ":streaming-s3-example:koverXmlReport",
         ":streaming-s3-example-java:jacocoTestReport",
         ":streaming-bedrock-example:koverXmlReport",
+        ":streaming-bedrock-example-java:jacocoTestReport",
     )
 
     // Captured at configuration time so the task action touches no Project state (configuration

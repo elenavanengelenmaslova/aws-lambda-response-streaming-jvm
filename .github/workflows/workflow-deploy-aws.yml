@@ -37,6 +37,11 @@ on:
         type: string
         default: 'streaming-endpoint.jar'
         description: 'File name of the built fat jar under build/dist'
+      log-retention-days:
+        required: false
+        type: string
+        default: '7'
+        description: 'CloudWatch log retention (days) passed as the LogRetentionDays template parameter'
     secrets:
       AWS_ACCOUNT_ID:
         required: true
@@ -91,11 +96,15 @@ jobs:
         env:
           SAM_DIR: ${{ inputs.sam-dir }}
           STACK_NAME_INPUT: ${{ inputs.stack-name }}
+          LOG_RETENTION_DAYS_INPUT: ${{ inputs.log-retention-days }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           AWS_DEPLOY_REGION: ${{ inputs.aws-region }}
         run: |
           # Resolve the stack name; fall back to the Kotlin default when a caller passes an empty value.
           STACK_NAME="${STACK_NAME_INPUT:-s3-file-streaming-endpoint}"
+
+          # Resolve log retention; fall back to 7 days when a caller passes an empty value.
+          LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS_INPUT:-7}"
 
           cd "$SAM_DIR"
           echo "Starting SAM deployment for stack: $STACK_NAME"
@@ -107,7 +116,7 @@ jobs:
           CFN_EXEC_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/StreamingCloudFormationExecutionRole"
 
           # Keep --parameter-overrides last so its multi-value list is terminated by end-of-args.
-          EXTRA_ARGS="--region $AWS_DEPLOY_REGION --s3-bucket $ARTIFACTS_BUCKET --no-resolve-s3 --role-arn $CFN_EXEC_ROLE_ARN --stack-name $STACK_NAME --parameter-overrides MemorySizeMb=1024 LogRetentionDays=7"
+          EXTRA_ARGS="--region $AWS_DEPLOY_REGION --s3-bucket $ARTIFACTS_BUCKET --no-resolve-s3 --role-arn $CFN_EXEC_ROLE_ARN --stack-name $STACK_NAME --parameter-overrides MemorySizeMb=1024 LogRetentionDays=$LOG_RETENTION_DAYS"
 
           DEPLOY_OUTPUT=$(sam deploy --config-env default --no-confirm-changeset --force-upload $EXTRA_ARGS 2>&1) && {
             echo "$DEPLOY_OUTPUT"

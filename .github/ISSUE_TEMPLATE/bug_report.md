@@ -15,8 +15,11 @@ One or two sentences describing what is broken.
 Tick every module involved. If you are not sure, tick the one whose code appears in the stack trace.
 
 - [ ] `streaming-core`
+- [ ] `streaming-sse`
 - [ ] `streaming-s3-example`
 - [ ] `streaming-s3-example-java`
+- [ ] `streaming-bedrock-example`
+- [ ] `streaming-bedrock-example-java`
 - [ ] Build, deployment or scripts (not a module)
 
 ## Reproduction steps

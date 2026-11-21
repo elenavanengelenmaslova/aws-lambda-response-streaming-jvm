@@ -296,6 +296,15 @@ profile, API-key auth and the SAM template above. Its
 covers building, deploying and resolving the endpoint URL and API key, so you can run it in your own
 account.
 
+## Java works too
+
+Nothing here is specific to Kotlin. The same endpoint exists as a plain Java Lambda in
+[`streaming-bedrock-example-java`](https://github.com/elenavanengelenmaslova/aws-lambda-response-streaming-jvm/tree/main/streaming-bedrock-example-java),
+using the same `aws-lambda-streaming-sse` library, agent flag and SAM settings. Both stacks passed the
+post-deploy check in one deploy pipeline run, with one measured request each after warm-up. The Java
+stack had first byte at 0.318 s of a 7.865 s response with 784 tokens, and the Kotlin stack at 0.390 s
+of 7.514 s with 807 tokens. These are single warm requests, so I make no cold-start claim from them.
+
 ## Conclusion
 
 `aws-lambda-streaming-core` does what I built it for: large objects, an S3 download, a CSV export, a

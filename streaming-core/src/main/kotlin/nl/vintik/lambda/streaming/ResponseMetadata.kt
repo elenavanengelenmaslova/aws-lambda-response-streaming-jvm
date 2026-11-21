@@ -25,7 +25,7 @@ private const val HEADER_VALUE_SEPARATOR = ", "
  *   keeps the wire format identical to a prelude that never had the field.
  */
 @Serializable
-public data class ResponseMetadata(
+public data class ResponseMetadata @JvmOverloads constructor(
     public val statusCode: Int,
     public val headers: Map<String, String>,
     @EncodeDefault(EncodeDefault.Mode.NEVER)

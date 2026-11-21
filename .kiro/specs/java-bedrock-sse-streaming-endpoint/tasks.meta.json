@@ -1,0 +1,1252 @@
+{
+  "pbtResults": {
+    "4.2 Write the request-body property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1795199295495
+    },
+    "3.4 Write the clamping property test": {
+      "status": "passed",
+      "lastRunTimestamp": 1795199346453
+    }
+  },
+  "executionHistory": {
+    "1.1 Add `@JvmOverloads` to `ResponseMetadata`'s primary constructor in `streaming-core`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013207
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199022979
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199109904
+      }
+    ],
+    "1.2 Write a Java test for the `ResponseMetadata` convenience constructor": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013301
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199115073
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199165063
+      }
+    ],
+    "1.3 Add `ResponseBody` and `StreamingResponse.stream` to `streaming-sse`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013357
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199023247
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199110157
+      }
+    ],
+    "1.4 Write a Java test for `stream`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013399
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199115474
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199165703
+      }
+    ],
+    "1.5 Regenerate and check the public API dumps": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013437
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199169963
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199214027
+      }
+    ],
+    "1.6 Checkpoint - run `./gradlew :streaming-core:build :streaming-sse:build apiCheck -PexcludeTags=integration`. Ensure all tests pass and `apiCheck` is green. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013507
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200593675
+      }
+    ],
+    "2.1 Register the module and its dependencies": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013549
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199024083
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199110891
+      }
+    ],
+    "2.2 Create `streaming-bedrock-example-java/build.gradle.kts`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013588
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199116171
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199166526
+      }
+    ],
+    "2.3 Add the new build file to the catalog invariant check": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013657
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199170177
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199214462
+      }
+    ],
+    "2.4 Checkpoint - run `./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration` and confirm the module configures and compiles, and that `streaming-core`, `streaming-sse` and all examples still build. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013706
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200594962
+      }
+    ],
+    "3.1 Create the data models": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013749
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199170735
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199215234
+      }
+    ],
+    "3.2 Implement `PromptParser`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013790
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199252604
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199304095
+      }
+    ],
+    "3.3 Write unit tests for every row of the parser table": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013865
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199310450
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199602133
+      }
+    ],
+    "3.4 Write the clamping property test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013906
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199311482
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199603048
+      }
+    ],
+    "3.5 Write the unsupported-parameter property test at parser level": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199013946
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199312321
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199600021
+      }
+    ],
+    "3.6 Checkpoint - run `./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration`. Ensure all tests pass. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014016
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200596061
+      }
+    ],
+    "4.1 Implement `NovaPayload`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014057
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199171544
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199216054
+      }
+    ],
+    "4.2 Write the request-body property test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014099
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199253390
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199305141
+      }
+    ],
+    "4.3 Write unit tests for `textDelta`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014155
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199254479
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199306166
+      }
+    ],
+    "4.4 Checkpoint - run `./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration`. Ensure all tests pass. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014221
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200597917
+      }
+    ],
+    "5.1 Implement `Deadline`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014271
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199172255
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199216750
+      }
+    ],
+    "5.2 Implement `DeltaBridge` and the exceptions": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014357
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199255475
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199307268
+      }
+    ],
+    "5.3 Write the bridge property test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014406
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199313383
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199601081
+      }
+    ],
+    "5.4 Checkpoint - run `./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration`. Ensure all tests pass and no test is timing-flaky (run the bridge tests 20 times). Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014449
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200598712
+      }
+    ],
+    "6.1 Implement `TokenStream`, `DeltaSink` and `BedrockAsyncSource`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014489
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199314329
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199599615
+      }
+    ],
+    "6.2 Test the SDK glue": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014529
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199701324
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199869360
+      }
+    ],
+    "6.3 Measure the async client's footprint": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014598
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199877938
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199951876
+      }
+    ],
+    "6.4 Checkpoint - run `./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration`. Ensure all tests pass. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014640
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200600076
+      }
+    ],
+    "7.1 Implement `Priming`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014675
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199701446
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199870176
+      }
+    ],
+    "7.2 Write the priming tests": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014714
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199955131
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200029262
+      }
+    ],
+    "7.3 Checkpoint - run `./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration`. Ensure all tests pass. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014773
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200601374
+      }
+    ],
+    "8.1 Implement `StreamTimings`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014815
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199702345
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199871156
+      }
+    ],
+    "8.2 Implement `BedrockStreamHandler`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014905
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199955984
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200030290
+      }
+    ],
+    "8.3 Write unit tests for the handler": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014947
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200033197
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200131408
+      }
+    ],
+    "8.4 Write the relay property tests": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199014987
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200034143
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200131923
+      }
+    ],
+    "8.5 Write the priming-registration test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015025
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200035271
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200133046
+      }
+    ],
+    "8.6 Write the in-process streaming integration test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015074
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200036310
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200134047
+      }
+    ],
+    "8.7 Checkpoint - run `./gradlew :streaming-bedrock-example-java:test -PexcludeTags=integration`. Ensure all tests pass. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015148
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200602711
+      }
+    ],
+    "9.1 Configure the fat jar and the zip": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015192
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200037237
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200135059
+      }
+    ],
+    "9.2 Add a build-time check that the zip exists and contains the jar": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015229
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200138369
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200196106
+      }
+    ],
+    "9.3 Checkpoint - run `./gradlew :streaming-bedrock-example-java:build -PexcludeTags=integration`, then `unzip -l build/dist/bedrock-streaming-endpoint-java.zip` and confirm the layout. Confirm the other examples' artifacts are untouched. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015272
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200604063
+      }
+    ],
+    "10.1 Configure JaCoCo with the 80% gate and the cache opt-out": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015313
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199224615
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199250043
+      }
+    ],
+    "10.2 Register the report in the root build and the upload workflow": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015390
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199256292
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199308089
+      }
+    ],
+    "10.3 Make the coverage-path check able to verify the new entry": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015424
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199619963
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199697155
+      }
+    ],
+    "10.4 Checkpoint - run `./gradlew verifyCoverageReports koverVerify koverHtmlReport apiCheck -PexcludeTags=integration --continue`. Ensure all six-plus-one reports validate and the coverage gate passes. Run the Java module's tests twice and confirm `test` executes both times (never `FROM-CACHE`). Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015466
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200471509
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200591286
+      }
+    ],
+    "11.1 Write `deployment/aws/sam-bedrock-java/template.yaml`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015507
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200139030
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200197197
+      }
+    ],
+    "11.2 Add `samconfig.toml`, `build.sh` and `deploy.sh`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015550
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200201072
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200266158
+      }
+    ],
+    "11.3 Validate the template": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015625
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200201964
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200267170
+      }
+    ],
+    "11.4 Register the template in the quality tooling": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015663
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200202812
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200268268
+      }
+    ],
+    "11.5 Checkpoint - run `./scripts/verify-quality-signals.sh --offline` and compare with the baseline recorded in the PR #37 description. Confirm no failure was introduced; the seven pre-existing ones may remain unless fixed by 10.3. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015700
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200608194
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795201195075
+      }
+    ],
+    "12.1 Make log retention a deploy-workflow input": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015746
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199024799
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199111717
+      }
+    ],
+    "12.2 Add the deploy and test matrix entries": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015788
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200274319
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200464433
+      }
+    ],
+    "12.3 Validate every SAM template in the build workflow": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015838
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200203412
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200269416
+      }
+    ],
+    "12.4 Verify the OIDC roles need no change": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015905
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204069454
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178032
+      }
+    ],
+    "12.5 Register the module in repository configuration": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015946
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200275584
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200465518
+      }
+    ],
+    "12.6 Checkpoint - run `actionlint` on the changed workflows if installed, `./scripts/verify-quality-signals.sh --offline`, and `./gradlew build apiCheck -PexcludeTags=integration`. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199015984
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200608728
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795201196253
+      }
+    ],
+    "13.1 Deploy and run the post-deploy test": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016030
+      },
+      {
+        "executionId": "5e49ccd3-f711-491c-b74d-af86ec4ad43e",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795203885654
+      }
+    ],
+    "13.2 Measure the cold-start cost of the async client": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016074
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204069578
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204252528
+      }
+    ],
+    "13.3 Measure the failure path on the existing Kotlin stack": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016127
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795240833371
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241088653
+      }
+    ],
+    "13.4 Apply the decision rule to the Kotlin handler": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016191
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241092388
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241143812
+      }
+    ],
+    "13.5 Checkpoint - confirm the CD run is green for all three streaming tests, the Java and Kotlin results are recorded, and no stack from the failure experiment was left in a failing configuration. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016267
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241144495
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241147854
+      }
+    ],
+    "14.1 Write `streaming-bedrock-example-java/README.md`": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016329
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200471729
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200592312
+      }
+    ],
+    "14.2 Update the repository and library READMEs": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016367
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200276515
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200463288
+      }
+    ],
+    "14.3 Gate video rendering on a verified recording": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016409
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199025432
+      },
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199112299
+      }
+    ],
+    "14.4 Append `docs/log.md` entries": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016464
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241148019
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241228752
+      }
+    ],
+    "14.5 Optionally add a short paragraph to the published article": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016516
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204070073
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178219
+      }
+    ],
+    "15.1 Run the complete gate": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016567
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241232376
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241306523
+      },
+      {
+        "executionId": "802cb4d3-7dcd-43a3-9809-932ade75c478",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795244653653
+      }
+    ],
+    "15.2 Confirm the release outcome before merging": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016622
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241307247
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241338084
+      }
+    ],
+    "15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795199016682
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241338212
+      },
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241384558
+      },
+      {
+        "executionId": "802cb4d3-7dcd-43a3-9809-932ade75c478",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795244654418
+      }
+    ],
+    "10. Coverage gate and registration": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200591398
+      }
+    ],
+    "1. Add the Java-friendly library entry points": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200593728
+      }
+    ],
+    "2. Scaffold the Java module": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200595012
+      }
+    ],
+    "3. Implement the prompt model and parser": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200596102
+      }
+    ],
+    "4. Implement the Nova payload helpers": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200597958
+      }
+    ],
+    "5. Implement the deadline and the delta bridge": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200598785
+      }
+    ],
+    "6. Implement the Bedrock async source": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200600125
+      }
+    ],
+    "7. Implement the CRaC priming hook": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200601417
+      }
+    ],
+    "8. Implement the handler": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200602759
+      }
+    ],
+    "9. Package the function so the agent loads": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795200604102
+      }
+    ],
+    "11. Create the SAM stack": [
+      {
+        "executionId": "8e04e5eb-1f83-449c-a105-0161295f09a4",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795201195166
+      }
+    ],
+    "12. Wire the module into CI": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795204178160
+      }
+    ],
+    "13. Deploy, measure and settle the failure path (**user-run**; needs the pipeline and a paid model call)": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241147955
+      }
+    ],
+    "14. Documentation and demo assets": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241228809
+      }
+    ],
+    "15. Final verification and release hygiene": [
+      {
+        "executionId": "b5fe5992-8a17-40b2-bcfe-69f4aa6a7a2d",
+        "chatSessionId": "sess_58942a94-66e2-4a47-ac72-ac10357ef9b8",
+        "timestamp": 1795241384604
+      }
+    ]
+  }
+}

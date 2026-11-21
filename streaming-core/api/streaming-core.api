@@ -39,6 +39,7 @@ public final class nl/vintik/lambda/streaming/MetadataTooLargeException : java/l
 public final class nl/vintik/lambda/streaming/ResponseMetadata {
 	public static final field Companion Lnl/vintik/lambda/streaming/ResponseMetadata$Companion;
 	public static final field SET_COOKIE Ljava/lang/String;
+	public fun <init> (ILjava/util/Map;)V
 	public fun <init> (ILjava/util/Map;Ljava/util/List;)V
 	public synthetic fun <init> (ILjava/util/Map;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()I

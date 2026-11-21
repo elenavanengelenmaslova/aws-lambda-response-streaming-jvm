@@ -10,6 +10,10 @@ SnapStart, CRaC priming hooks and warm reuse all keep working.
 implementation("nl.vintik:aws-lambda-streaming-sse:<version>")
 ```
 
+<p align="center">
+  <img src="../docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens as Server-Sent Events from the deployed Lambda, the answer appearing progressively while the model is still generating" width="760">
+</p>
+
 ## The problem this solves
 
 On the managed JVM runtime the `OutputStream` a `RequestStreamHandler` receives is a
@@ -118,6 +122,12 @@ That is the whole deployment change: one zip task and one flag.
 
 ## Usage
 
+The same handler in both languages. Packaging and the `-javaagent` flag from the setup above are
+identical for Kotlin and Java: the same fat jar with `Premain-Class`, the same zip with the jar under
+`lib/`, and the same `JAVA_TOOL_OPTIONS`. Only the handler code differs.
+
+**Kotlin**
+
 ```kotlin
 class ChatHandler : RequestStreamHandler {
 
@@ -142,6 +152,50 @@ class ChatHandler : RequestStreamHandler {
     }
 }
 ```
+
+**Java**
+
+```java
+public class ChatHandler implements RequestStreamHandler {
+
+    private final StreamingResponse streaming = new StreamingResponse();
+
+    @Override
+    public void handleRequest(InputStream input, OutputStream output, Context context)
+            throws IOException {
+        var prompt = parse(input);                     // validate BEFORE committing a status
+
+        // Two-argument constructor: the Kotlin default for `cookies` is not visible to Java
+        // without it, so a Java caller would otherwise have to pass `null` explicitly.
+        var metadata = new ResponseMetadata(
+                200,
+                Map.of(
+                        "Content-Type", "text/event-stream; charset=utf-8",
+                        "Cache-Control", "no-cache"));
+
+        // `stream` takes a ResponseBody and returns void, so there is no `return null;` and no
+        // generic result to cast.
+        streaming.stream(context.getAwsRequestId(), metadata, live -> {
+            var sse = new SseWriter();
+            for (var token : model.tokens()) {
+                sse.writeEvent(live, token);
+            }
+            sse.writeEnd(live);
+        });
+    }
+}
+```
+
+`stream` and the two-argument `ResponseMetadata` constructor (`@JvmOverloads`) exist for Java callers.
+They are new relative to 3.0.0 and ship in the next minor release after it, which has not been
+published yet; check the releases page for the exact version before depending on them. On 3.0.0 a Java
+caller uses `send`, which needs a `return null;` in the body lambda, and passes `null` for `cookies`.
+`send` is unchanged and remains the Kotlin entry point; `stream` is deliberately not an overload of
+it, so existing Kotlin trailing-lambda callers are unaffected.
+
+A runnable Java handler built on this is [`streaming-bedrock-example-java`](../streaming-bedrock-example-java/).
+Its measured results from a deployed run (one post-warm-up request, not a benchmark: first byte at
+0.318 s of 7.865 s total, tokens spread over 15 time buckets) are in that module's README.
 
 The `output` the runtime handed you is deliberately left untouched. Note that this handler lets
 anything `send` raises propagate, which is the right default: if the agent is missing, the
