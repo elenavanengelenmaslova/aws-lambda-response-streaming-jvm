@@ -3361,20 +3361,22 @@ That framing is what makes it likely to become the article people find when they
   matrix runs (44772687065 and older) contain no Java Bedrock leg, so that creation is not visible in CD
   history. The "stack deploys under the execution role" claim rests on the template's wildcard scoping
   and on the stack existing, not on a create observed here.
-- **Caveat 2, the live GitHub Actions role is wider than the repo template.** The template's
-  `StreamingDeploymentPolicy` grants `logs:FilterLogEvents` and S3 only for the S3 stacks, and
-  `apigateway:GET` only on `/apikeys/*`. `bedrock-streaming-test.sh` calls `cloudformation describe-stacks`
-  (covered), `apigateway get-api-key` (covered), and `lambda get-alias` plus
-  `lambda get-function-configuration`, which the template does **not** grant. The test passed, so the
-  deployed role has more than `github-oidc-role.yaml` says. Either the template drifted from the live
-  role or the live role was extended by hand. Not verified: no AWS read was made to compare.
-- **Conclusion:** no OIDC role change is needed for the Java Bedrock stack on this evidence. Do not edit
-  `github-oidc-role.yaml` for it. Two follow-ups are left to the owner: (a) if a fresh account or a rebuilt
-  stack is ever deployed, the first create is the real test of the execution role, so re-check then;
-  (b) reconcile the template with the live role for the `lambda:GetAlias` / `GetFunctionConfiguration`
-  reads the Bedrock test needs. Requirement 13.4's "extended" wording can be softened to "verified to need
-  no change", with caveat 1 noted.
-
+- **Caveat 2 (corrected), the test does not need `lambda:GetAlias` / `lambda:GetFunctionConfiguration`.**
+  An earlier version of this entry inferred that the live role was wider than the template because the
+  test passed. That inference was wrong. `report_agent_config` in `scripts/bedrock-streaming-test.sh`
+  runs both reads with `2>/dev/null || true` and returns early when the alias lookup is empty, so a
+  denied call is swallowed. The CI log of run 44801738573 confirms it: neither Bedrock leg printed the
+  `alias 'live' is version ... with the streaming agent configured` line, so the diagnostic was skipped
+  silently and the test passed without it. The template's test role (`StreamingDeploymentPolicy`) grants
+  `cloudformation:DescribeStacks` and `apigateway:GET` on `/apikeys/*`, which is everything the
+  assertions need. Nothing here shows the live role differs from the template.
+- **Conclusion (one position):** no OIDC role change is needed for the Java Bedrock stack. The template
+  stays as it is for the test to pass. Optional follow-up, only if you want the agent-configuration
+  diagnostic to run in CI: add `lambda:GetAlias` and `lambda:GetFunctionConfiguration` to the test role,
+  scoped to the Bedrock functions. Separately, caveat 1 stands: this run did not exercise
+  `StreamingCloudFormationExecutionRole`, so the first create in a fresh account or a rebuilt stack is the
+  real test of that role. Requirement 13.4's "extended" wording can be softened to "verified to need no
+  change", with caveat 1 noted.
 ## MEASURED: the Kotlin pre-first-delta 502 path kills the execution environment (`Runtime.ExitError`)
 
 - **What this is:** task 13.3 of `java-bedrock-sse-streaming-endpoint`. It settles item 2 of

@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * A point in time, measured on the monotonic clock, after which waiting for the model stream
@@ -15,26 +16,33 @@ final class Deadline {
     static final Duration SAFETY_MARGIN = Duration.ofSeconds(3);
 
     private final long deadlineNanos;
+    private final LongSupplier clock;
 
-    private Deadline(long deadlineNanos) {
+    private Deadline(long deadlineNanos, LongSupplier clock) {
         this.deadlineNanos = deadlineNanos;
+        this.clock = clock;
     }
 
     /** Deadline at {@code now + remaining invocation time - SAFETY_MARGIN}. */
     static Deadline fromContext(Context context) {
         long remainingMillis = context.getRemainingTimeInMillis();
         long budgetNanos = TimeUnit.MILLISECONDS.toNanos(remainingMillis) - SAFETY_MARGIN.toNanos();
-        return new Deadline(System.nanoTime() + budgetNanos);
+        return new Deadline(System.nanoTime() + budgetNanos, System::nanoTime);
     }
 
     /** Deadline {@code duration} from now; intended for tests. */
     static Deadline after(Duration duration) {
-        return new Deadline(System.nanoTime() + duration.toNanos());
+        return new Deadline(System.nanoTime() + duration.toNanos(), System::nanoTime);
+    }
+
+    /** Deadline {@code duration} after the clock's current reading; lets a test advance time itself. */
+    static Deadline after(Duration duration, LongSupplier nanoClock) {
+        return new Deadline(nanoClock.getAsLong() + duration.toNanos(), nanoClock);
     }
 
     /** Nanoseconds left until the deadline; zero or negative once expired. */
     long remainingNanos() {
-        return deadlineNanos - System.nanoTime();
+        return deadlineNanos - clock.getAsLong();
     }
 
     boolean isExpired() {

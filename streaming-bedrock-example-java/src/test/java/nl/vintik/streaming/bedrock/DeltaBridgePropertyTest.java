@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -172,16 +173,32 @@ class DeltaBridgePropertyTest {
         bridge.offerDone();
         AtomicInteger cancels = new AtomicInteger();
         List<String> written = new ArrayList<>();
-        Deadline deadline = Deadline.after(Duration.ofMillis(150));
+        // A controllable clock: the deadline is certainly valid until the first sink call, which
+        // then advances time past it. No sleeping, so scheduler delay cannot change the outcome.
+        AtomicLong now = new AtomicLong(1_000_000_000L);
+        Deadline deadline = Deadline.after(Duration.ofMillis(100), now::get);
         assertThrows(ModelStreamTimeoutException.class, () -> bridge.drain(deadline, text -> {
             written.add(text);
-            try {
-                Thread.sleep(300);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            now.addAndGet(Duration.ofSeconds(1).toNanos());
         }, cancels::incrementAndGet));
         assertEquals(List.of("first"), written, "the second queued delta is not consumed after expiry");
+        assertEquals(1, cancels.get());
+    }
+
+    @Test
+    @DisplayName("`Given a deadline that is already expired and a queued delta When drained Then nothing is written and the call is cancelled`")
+    void alreadyExpiredDeadlineConsumesNothing() {
+        DeltaBridge bridge = new DeltaBridge();
+        bridge.offerDelta("first");
+        bridge.offerDone();
+        AtomicInteger cancels = new AtomicInteger();
+        List<String> written = new ArrayList<>();
+        AtomicLong now = new AtomicLong(5_000_000_000L);
+        Deadline deadline = Deadline.after(Duration.ofMillis(1), now::get);
+        now.addAndGet(Duration.ofSeconds(1).toNanos());
+        assertThrows(ModelStreamTimeoutException.class,
+                () -> bridge.drain(deadline, written::add, cancels::incrementAndGet));
+        assertEquals(List.of(), written);
         assertEquals(1, cancels.get());
     }
 

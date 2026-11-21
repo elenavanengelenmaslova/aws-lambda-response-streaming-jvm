@@ -265,14 +265,14 @@ Constraints that apply throughout:
     - _Requirements: 15.7_
 
 - [x] 15. Final verification and release hygiene
-  - [x] 15.1 Run the complete gate
+  - [ ] 15.1 Run the complete gate
     - `./gradlew clean build apiCheck -PexcludeTags=integration`, `./gradlew verifyCoverageReports koverVerify koverHtmlReport -PexcludeTags=integration --continue`, `sam validate` on all four templates, and `./scripts/verify-quality-signals.sh`. Paste the quality-signals output into the PR description as the template asks.
     - _Requirements: 12.5, 12.6, 13.1, 13.2_
   - [x] 15.2 Confirm the release outcome before merging
     - Run `scripts/release/compute-version.sh` on the branch's merge result and confirm `bump=minor`. The library commits must be `feat:` and no commit may carry `!` or `BREAKING CHANGE:`. If the PR is squash-merged, the PR title must start with `feat:`, because only the title is classified.
     - Confirm the release trigger filter is unchanged and that both published modules still share one version.
     - _Requirements: 2.5, 13.9, 14.1, 14.2, 14.3, 14.4, 14.5_
-  - [x] 15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.
+  - [ ] 15.3 Checkpoint - ensure every Correctness Property test passes, the demo and README references are current, and the PR description reports what was and was not verified, including that task 13 results come from a deployed run. Ask the user if questions arise.
 
 ## Notes
 

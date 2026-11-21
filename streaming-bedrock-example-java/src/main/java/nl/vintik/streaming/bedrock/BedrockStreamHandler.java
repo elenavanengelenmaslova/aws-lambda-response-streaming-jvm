@@ -78,9 +78,10 @@ public final class BedrockStreamHandler implements RequestStreamHandler {
     private void relay(PromptRequest request, Deadline deadline, OutputStream live, StreamTimings timings)
             throws IOException {
         SseWriter sse = new SseWriter();
+        LineEndings lineEndings = new LineEndings();
         try {
             tokens.stream(request, deadline, delta -> {
-                sse.writeEvent(live, normalizeLineEndings(delta));
+                sse.writeEvent(live, lineEndings.normalize(delta));
                 timings.onDelta();
             });
             sse.writeEnd(live);
@@ -100,6 +101,25 @@ public final class BedrockStreamHandler implements RequestStreamHandler {
      */
     static String normalizeLineEndings(String text) {
         return text.indexOf('\r') < 0 ? text : text.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
+    /**
+     * Per-stream line-ending normaliser. A CRLF can be split across two deltas ("left\r" then
+     * "\nright"); normalising each delta alone would turn that into two newlines, so this remembers
+     * whether the last model character was a CR and drops the LF that completes it. Empty deltas
+     * leave the state alone. One instance per relay, never shared.
+     */
+    static final class LineEndings {
+        private boolean afterCr;
+
+        String normalize(String delta) {
+            if (delta.isEmpty()) {
+                return delta;
+            }
+            String text = afterCr && delta.charAt(0) == '\n' ? delta.substring(1) : delta;
+            afterCr = delta.charAt(delta.length() - 1) == '\r';
+            return normalizeLineEndings(text);
+        }
     }
 
     private static void writeErrorEvent(SseWriter sse, OutputStream live) {

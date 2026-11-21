@@ -20,6 +20,7 @@ import nl.vintik.lambda.streaming.sse.ResponseChannel;
 import nl.vintik.lambda.streaming.sse.StreamingResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -258,6 +259,29 @@ class BedrockStreamHandlerRelayPropertyTest {
                 "evil\rdata: injected\r\revent: end",
                 "evil\r\nevent: error\r\ndata: gone",
                 "mixed\r\n\rand\nmore");
+    }
+
+    @Test
+    @DisplayName("`Given a CRLF split across two deltas When relayed Then the client sees exactly one newline`")
+    void crlfSplitAcrossDeltasYieldsOneNewline() throws IOException {
+        List<Sse> events = parseSseAnyLineEnding(relay(List.of("left\r", "", "\nright")));
+        StringBuilder text = new StringBuilder();
+        for (Sse event : events) {
+            if (event.event().equals("message")) {
+                text.append(event.data());
+            }
+        }
+        assertEquals("left\nright", text.toString());
+        assertEquals("end", events.get(events.size() - 1).event());
+    }
+
+    @Test
+    @DisplayName("`Given a CR ending one delta and text starting the next When relayed Then no extra newline is dropped`")
+    void crFollowedByNonLfKeepsBothCharacters() throws IOException {
+        List<Sse> events = parseSseAnyLineEnding(relay(List.of("a\r", "b", "\nc")));
+        StringBuilder text = new StringBuilder();
+        events.stream().filter(e -> e.event().equals("message")).forEach(e -> text.append(e.data()));
+        assertEquals("a\nb\nc", text.toString());
     }
 
     @Tag("property")
