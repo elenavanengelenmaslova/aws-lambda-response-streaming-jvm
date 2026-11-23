@@ -11,8 +11,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <img src="docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from the deployed Kotlin S3 example" width="760">
+  <img src="docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens from the deployed Kotlin Lambda as Server-Sent Events, the answer appearing progressively while the model is still generating" width="760">
 </p>
+
+<p align="center"><em>The deployed endpoint, recorded with <code>curl -N</code>: tokens arrive while Nova Lite is still generating, 0.4 s to the first one and 4.7 s of steady arrival after it.</em></p>
 
 A JVM library that implements the **AWS Lambda / API Gateway HTTP response streaming protocol** for Kotlin and Java.
 
@@ -58,8 +60,15 @@ The library handles:
 
 This library targets **API Gateway** response streaming (`ResponseTransferMode: RESPONSE_STREAM`): API Gateway invokes the function with the streaming API and re-streams this `[metadata JSON] [8 null bytes] [body…]` payload to the client. The library never touches the invocation layer — it only writes the wire format.
 
-Lambda Function URLs are not supported on the managed JVM runtime — see [Limitations](#limitations).
 
+
+<p align="center">
+  <img src="docs/s3-streaming-demo.gif" alt="A 20 MB object streaming in progressively via curl from the deployed Kotlin S3 example" width="760">
+</p>
+
+<p align="center"><em>A 20 MB object from the deployed Kotlin S3 example, delivered through API Gateway without buffering the whole object.</em></p>
+
+Lambda Function URLs are not supported on the managed JVM runtime — see [Limitations](#limitations).
 ## Dependency
 
 ```kotlin
@@ -189,12 +198,6 @@ The standard lambda response streaming limitations still apply; additionally, th
 | [`streaming-bedrock-example-java`](streaming-bedrock-example-java/) | Java | Java port of the Bedrock SSE example (asynchronous Bedrock client) — proves the SSE library, `streaming-sse`, is consumable from plain Java. One post-deploy run (not a benchmark): first byte at 0.318 s of 7.865 s total, 784 tokens over 15 time buckets |
 
 The two Bedrock examples stream Amazon Bedrock tokens as Server-Sent Events, which takes more than this module. On the managed JVM runtime the `OutputStream` a `RequestStreamHandler` receives is an in-memory buffer, so for a token trickle nothing reaches the client until the handler returns — the whole answer arrives in one burst at the end. [`streaming-sse`](streaming-sse/) sends the response to the Lambda Runtime API as it is produced, and ships a Java agent that keeps AWS's invocation loop from sending a second one, so each token leaves while the model is still generating. [`docs/bedrock-sse-streaming.md`](docs/bedrock-sse-streaming.md) walks through the mechanism and the measurements behind it.
-
-<p align="center">
-  <img src="docs/bedrock-streaming-demo.gif" alt="curl streaming Amazon Bedrock Nova Lite tokens from the deployed Kotlin Lambda as Server-Sent Events, the answer appearing progressively while the model is still generating" width="760">
-</p>
-
-<p align="center"><em>The deployed endpoint, recorded with <code>curl -N</code>: tokens arrive while Nova Lite is still generating, 0.4 s to the first one and 4.7 s of steady arrival after it.</em></p>
 
 ## Contributing and security
 
